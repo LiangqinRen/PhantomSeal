@@ -1,0 +1,7 @@
+defaults:
+  - evaluate: evaluate
+  - third_party: simswap
+  - _self_
+
+data:
+  dataset_path: "data/vggface2_512"
