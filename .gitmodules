@@ -1,0 +1,6 @@
+[submodule "third_party/HifiFace"]
+	path = third_party/HifiFace
+	url = https://github.com/maum-ai/hififace.git
+[submodule "third_party/SimSwap"]
+	path = third_party/SimSwap
+	url = https://github.com/neuralchen/SimSwap.git

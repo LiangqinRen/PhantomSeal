@@ -4,4 +4,4 @@ defaults:
   - _self_
 
 data:
-  dataset_path: "data/vggface2_512"
+  dataset_dir: "data/vggface2_512"

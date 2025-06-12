@@ -1,5 +1,6 @@
 .vscode
 
 **/__pycache__/**
+config/evaluate/evaluate.yaml
 data/
 outputs/
