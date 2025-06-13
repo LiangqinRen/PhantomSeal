@@ -3,5 +3,10 @@ defaults:
   - third_party: simswap
   - _self_
 
-data:
-  dataset_dir: "data/vggface2_512"
+log_suffix: ""
+image_dir: log/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}/image
+random_seed: 0
+
+hydra:
+  run:
+    dir: log/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}

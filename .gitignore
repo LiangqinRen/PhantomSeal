@@ -3,4 +3,4 @@
 **/__pycache__/**
 config/evaluate/evaluate.yaml
 data/
-outputs/
+log/
