@@ -4,3 +4,4 @@
 config/evaluate/evaluate.yaml
 data/
 log/
+multirun/

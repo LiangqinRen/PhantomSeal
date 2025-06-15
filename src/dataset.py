@@ -72,13 +72,20 @@ class MetricDataset_224(Dataset):
         return img_A, img_B
 
 
-class MetricDataset_512(Dataset):
-    def __init__(self, root_dir, pairs_count):
-        self.root_dir = Path(root_dir)
-        self.transform = transforms.Compose(
-            [transforms.Resize(256), transforms.ToTensor()]
+class MetricDataset(Dataset):
+    def __init__(self, config):
+        self.config = config
+        self.root_dir = Path(
+            config.third_party.dataset.metric_224_dir
+            if config.third_party.dataset.use_224
+            else config.third_party.dataset.metric_512_dir
         )
-        self.pairs_count = pairs_count
+        self.transform = (
+            transforms.Compose([transforms.ToTensor()])
+            if config.third_party.dataset.use_224
+            else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
+        )
+        self.metric_pairs = config.third_party.dataset.metric_pairs
         self.mtcnn = MTCNN(
             keep_all=True, device="cuda" if torch.cuda.is_available() else "cpu"
         )
@@ -123,46 +130,11 @@ class MetricDataset_512(Dataset):
         random.shuffle(A)
         random.shuffle(B)
 
-        min_count = min(len(A), len(B), self.pairs_count)
+        min_count = min(len(A), len(B), self.metric_pairs)
         valid_imgs_A_path = self.__filter_valid_images(A, min_count)
         valid_imgs_B_path = self.__filter_valid_images(B, min_count)
 
         return valid_imgs_A_path, valid_imgs_B_path
-
-    def __len__(self):
-        return len(self.A)
-
-    def __getitem__(self, idx):
-        img_A_path, img_B_path = self.A[idx], self.B[idx]
-
-        img_A = self.transform(Image.open(img_A_path).convert("RGB"))
-        img_B = self.transform(Image.open(img_B_path).convert("RGB"))
-
-        return img_A, img_B
-
-
-class MetricDataset(Dataset):
-    def __init__(self, root_dir, transform=transforms.Compose([transforms.ToTensor()])):
-        self.root_dir = Path(root_dir)
-        self.transform = transform
-
-        self.A, self.B = self.__get_double_imgs_list()
-
-    def __get_double_imgs_list(self):
-        test_dir = self.root_dir / "test"
-        all_people = [f for f in test_dir.iterdir() if f.is_dir()]
-        random.shuffle(sorted(all_people))
-
-        A, B = [], []
-        for idx, people in enumerate(all_people):
-            if idx % 2 == 0:
-                A.extend([f for f in people.iterdir() if f.is_file()])
-            elif idx % 2 == 1:
-                B.extend([f for f in people.iterdir() if f.is_file()])
-
-        min_count = min(len(A), len(B))
-
-        return A[:min_count], B[:min_count]
 
     def __len__(self):
         return len(self.A)

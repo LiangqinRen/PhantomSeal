@@ -353,7 +353,7 @@ class Effectiveness:
         pert_imgs: tensor,
         swap_imgs: tensor,
         pert_swap_imgs: tensor,
-        anchor_imgs: tensor,
+        cloak_imgs: tensor,
     ) -> dict:
         effectivenesses = {}
         for k, v in self.candi_funcs.items():
@@ -367,8 +367,8 @@ class Effectiveness:
             if source_imgs is not None and pert_swap_imgs is not None:
                 effectivenesses[k]["pert_swap"] = v(source_imgs, pert_swap_imgs)
 
-            if pert_swap_imgs is not None and anchor_imgs is not None:
-                effectivenesses[k]["anchor"] = v(pert_swap_imgs, anchor_imgs)
+            if pert_swap_imgs is not None and cloak_imgs is not None:
+                effectivenesses[k]["anchor"] = v(pert_swap_imgs, cloak_imgs)
 
         return effectivenesses
 
@@ -616,11 +616,14 @@ class Cloak:
         self.config = config
         self.effectiveness = effectiveness
 
-        self.anchorset_dir = self.config.third_party.dataset.cloak_dir
-        self.anchor_imgs = self.__get_anchor_imgs()
-        self.anchor_cache = self.__cache_anchor_imgs()
+        self.cloak_dir = self.config.third_party.dataset.cloak_dir
+        if not config.third_party.dataset.use_224:
+            self.cloak_dir = self.cloak_dir.replace("cloak_224", "cloak_512")
 
-    def __cache_anchor_imgs(self) -> dict:
+        self.cloak_imgs = self.__get_cloak_imgs()
+        self.cloak_cache = self.__cache_cloak_imgs()
+
+    def __cache_cloak_imgs(self) -> dict:
         mtcnn = MTCNN(
             image_size=160,
             device="cuda",
@@ -632,8 +635,8 @@ class Cloak:
         ).cuda()
         FaceVerification.eval()
 
-        anchor_cache = {}
-        for k, v in self.anchor_imgs.items():
+        cloak_cache = {}
+        for k, v in self.cloak_imgs.items():
             imgs_ndarray = v.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
             embeddings = []
             for i, img in enumerate(imgs_ndarray):
@@ -642,22 +645,20 @@ class Cloak:
                     self.logger.fatal(f"Cannot detect the face from {i}th {k}")
                 embedding = FaceVerification(img_cropped.unsqueeze(0).cuda())
                 embeddings.append(embedding)
-            anchor_cache[k] = embeddings
+            cloak_cache[k] = embeddings
 
-        return anchor_cache
+        return cloak_cache
 
     def __hash_tensor(self, img: tensor):
         return hash(tuple(img.view(-1).tolist()))
 
-    def __get_anchor_imgs_path(self) -> dict:
-        male_imgs_path = sorted(os.listdir(join(self.anchorset_dir, "male")))
-        male_imgs_path = [
-            join(self.anchorset_dir, "male", name) for name in male_imgs_path
-        ]
+    def __get_cloak_imgs_path(self) -> dict:
+        male_imgs_path = sorted(os.listdir(join(self.cloak_dir, "male")))
+        male_imgs_path = [join(self.cloak_dir, "male", name) for name in male_imgs_path]
 
-        female_imgs_path = sorted(os.listdir(join(self.anchorset_dir, "female")))
+        female_imgs_path = sorted(os.listdir(join(self.cloak_dir, "female")))
         female_imgs_path = [
-            join(self.anchorset_dir, "female", name) for name in female_imgs_path
+            join(self.cloak_dir, "female", name) for name in female_imgs_path
         ]
 
         return {
@@ -667,19 +668,23 @@ class Cloak:
         }
 
     def __load_imgs(self, imgs_path) -> dict:
-        transform = transforms.Compose([transforms.ToTensor()])
+        transform = (
+            transforms.Compose([transforms.ToTensor()])
+            if self.config.third_party.dataset.use_224
+            else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
+        )
         imgs = [transform(Image.open(path).convert("RGB")) for path in imgs_path]
         imgs = torch.stack(imgs)
 
         return imgs.cuda()
 
-    def __get_anchor_imgs(self) -> dict:
-        anchor_imgs_path = self.__get_anchor_imgs_path()
+    def __get_cloak_imgs(self) -> dict:
+        cloak_imgs_path = self.__get_cloak_imgs_path()
 
         return {
-            "male": self.__load_imgs(anchor_imgs_path["male"]),
-            "female": self.__load_imgs(anchor_imgs_path["female"]),
-            "mix": self.__load_imgs(anchor_imgs_path["mix"]),
+            "male": self.__load_imgs(cloak_imgs_path["male"]),
+            "female": self.__load_imgs(cloak_imgs_path["female"]),
+            "mix": self.__load_imgs(cloak_imgs_path["mix"]),
         }
 
     def __check_imgs_gender_single(self, img: tensor, key: str, secret: str) -> dict:
@@ -757,18 +762,18 @@ class Cloak:
         best_anchors = []
         for i in range(imgs.shape[0]):
             if self.config.third_party.dataset.cloak_mix:
-                candidates = self.anchor_imgs["mix"]
-                cache = self.anchor_cache["mix"]
+                candidates = self.cloak_imgs["mix"]
+                cache = self.cloak_cache["mix"]
             else:
                 candidates = (
-                    self.anchor_imgs["female"]
+                    self.cloak_imgs["female"]
                     if imgs_gender[self.__hash_tensor(imgs[i])] == "male"
-                    else self.anchor_imgs["male"]
+                    else self.cloak_imgs["male"]
                 )
                 cache = (
-                    self.anchor_cache["female"]
+                    self.cloak_cache["female"]
                     if imgs_gender[self.__hash_tensor(imgs[i])] == "male"
-                    else self.anchor_cache["male"]
+                    else self.cloak_cache["male"]
                 )
 
             # img_to_match = imgs[i].unsqueeze(0)

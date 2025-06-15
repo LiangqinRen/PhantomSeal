@@ -1,6 +1,7 @@
 import utils
 from simswap.defense import Defense
 
+import sys
 import inspect
 import hydra
 from omegaconf import DictConfig
@@ -21,7 +22,7 @@ def main(config: DictConfig):
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()
     else:
-        raise NotImplementedError
+        sys.exit(f"⚠️ Oops! That function doesn't exist")
 
 
 if __name__ == "__main__":
