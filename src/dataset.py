@@ -37,41 +37,6 @@ class SampleDataset(Dataset):
         return img_A, img_B
 
 
-class MetricDataset_224(Dataset):
-    def __init__(self, root_dir):
-        self.root_dir = Path(root_dir)
-        self.transform = transforms.Compose([transforms.ToTensor()])
-
-        self.A, self.B = self.__get_double_imgs_list()
-
-    def __get_double_imgs_list(self):
-        test_dir = self.root_dir
-        all_people = [f for f in test_dir.iterdir() if f.is_dir()]
-        random.shuffle(sorted(all_people))
-
-        A, B = [], []
-        for idx, people in enumerate(all_people):
-            if idx % 2 == 0:
-                A.extend([f for f in people.iterdir() if f.is_file()])
-            elif idx % 2 == 1:
-                B.extend([f for f in people.iterdir() if f.is_file()])
-
-        min_count = min(len(A), len(B))
-
-        return A[:min_count], B[:min_count]
-
-    def __len__(self):
-        return len(self.A)
-
-    def __getitem__(self, idx):
-        img_A_path, img_B_path = self.A[idx], self.B[idx]
-
-        img_A = self.transform(Image.open(img_A_path).convert("RGB"))
-        img_B = self.transform(Image.open(img_B_path).convert("RGB"))
-
-        return img_A, img_B
-
-
 class MetricDataset(Dataset):
     def __init__(self, config):
         self.config = config

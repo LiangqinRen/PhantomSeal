@@ -1,6 +1,6 @@
 import metric
 from simswap.base import Base
-from dataset import SampleDataset, MetricDataset_224, MetricDataset
+from dataset import SampleDataset, MetricDataset
 from utils import save_tensor_imgs
 
 
@@ -8,7 +8,6 @@ import textwrap
 import torch
 from torch import tensor, nn
 from torch.utils.data import DataLoader
-from omegaconf import OmegaConf
 from pathlib import Path
 
 
@@ -19,104 +18,6 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
-    def __perturb_imgs(
-        self, imgs: tensor, cloak_imgs: tensor, silent: bool = False
-    ) -> tensor:
-        l2_loss = nn.MSELoss().cuda()
-        x_imgs = imgs.clone().detach()
-        cloak_identity = self._get_imgs_identity(cloak_imgs)
-        imgs_latent_code = self.target.netG.encoder(x_imgs)
-        epsilon = (
-            self.config.third_party.defense.epsilon
-            * (torch.max(x_imgs) - torch.min(x_imgs))
-            / 2
-        )
-        limits = (
-            tensor(
-                [
-                    self.config.third_party.defense.limit.R,
-                    self.config.third_party.defense.limit.G,
-                    self.config.third_party.defense.limit.B,
-                ]
-            )
-            .view(1, 3, 1, 1)
-            .cuda()
-        )
-
-        best_imgs, best_loss = None, float("inf")
-        for epoch in range(self.config.third_party.defense.epochs):
-            x_imgs.requires_grad = True
-
-            pert_diff_loss = self.config.third_party.defense.weight.perturb * l2_loss(
-                x_imgs, imgs.detach()
-            )
-
-            x_identity = self._get_imgs_identity(x_imgs)
-            identity_diff_loss = (
-                self.config.third_party.defense.weight.identity
-                * l2_loss(x_identity, cloak_identity.detach())
-            )
-
-            x_latent_code = self.target.netG.encoder(x_imgs)
-            context_diff_loss = (
-                self.config.third_party.defense.weight.context
-                * -torch.clamp(
-                    l2_loss(x_latent_code, imgs_latent_code.detach()),
-                    0,
-                    self.config.third_party.defense.limit.context,
-                )
-            )
-
-            loss = pert_diff_loss + identity_diff_loss + context_diff_loss
-            loss.backward()
-
-            x_imgs = (
-                x_imgs.clone().detach() - epsilon * x_imgs.grad.sign().clone().detach()
-            )
-
-            x_imgs = torch.clamp(
-                x_imgs,
-                min=imgs - limits,
-                max=imgs + limits,
-            )
-            x_imgs = torch.clamp(x_imgs, 0, 1)
-
-            if loss.item() < best_loss:
-                best_loss = loss.item()
-                best_imgs = x_imgs
-
-            if not silent:
-                self.logger.info(
-                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}]loss: {loss:.5f}({pert_diff_loss.item():.5f}, {identity_diff_loss.item():.5f}, {context_diff_loss.item():.5f})"
-                )
-
-        return best_imgs
-
-    def __get_full_swap_results(
-        self, imgs_A: tensor, imgs_B: tensor, pert_imgs_A: tensor
-    ) -> tuple[tensor, tensor, tensor, tensor]:
-        imgs_A_identity = self._get_imgs_identity(imgs_A)
-        imgs_A_src_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
-
-        pert_imgs_A_identity = self._get_imgs_identity(pert_imgs_A)
-        pert_imgs_A_src_swap = self.target(
-            None, imgs_B, pert_imgs_A_identity, None, True
-        )
-
-        imgs_B_identity = self._get_imgs_identity(imgs_B)
-        imgs_A_tgt_swap = self.target(None, imgs_A, imgs_B_identity, None, True)
-
-        pert_imgs_A_tgt_swap = self.target(
-            None, pert_imgs_A, imgs_B_identity, None, True
-        )
-
-        return (
-            imgs_A_src_swap,
-            pert_imgs_A_src_swap,
-            imgs_A_tgt_swap,
-            pert_imgs_A_tgt_swap,
-        )
-
     def sample(self) -> None:
         dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
         dataloader = DataLoader(
@@ -126,14 +27,14 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self.__perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
 
             (
                 imgs_A_src_swap,
                 pert_imgs_A_src_swap,
                 imgs_A_tgt_swap,
                 pert_imgs_A_tgt_swap,
-            ) = self.__get_full_swap_results(imgs_A, imgs_B, x_imgs)
+            ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs)
 
             (
                 pert_utilities,
@@ -208,14 +109,14 @@ class Defense(Base):
 
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self.__perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
 
             (
                 imgs_A_src_swap,
                 pert_imgs_A_src_swap,
                 imgs_A_tgt_swap,
                 pert_imgs_A_tgt_swap,
-            ) = self.__get_full_swap_results(imgs_A, imgs_B, x_imgs)
+            ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs)
 
             (
                 pert_utilities,
@@ -302,3 +203,101 @@ class Defense(Base):
             {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
             """
             )
+
+    def _perturb_imgs(
+        self, imgs: tensor, cloak_imgs: tensor, silent: bool = False
+    ) -> tensor:
+        l2_loss = nn.MSELoss().cuda()
+        x_imgs = imgs.clone().detach()
+        cloak_identity = self._get_imgs_identity(cloak_imgs)
+        imgs_latent_code = self.target.netG.encoder(x_imgs)
+        epsilon = (
+            self.config.third_party.defense.epsilon
+            * (torch.max(x_imgs) - torch.min(x_imgs))
+            / 2
+        )
+        limits = (
+            tensor(
+                [
+                    self.config.third_party.defense.limit.R,
+                    self.config.third_party.defense.limit.G,
+                    self.config.third_party.defense.limit.B,
+                ]
+            )
+            .view(1, 3, 1, 1)
+            .cuda()
+        )
+
+        best_imgs, best_loss = None, float("inf")
+        for epoch in range(self.config.third_party.defense.epochs):
+            x_imgs.requires_grad = True
+
+            pert_diff_loss = self.config.third_party.defense.weight.perturb * l2_loss(
+                x_imgs, imgs.detach()
+            )
+
+            x_identity = self._get_imgs_identity(x_imgs)
+            identity_diff_loss = (
+                self.config.third_party.defense.weight.identity
+                * l2_loss(x_identity, cloak_identity.detach())
+            )
+
+            x_latent_code = self.target.netG.encoder(x_imgs)
+            context_diff_loss = (
+                self.config.third_party.defense.weight.context
+                * -torch.clamp(
+                    l2_loss(x_latent_code, imgs_latent_code.detach()),
+                    0,
+                    self.config.third_party.defense.limit.context,
+                )
+            )
+
+            loss = pert_diff_loss + identity_diff_loss + context_diff_loss
+            loss.backward()
+
+            x_imgs = (
+                x_imgs.clone().detach() - epsilon * x_imgs.grad.sign().clone().detach()
+            )
+
+            x_imgs = torch.clamp(
+                x_imgs,
+                min=imgs - limits,
+                max=imgs + limits,
+            )
+            x_imgs = torch.clamp(x_imgs, 0, 1)
+
+            if loss.item() < best_loss:
+                best_loss = loss.item()
+                best_imgs = x_imgs
+
+            if not silent:
+                self.logger.info(
+                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}]loss: {loss:.5f}({pert_diff_loss.item():.5f}, {identity_diff_loss.item():.5f}, {context_diff_loss.item():.5f})"
+                )
+
+        return best_imgs
+
+    def _get_full_swap_results(
+        self, imgs_A: tensor, imgs_B: tensor, pert_imgs_A: tensor
+    ) -> tuple[tensor, tensor, tensor, tensor]:
+        imgs_A_identity = self._get_imgs_identity(imgs_A)
+        imgs_A_src_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
+
+        pert_imgs_A_identity = self._get_imgs_identity(pert_imgs_A)
+        pert_imgs_A_src_swap = self.target(
+            None, imgs_B, pert_imgs_A_identity, None, True
+        )
+
+        imgs_B_identity = self._get_imgs_identity(imgs_B)
+        imgs_A_tgt_swap = self.target(None, imgs_A, imgs_B_identity, None, True)
+
+        pert_imgs_A_tgt_swap = self.target(
+            None, pert_imgs_A, imgs_B_identity, None, True
+        )
+
+        return (
+            imgs_A_src_swap,
+            pert_imgs_A_src_swap,
+            imgs_A_tgt_swap,
+            pert_imgs_A_tgt_swap,
+        )

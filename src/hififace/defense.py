@@ -17,116 +17,6 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
-    def _perturb_imgs(
-        self, imgs: tensor, cloak_imgs: tensor, silent: bool = False
-    ) -> tensor:
-        l2_loss = nn.MSELoss().cuda()
-        cloak_3d = self.net.generator.id_extractor.f_3d(cloak_imgs)[:, :80]
-        context_3d = self.net.generator.id_extractor.f_3d(imgs)[:, 80:]
-        cloak_identity = F.normalize(
-            self.net.generator.id_extractor.f_id(
-                F.interpolate((cloak_imgs - 0.5) / 0.5, size=112, mode="bilinear")
-            ),
-            dim=-1,
-            p=2,
-        )
-        middle_feat, final_feat = self.net.generator.encoder(imgs)
-        epsilon = (
-            self.config.third_party.defense.epsilon
-            * (torch.max(imgs) - torch.min(imgs))
-            / 2
-        )
-        limits = (
-            tensor(
-                [
-                    self.config.third_party.defense.limit.R,
-                    self.config.third_party.defense.limit.G,
-                    self.config.third_party.defense.limit.B,
-                ]
-            )
-            .view(1, 3, 1, 1)
-            .cuda()
-        )
-
-        x_imgs = imgs.clone().detach() + 1e-5
-        best_imgs, best_loss = None, float("inf")
-        for epoch in range(self.config.third_party.defense.epochs):
-            x_imgs.requires_grad = True
-
-            pert_loss = self.config.third_party.defense.weight.perturb * l2_loss(
-                x_imgs, imgs.detach()
-            )
-
-            x_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, :80]
-            identity_3d_loss = (
-                self.config.third_party.defense.weight.identity_3d
-                * l2_loss(x_3d, cloak_3d.detach())
-            )
-
-            x_identity = F.normalize(
-                self.net.generator.id_extractor.f_id(
-                    F.interpolate((x_imgs - 0.5) / 0.5, size=112, mode="bilinear")
-                ),
-                dim=-1,
-                p=2,
-            )
-            identity_id_loss = (
-                self.config.third_party.defense.weight.identity_id
-                * l2_loss(x_identity, cloak_identity.detach())
-            )
-
-            x_middle_feat, x_final_feat = self.net.generator.encoder(x_imgs)
-            context_middle_loss = (
-                -self.config.third_party.defense.weight.context_middle
-                * l2_loss(x_middle_feat, middle_feat.detach())
-            )
-            context_final_loss = (
-                -self.config.third_party.defense.weight.context_final
-                * torch.clamp(
-                    l2_loss(x_final_feat, final_feat.detach()),
-                    min=0,
-                    max=self.config.third_party.defense.limit.context_final,
-                )
-            )
-
-            x_context_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, 80:]
-            context_3d_loss = (
-                -self.config.third_party.defense.weight.context_3d
-                * l2_loss(x_context_3d, context_3d.detach())
-            )
-
-            loss = (
-                pert_loss
-                + identity_3d_loss
-                + identity_id_loss
-                + context_middle_loss
-                + context_final_loss
-                + context_3d_loss
-            )
-            loss.backward(retain_graph=False)
-
-            x_imgs = (
-                x_imgs.clone().detach() - epsilon * x_imgs.grad.sign().clone().detach()
-            )
-
-            x_imgs = torch.clamp(
-                x_imgs,
-                min=imgs - limits,
-                max=imgs + limits,
-            )
-            x_imgs = torch.clamp(x_imgs, 0, 1)
-
-            if loss.item() < best_loss:
-                best_loss = loss.item()
-                best_imgs = x_imgs
-
-            if not silent:
-                self.logger.info(
-                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs}]loss: {loss:.5f}({pert_loss.item():.5f}, {identity_3d_loss.item():.5f}, {identity_id_loss.item():.5f}, {context_middle_loss.item():.5f}, {context_final_loss.item():.5f}, {context_3d_loss.item():.5f})"
-                )
-
-        return best_imgs
-
     def metric(
         self,
     ) -> None:
@@ -239,3 +129,113 @@ class Defense(Base):
             {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
             """
             )
+
+    def _perturb_imgs(
+        self, imgs: tensor, cloak_imgs: tensor, silent: bool = False
+    ) -> tensor:
+        l2_loss = nn.MSELoss().cuda()
+        cloak_3d = self.net.generator.id_extractor.f_3d(cloak_imgs)[:, :80]
+        context_3d = self.net.generator.id_extractor.f_3d(imgs)[:, 80:]
+        cloak_identity = F.normalize(
+            self.net.generator.id_extractor.f_id(
+                F.interpolate((cloak_imgs - 0.5) / 0.5, size=112, mode="bilinear")
+            ),
+            dim=-1,
+            p=2,
+        )
+        middle_feat, final_feat = self.net.generator.encoder(imgs)
+        epsilon = (
+            self.config.third_party.defense.epsilon
+            * (torch.max(imgs) - torch.min(imgs))
+            / 2
+        )
+        limits = (
+            tensor(
+                [
+                    self.config.third_party.defense.limit.R,
+                    self.config.third_party.defense.limit.G,
+                    self.config.third_party.defense.limit.B,
+                ]
+            )
+            .view(1, 3, 1, 1)
+            .cuda()
+        )
+
+        x_imgs = imgs.clone().detach() + 1e-5
+        best_imgs, best_loss = None, float("inf")
+        for epoch in range(self.config.third_party.defense.epochs):
+            x_imgs.requires_grad = True
+
+            pert_loss = self.config.third_party.defense.weight.perturb * l2_loss(
+                x_imgs, imgs.detach()
+            )
+
+            x_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, :80]
+            identity_3d_loss = (
+                self.config.third_party.defense.weight.identity_3d
+                * l2_loss(x_3d, cloak_3d.detach())
+            )
+
+            x_identity = F.normalize(
+                self.net.generator.id_extractor.f_id(
+                    F.interpolate((x_imgs - 0.5) / 0.5, size=112, mode="bilinear")
+                ),
+                dim=-1,
+                p=2,
+            )
+            identity_id_loss = (
+                self.config.third_party.defense.weight.identity_id
+                * l2_loss(x_identity, cloak_identity.detach())
+            )
+
+            x_middle_feat, x_final_feat = self.net.generator.encoder(x_imgs)
+            context_middle_loss = (
+                -self.config.third_party.defense.weight.context_middle
+                * l2_loss(x_middle_feat, middle_feat.detach())
+            )
+            context_final_loss = (
+                -self.config.third_party.defense.weight.context_final
+                * torch.clamp(
+                    l2_loss(x_final_feat, final_feat.detach()),
+                    min=0,
+                    max=self.config.third_party.defense.limit.context_final,
+                )
+            )
+
+            x_context_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, 80:]
+            context_3d_loss = (
+                -self.config.third_party.defense.weight.context_3d
+                * l2_loss(x_context_3d, context_3d.detach())
+            )
+
+            loss = (
+                pert_loss
+                + identity_3d_loss
+                + identity_id_loss
+                + context_middle_loss
+                + context_final_loss
+                + context_3d_loss
+            )
+            loss.backward(retain_graph=False)
+
+            x_imgs = (
+                x_imgs.clone().detach() - epsilon * x_imgs.grad.sign().clone().detach()
+            )
+
+            x_imgs = torch.clamp(
+                x_imgs,
+                min=imgs - limits,
+                max=imgs + limits,
+            )
+            x_imgs = torch.clamp(x_imgs, 0, 1)
+
+            if loss.item() < best_loss:
+                best_loss = loss.item()
+                best_imgs = x_imgs
+
+            if not silent:
+                self.logger.info(
+                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs}]loss: {loss:.5f}({pert_loss.item():.5f}, {identity_3d_loss.item():.5f}, {identity_id_loss.item():.5f}, {context_middle_loss.item():.5f}, {context_final_loss.item():.5f}, {context_3d_loss.item():.5f})"
+                )
+
+        return best_imgs
