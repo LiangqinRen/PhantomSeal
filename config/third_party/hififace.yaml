@@ -1,0 +1,18 @@
+function: "sample"
+
+origin:
+  config_path: config/model.yaml
+  checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
+
+dataset:
+  metric_512_dir: "data/vggface2_512"
+  use_224: false
+  metric_pairs: 100
+  cloak: "real"
+  cloak_dir: "data/cloak_512/${third_party.dataset.cloak}"
+  cloak_mix: true
+  cloak_index: 0
+  cloak_min_distance: 1.04
+
+defense:
+  batch_size: 10

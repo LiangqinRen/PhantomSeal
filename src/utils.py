@@ -2,12 +2,14 @@ import logging
 import time
 import torch
 import random
+import os
 import numpy as np
 from torch import tensor
 from torchvision.utils import save_image, make_grid
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 from pathlib import Path
+from contextlib import contextmanager
 
 
 class Timer:
@@ -86,3 +88,13 @@ def save_tensor_imgs(
             for i, img in enumerate(imgs, start=1):
                 title_label = label.replace("\n", "_")
                 save_image(img, image_dir / f"{title_label}_{idx}_{i}.png")
+
+
+@contextmanager
+def cd(path):
+    prev = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev)
