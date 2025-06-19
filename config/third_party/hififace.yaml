@@ -16,3 +16,18 @@ dataset:
 
 defense:
   batch_size: 10
+  epochs: 750
+  epsilon: 0.003
+  limit:
+    R: 0.075
+    G: 0.025
+    B: 0.075
+    context_final: 50
+    context_3d: 100
+  weight:
+    perturb: 10000
+    identity_3d: 10000
+    identity_id: 5000
+    context_3d: 0
+    context_middle: 0
+    context_final: 0
