@@ -5,3 +5,5 @@ config/evaluate/evaluate.yaml
 data/
 logs/
 multirun/
+
+config/evaluate/evaluate.yaml

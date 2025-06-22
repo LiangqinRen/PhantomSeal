@@ -1,0 +1,29 @@
+facenet_512:
+  use: true
+  threshold: 1.04
+
+face_recognition:
+  use: false
+
+facepp:
+  use: true
+  compare_url: "https://api-us.faceplusplus.com/facepp/v3/compare"
+  api_key:
+    - ""
+  api_secret: 
+    - ""
+
+aws:
+    use: false
+    api_key: ""
+    api_secret: ""
+    api_region: ""
+
+ai_lab_tools:
+  face_beauty_url: "https://www.ailabapi.com/api/portrait/effects/face-beauty"
+  cartoon_url: "https://www.ailabapi.com/api/portrait/effects/portrait-animation"
+  api_key: ""
+
+tencent_cloud:
+  secret_id: ""
+  secret_key: ""
