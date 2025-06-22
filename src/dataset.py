@@ -45,11 +45,22 @@ class MetricDataset(Dataset):
             if config.third_party.dataset.use_224
             else config.third_party.dataset.metric_512_dir
         )
-        self.transform = (
-            transforms.Compose([transforms.ToTensor()])
-            if config.third_party.dataset.use_224
-            else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
-        )
+        if config.third_party.name == "faceshifter":
+            self.transform = transforms.Compose(
+                [
+                    transforms.Resize(256),
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                ]
+            )
+        elif (
+            config.third_party.name == "simswap" and config.third_party.dataset.use_224
+        ):
+            self.transform = transforms.Compose([transforms.ToTensor()])
+        else:
+            self.transform = transforms.Compose(
+                [transforms.Resize(256), transforms.ToTensor()]
+            )
         self.metric_pairs = config.third_party.dataset.metric_pairs
         self.mtcnn = MTCNN(
             keep_all=True, device="cuda" if torch.cuda.is_available() else "cpu"

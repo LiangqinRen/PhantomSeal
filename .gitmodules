@@ -4,3 +4,6 @@
 [submodule "third_party/SimSwap"]
 	path = third_party/SimSwap
 	url = https://github.com/neuralchen/SimSwap.git
+[submodule "third_party/FaceShifter"]
+	path = third_party/FaceShifter
+	url = https://github.com/richarduuz/Research_Project.git

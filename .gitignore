@@ -1,7 +1,7 @@
-.vscode
+.vscode/
 
 **/__pycache__/**
 config/evaluate/evaluate.yaml
 data/
-log/
+logs/
 multirun/

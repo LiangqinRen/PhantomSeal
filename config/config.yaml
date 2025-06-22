@@ -4,9 +4,9 @@ defaults:
   - _self_
 
 log_suffix: ""
-image_dir: log/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}/image
+image_dir: logs/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}/image
 random_seed: 0
 
 hydra:
   run:
-    dir: log/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}
+    dir: logs/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}
