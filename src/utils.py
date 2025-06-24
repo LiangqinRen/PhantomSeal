@@ -3,6 +3,7 @@ import time
 import torch
 import random
 import os
+import sys
 import numpy as np
 from torch import tensor
 from torchvision.utils import save_image, make_grid
@@ -98,3 +99,16 @@ def cd(path):
         yield
     finally:
         os.chdir(prev)
+
+
+@contextmanager
+def use_project(project_paths: list[Path]):
+    abs_paths = [str(p.resolve()) for p in project_paths]
+    for path in abs_paths:
+        sys.path.insert(0, path)
+    try:
+        yield
+    finally:
+        for path in abs_paths:
+            if path in sys.path:
+                sys.path.remove(path)
