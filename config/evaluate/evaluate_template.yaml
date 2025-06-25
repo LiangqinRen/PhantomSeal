@@ -14,10 +14,10 @@ facepp:
     - ""
 
 aws:
-    use: false
-    api_key: ""
-    api_secret: ""
-    api_region: ""
+  use: false
+  api_key: ""
+  api_secret: ""
+  api_region: ""
 
 ai_lab_tools:
   face_beauty_url: "https://www.ailabapi.com/api/portrait/effects/face-beauty"

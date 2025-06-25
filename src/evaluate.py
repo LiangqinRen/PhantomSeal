@@ -378,7 +378,7 @@ class AIEditing:
         self.logger = logger
         self.config = config
 
-    def face_beauty_via_ailabtools(self, imgs: tensor) -> tensor:
+    def face_beauty_via_ailabtools(self, imgs: tensor) -> tuple[tensor, int]:
         url = self.config.evaluate.ai_lab_tools.face_beauty_url
         headers = {"ailabapi-api-key": self.config.evaluate.ai_lab_tools.api_key}
         data = {
@@ -430,7 +430,7 @@ class AIEditing:
         beauty_imgs = torch.stack(img_list, dim=0).cuda()
         return beauty_imgs, beauty_success_count
 
-    def cartoon_via_ailabtools(self, imgs: tensor) -> tensor:
+    def cartoon_via_ailabtools(self, imgs: tensor) -> tuple[tensor, int]:
         url = self.config.evaluate.ai_lab_tools.cartoon_url
         headers = {"ailabapi-api-key": self.config.evaluate.ai_lab_tools.api_key}
         data = {"type": "jpcartoon"}
@@ -471,7 +471,7 @@ class AIEditing:
         cartoon_imgs = torch.stack(img_list, dim=0).cuda()
         return cartoon_imgs, cartoon_success_count
 
-    def face_beauty_via_tencentcloud(self, imgs: tensor) -> tensor:
+    def face_beauty_via_tencentcloud(self, imgs: tensor) -> tuple[tensor, int]:
         def sign(key, msg):
             return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
 

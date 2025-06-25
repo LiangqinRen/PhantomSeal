@@ -18,6 +18,11 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
+        if self.config.third_party.robustness.ai_beauty:
+            logger.info(
+                f"AI Beauty enabled with {self.config.third_party.robustness.ai_beauty_tool}"
+            )
+
     def sample(self) -> None:
         dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
         dataloader = DataLoader(
@@ -105,9 +110,20 @@ class Defense(Base):
         )
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
-            total_count += len(imgs_A)
-
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            if self.config.third_party.robustness.ai_beauty:
+                ai_beauty_tool = self.config.third_party.robustness.ai_beauty_tool
+                if ai_beauty_tool == "ai_lab_tools":
+                    imgs_A, count = self.aiediting.face_beauty_via_ailabtools(imgs_A)
+                elif ai_beauty_tool == "tencent_cloud":
+                    imgs_A, count = self.aiediting.face_beauty_via_tencentcloud(imgs_A)
+                else:
+                    self.logger.critical(f"Unknown ai_beauty_tool: {ai_beauty_tool}")
+                    raise ValueError(f"Unknown ai_beauty_tool: {ai_beauty_tool}")
+                total_count += count
+            else:
+                total_count += len(imgs_A)
+
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
             x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
 
