@@ -6,7 +6,7 @@ for date_dir in "$LOGS_DIR"/*; do
   [ -d "$date_dir" ] || continue
 
   for time_dir in "$date_dir"/*; do
-    if [[ -d "$time_dir" && "$time_dir" == *_debug ]]; then
+    if [[ -d "$time_dir" && "$time_dir" == *-debug ]]; then
       echo "Deleting debug folder: $time_dir"
       rm -rf "$time_dir"
     fi

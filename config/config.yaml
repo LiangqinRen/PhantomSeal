@@ -3,10 +3,13 @@ defaults:
   - third_party: simswap
   - _self_
 
-log_suffix: ""
-image_dir: logs/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}/image
+log:
+  file_suffix: ""
+  record_level: info # one of [debug, info, warning, error, critical]
+
+image_dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}/image
 random_seed: 0
 
 hydra:
   run:
-    dir: logs/${now:%Y-%m-%d}/${now:%H:%M:%S}${log_suffix}
+    dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}

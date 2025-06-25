@@ -25,8 +25,14 @@ class Timer:
         )
 
 
-def get_customized_logger():
+def get_customized_logger(log_level: str) -> logging.Logger:
+    level_str = log_level.upper()
+    if not hasattr(logging, level_str):
+        raise ValueError(f"Invalid log level: {level_str}")
+
+    level = getattr(logging, level_str)
     logger = logging.getLogger()
+    logger.setLevel(level)
 
     formatter = logging.Formatter(
         fmt="[%(asctime)s.%(msecs)03d][%(filename)10s:%(lineno)4d][%(levelname)5s] - %(message)s",

@@ -6,16 +6,18 @@ function=$1
 function=`echo $function | tr '[:upper:]' '[:lower:]'`
 
 if [ $# == 2 ] && [ "$2" == "debug" ]; then
-    debug="_debug"
+    suffix="-debug"
+    log_level="debug"
 else
-    debug=""
+    suffix=""
+    log_level="info"
 fi
 
 ROOT=$(dirname $(dirname $(realpath "$0")))
 
 if [[ $function == 'metric' ]]
 then
-    PYTHONPATH="$ROOT/src:$ROOT/third_party/HifiFace" python "$ROOT/src/hififace/main.py" third_party=hififace log_suffix=$debug third_party.function=$function
+    PYTHONPATH="$ROOT/src:$ROOT/third_party/HifiFace" python "$ROOT/src/hififace/main.py" third_party=hififace third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 else
     echo "⚠️ Oops! That function doesn't exist"
 fi
