@@ -5,7 +5,7 @@ import random
 import os
 import sys
 import numpy as np
-from torch import tensor
+from torch import Tensor
 from torchvision.utils import save_image, make_grid
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
@@ -83,10 +83,10 @@ def save_tensor_imgs(
     image_dir: Path,
     idx: int,
     img_labels: list[str],
-    img_tensors: list[tensor],
+    img_tensors: list[Tensor],
     only_save_summary: bool = True,
 ) -> None:
-    def prepend_white_column(imgs: tensor) -> tensor:
+    def prepend_white_column(imgs: Tensor) -> Tensor:
         _, C, H, W = imgs.shape
         white_img = torch.ones((1, C, H, W), device=imgs.device, dtype=imgs.dtype)
         return torch.cat([white_img, imgs], dim=0)

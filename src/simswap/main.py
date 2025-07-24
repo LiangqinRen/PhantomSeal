@@ -13,7 +13,7 @@ def main(config: DictConfig):
 
     utils.check_cuda_availability(logger)
     utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer(inspect.currentframe().f_code.co_name, logger)
+    timer = utils.Timer("main", logger)
 
     defense = Defense(logger, config)
     defense_function_list = ["sample", "metric"]

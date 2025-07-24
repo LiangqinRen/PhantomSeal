@@ -6,7 +6,7 @@ from utils import save_tensor_imgs
 
 import textwrap
 import torch
-from torch import tensor, nn
+from torch import tensor, Tensor, nn
 from torch.utils.data import DataLoader
 from pathlib import Path
 
@@ -221,8 +221,8 @@ class Defense(Base):
             )
 
     def _perturb_imgs(
-        self, imgs: tensor, cloak_imgs: tensor, silent: bool = False
-    ) -> tensor:
+        self, imgs: Tensor, cloak_imgs: Tensor, silent: bool = False
+    ) -> Tensor:
         l2_loss = nn.MSELoss().cuda()
         x_imgs = imgs.clone().detach() + torch.randn_like(imgs) * 1e-5
         cloak_identity = self._get_imgs_identity(cloak_imgs)
@@ -244,9 +244,9 @@ class Defense(Base):
             .cuda()
         )
 
-        best_imgs, best_loss = None, float("inf")
+        best_imgs, best_loss = torch.ones_like(imgs), float("inf")
         for epoch in range(self.config.third_party.defense.epochs):
-            x_imgs.requires_grad = True
+            x_imgs = x_imgs.clone().detach().requires_grad_(True)
 
             pert_diff_loss = self.config.third_party.defense.weight.perturb * l2_loss(
                 x_imgs, imgs.detach()
@@ -271,9 +271,12 @@ class Defense(Base):
             loss = pert_diff_loss + identity_diff_loss + context_diff_loss
             loss.backward()
 
-            x_imgs = (
-                x_imgs.clone().detach() - epsilon * x_imgs.grad.sign().clone().detach()
-            )
+            if x_imgs.grad is not None:
+                grad_sign = x_imgs.grad.sign().clone().detach()
+            else:
+                grad_sign = torch.zeros_like(x_imgs)
+
+            x_imgs = x_imgs.clone().detach() - epsilon * grad_sign
 
             x_imgs = torch.clamp(
                 x_imgs,
@@ -294,8 +297,8 @@ class Defense(Base):
         return best_imgs
 
     def _get_full_swap_results(
-        self, imgs_A: tensor, imgs_B: tensor, pert_imgs_A: tensor
-    ) -> tuple[tensor, tensor, tensor, tensor]:
+        self, imgs_A: Tensor, imgs_B: Tensor, pert_imgs_A: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         imgs_A_identity = self._get_imgs_identity(imgs_A)
         imgs_A_src_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
 

@@ -4,7 +4,7 @@ from evaluate import Utility, Effectiveness, AIEditing, Cloak
 import torch
 import torch.nn.functional as F
 from argparse import Namespace
-from torch import tensor
+from torch import Tensor
 from types import MethodType
 
 
@@ -36,7 +36,7 @@ class Base:
         self.aiediting = AIEditing(logger, config)
         self.cloak = Cloak(logger, config, self.effectiveness)
 
-    def _get_imgs_identity(self, imgs: tensor) -> tensor:
+    def _get_imgs_identity(self, imgs: Tensor) -> Tensor:
         imgs_downsample = F.interpolate(imgs, size=(112, 112))
         prior = self.target.netArc(imgs_downsample)
         prior = prior / torch.norm(prior, p=2, dim=1)[0]
@@ -44,7 +44,7 @@ class Base:
         return prior.cuda()
 
     @staticmethod
-    def encoder(this, input):
+    def encoder(this, input: Tensor) -> Tensor:
         x = input
 
         x = this.first_layer(x)
