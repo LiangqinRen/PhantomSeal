@@ -224,7 +224,7 @@ class Defense(Base):
         self, imgs: tensor, cloak_imgs: tensor, silent: bool = False
     ) -> tensor:
         l2_loss = nn.MSELoss().cuda()
-        x_imgs = imgs.clone().detach()
+        x_imgs = imgs.clone().detach() + torch.randn_like(imgs) * 1e-5
         cloak_identity = self._get_imgs_identity(cloak_imgs)
         imgs_latent_code = self.target.netG.encoder(x_imgs)
         epsilon = (

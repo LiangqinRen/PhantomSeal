@@ -13,3 +13,4 @@ random_seed: 0
 hydra:
   run:
     dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
+  output_subdir: config

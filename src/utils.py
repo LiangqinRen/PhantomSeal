@@ -20,9 +20,29 @@ class Timer:
         self.logger = logger
 
     def __del__(self):
+        elapsed = time.time() - self.begin_time
         self.logger.info(
-            f"{self.function_name} costs {time.time() - self.begin_time:.3f} seconds"
+            f"{self.function_name} costs {self.format_seconds(elapsed)} ({elapsed:.3f} seconds)"
         )
+
+    def format_seconds(self, seconds: float) -> str:
+        seconds = round(seconds, 3)
+        days, rem = divmod(int(seconds), 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes, whole_seconds = divmod(rem, 60)
+        fractional = round(seconds - int(seconds), 3)
+        final_seconds = whole_seconds + fractional
+
+        parts = []
+        if days:
+            parts.append(f"{days}d")
+        if hours:
+            parts.append(f"{hours}h")
+        if minutes:
+            parts.append(f"{minutes}m")
+        if final_seconds or not parts:
+            parts.append(f"{final_seconds:.3f}s")
+        return " ".join(parts)
 
 
 def get_customized_logger(log_level: str) -> logging.Logger:
