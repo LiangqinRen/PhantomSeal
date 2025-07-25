@@ -1,4 +1,5 @@
 from torch import Tensor
+from copy import deepcopy
 
 
 def get_metric_data_template(effectiveness) -> dict:
@@ -21,6 +22,36 @@ def get_metric_data_template(effectiveness) -> dict:
             "swap": (0, 0),
             "pert_swap": (0, 0),
         }
+
+    return data
+
+
+def get_robustness_metric_data_template(effectiveness) -> dict:
+    data = {
+        "pert_as_src_effectiveness": {},
+        "pert_as_tgt_effectiveness": {},
+    }
+
+    for effec in effectiveness.candi_funcs.keys():
+        data["pert_as_src_effectiveness"][effec] = {
+            "swap": (0, 0),
+            "pert_swap": (0, 0),
+            "anchor": (0, 0),
+        }
+        data["pert_as_tgt_effectiveness"][effec] = {
+            "swap": (0, 0),
+            "pert_swap": (0, 0),
+        }
+
+    data = {
+        "utility": {"mse": 0, "psnr": 0, "ssim": 0, "lpips": 0},
+        "noise": deepcopy(data),
+        "compress": deepcopy(data),
+        "crop": deepcopy(data),
+        "logo": deepcopy(data),
+        "inc_bright": deepcopy(data),
+        "dec_bright": deepcopy(data),
+    }
 
     return data
 
@@ -61,6 +92,31 @@ def get_defense_metric(
         pert_as_tgt_swap_utilities,
         source_effectivenesses,
         target_effectivenesses,
+    )
+
+
+def merge_single_dict(sum: dict, item: dict):
+    # sum and item must have identical structure
+    for key in sum:
+        if isinstance(sum[key], dict) and isinstance(item[key], dict):
+            merge_single_dict(sum[key], item[key])
+        elif isinstance(sum[key], tuple) and isinstance(item[key], tuple):
+            sum[key] = tuple(a + b for a, b in zip(sum[key], item[key]))
+        else:
+            sum[key] = sum[key] + item[key]
+
+
+def merge_single_robustness_metric(
+    data: dict,
+    source_effectivenesses: dict,
+    target_effectivenesses: dict,
+    experiment: str,
+) -> None:
+    merge_single_dict(
+        data[experiment]["pert_as_src_effectiveness"], source_effectivenesses
+    )
+    merge_single_dict(
+        data[experiment]["pert_as_tgt_effectiveness"], target_effectivenesses
     )
 
 
@@ -157,6 +213,23 @@ def generate_summary_effectiveness_log(data: dict, item: str) -> str:
 
 def generate_iter_robustness_log(source: dict, target: dict) -> str:
     content = ""
+    for effec in source:
+        content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in source[effec].items())} "
+    for effec in target:
+        content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in target[effec].items())} "
+    return content
+
+
+def generate_summary_robustness_utility_log(data: dict, batch: int) -> str:
+    return f"""
+        {tuple(f'{v/batch:.3f}' for _,v in data.items())}
+        """.strip()
+
+
+def generate_summary_robustness_log(data: dict) -> str:
+    content = ""
+    source = data["pert_as_src_effectiveness"]
+    target = data["pert_as_tgt_effectiveness"]
     for effec in source:
         content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in source[effec].items())} "
     for effec in target:
