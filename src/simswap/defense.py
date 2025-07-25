@@ -1,6 +1,7 @@
 import metric
 from simswap.base import Base
 from dataset import SampleDataset, MetricDataset
+from robustness import Robustness
 from utils import save_tensor_imgs
 
 
@@ -17,6 +18,8 @@ class Defense(Base):
 
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
+
+        self.robustness = Robustness(logger, config)
 
         if self.config.third_party.robustness.ai_beauty:
             logger.info(
@@ -65,7 +68,7 @@ class Defense(Base):
                 idx,
                 [
                     "imgs_A",
-                    "imgs_b",
+                    "imgs_B",
                     "pert_imgs",
                     "cloak_imgs",
                     "swap",
@@ -83,7 +86,7 @@ class Defense(Base):
                     imgs_A_tgt_swap,
                     pert_imgs_A_tgt_swap,
                 ],
-                False,
+                only_save_summary=False,
             )
 
             self.logger.info(
@@ -168,7 +171,7 @@ class Defense(Base):
                 idx,
                 [
                     "imgs_A",
-                    "imgs_b",
+                    "imgs_B",
                     "pert_imgs",
                     "cloak_imgs",
                     "swap",
@@ -186,7 +189,7 @@ class Defense(Base):
                     imgs_A_tgt_swap,
                     pert_imgs_A_tgt_swap,
                 ],
-                True,
+                only_save_summary=True,
             )
 
             del imgs_A, imgs_B, x_imgs, cloak_imgs
@@ -219,6 +222,87 @@ class Defense(Base):
             {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
             """
             )
+
+    def robustness_sample(self) -> None:
+        dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+
+            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            x_imgs = self.robustness.webp_compress(x_imgs, 80)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+            x_imgs = self.robustness.webp_compress(x_imgs, 80)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+
+            pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
+            logo = self.robustness.load_logo()
+
+            (
+                noise_source_effectivenesses,
+                noise_target_effectivenesses,
+            ) = self.robustness.get_gauss_noise_metrics(
+                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+            )
+
+            (
+                compress_source_effectivenesses,
+                compress_target_effectivenesses,
+            ) = self.robustness.get_compress_metrics(
+                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+            )
+
+            (
+                crop_source_effectivenesses,
+                crop_target_effectivenesses,
+            ) = self.robustness.get_crop_metrics(
+                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+            )
+
+            (
+                logo_source_effectivenesses,
+                logo_target_effectivenesses,
+            ) = self.robustness.get_logo_metrics(
+                idx, imgs_A, imgs_B, x_imgs, logo, cloak_imgs, self.image_dir
+            )
+
+            (
+                inc_bright_source_effectivenesses,
+                inc_bright_target_effectivenesses,
+            ) = self.robustness.get_brightness_metrics(
+                idx, imgs_A, imgs_B, x_imgs, 1.25, cloak_imgs, self.image_dir
+            )
+
+            (
+                dec_bright_source_effectivenesses,
+                dec_bright_target_effectivenesses,
+            ) = self.robustness.get_brightness_metrics(
+                idx, imgs_A, imgs_B, x_imgs, 0.75, cloak_imgs, self.image_dir
+            )
+
+            torch.cuda.empty_cache()
+            self.logger.info(
+                textwrap.dedent(
+                    f"""
+                pert utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_utilities)}
+                effectiveness tools: {list(self.effectiveness.candi_funcs.keys())}, noise, compress, crop, overlay, increase and decrease the brightness
+                source(robust swap, robust pert swap, robust cloak), target(robust swap, robust pert swap)
+                noise, compress, crop, logo, inc_bright, dec_bright
+                {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
+                {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
+                {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
+                {metric.generate_iter_robustness_log(logo_source_effectivenesses,logo_target_effectivenesses)}
+                {metric.generate_iter_robustness_log(inc_bright_source_effectivenesses,inc_bright_target_effectivenesses)}
+                {metric.generate_iter_robustness_log(dec_bright_source_effectivenesses,dec_bright_target_effectivenesses)}
+                """
+                )
+            )
+
+    def robustness_metric(self) -> None:
+        pass
 
     def _perturb_imgs(
         self, imgs: Tensor, cloak_imgs: Tensor, silent: bool = False

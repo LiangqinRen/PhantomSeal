@@ -1,4 +1,4 @@
-from torch import tensor
+from torch import Tensor
 
 
 def get_metric_data_template(effectiveness) -> dict:
@@ -28,14 +28,14 @@ def get_metric_data_template(effectiveness) -> dict:
 def get_defense_metric(
     utility,
     effectiveness,
-    imgs_A: tensor,
-    imgs_B: tensor,
-    x_imgs: tensor,
-    cloak_imgs: tensor,
-    imgs_A_src_swap: tensor,
-    pert_imgs_A_src_swap: tensor,
-    imgs_A_tgt_swap: tensor,
-    pert_imgs_A_tgt_swap: tensor,
+    imgs_A: Tensor,
+    imgs_B: Tensor,
+    x_imgs: Tensor,
+    cloak_imgs: Tensor,
+    imgs_A_src_swap: Tensor,
+    pert_imgs_A_src_swap: Tensor,
+    imgs_A_tgt_swap: Tensor,
+    pert_imgs_A_tgt_swap: Tensor,
 ) -> tuple[dict, dict, dict, dict, dict]:
     pert_utilities = utility.calculate_utility(imgs_A, x_imgs)
     pert_as_src_swap_utilities = utility.calculate_utility(
@@ -152,4 +152,13 @@ def generate_summary_effectiveness_log(data: dict, item: str) -> str:
     for effec in data[item]:
         content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in data[item][effec].items())} "
 
+    return content
+
+
+def generate_iter_robustness_log(source: dict, target: dict) -> str:
+    content = ""
+    for effec in source:
+        content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in source[effec].items())} "
+    for effec in target:
+        content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in target[effec].items())} "
     return content

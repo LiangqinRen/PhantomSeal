@@ -30,3 +30,4 @@ defense:
 robustness:
   ai_beauty: false
   ai_beauty_tool: null
+  logo_img_path: data/samples_224/NDSS.jpg

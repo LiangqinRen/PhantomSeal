@@ -137,7 +137,7 @@ class Defense(Base):
                     torch.cat(imgs_A_tgt_swap, dim=0).cuda(),
                     torch.cat(pert_imgs_A_tgt_swap, dim=0).cuda(),
                 ],
-                True,
+                only_save_summary=True,
             )
 
             del imgs_A, imgs_B, x_imgs, cloak_imgs

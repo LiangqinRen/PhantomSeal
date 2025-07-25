@@ -112,7 +112,7 @@ class Defense(Base):
                     faceshifter_cloak_swap,
                     faceshifter_pert_swap,
                 ],
-                True,
+                only_save_summary=True,
             )
 
             total_count += len(faceshifter_swap)

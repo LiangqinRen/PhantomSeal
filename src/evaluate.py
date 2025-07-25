@@ -19,7 +19,7 @@ from http.client import HTTPSConnection
 from datetime import datetime, timedelta, timezone
 from facenet_pytorch import MTCNN, InceptionResnetV1
 from skimage import metrics
-from torch import tensor
+from torch import Tensor
 import face_recognition
 from PIL import Image
 from io import BytesIO
@@ -37,7 +37,7 @@ class Utility:
             warnings.simplefilter("ignore", UserWarning)
             self.lpips_distance = lpips.LPIPS(net="vgg", verbose=False).cuda()
 
-    def calculate_utility(self, imgs1: torch.tensor, imgs2: torch.tensor):
+    def calculate_utility(self, imgs1: Tensor, imgs2: Tensor):
         utilities = {"mse": [], "psnr": [], "ssim": [], "lpips": []}
 
         imgs1_ndarray = imgs1.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
@@ -109,7 +109,7 @@ class Effectiveness:
 
         return candidate_functions
 
-    def get_images_distance(self, imgs1: tensor, imgs2: tensor) -> list[float]:
+    def get_images_distance(self, imgs1: Tensor, imgs2: Tensor) -> list[float]:
         distances = []
 
         imgs1_ndarray = imgs1.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
@@ -142,7 +142,7 @@ class Effectiveness:
         return distances
 
     def __get_facenet_matching(
-        self, imgs1: tensor, imgs2: tensor
+        self, imgs1: Tensor, imgs2: Tensor
     ) -> tuple[float, float]:
         matching_count, valid_count = 0, 1e-10
         distances = self.get_images_distance(imgs1, imgs2)
@@ -156,7 +156,7 @@ class Effectiveness:
         return matching_count, valid_count
 
     def __get_facerec_matching(
-        self, imgs1: tensor, imgs2: tensor
+        self, imgs1: Tensor, imgs2: Tensor
     ) -> tuple[float, float]:
         matching_count, valid_count = 0, 1e-10
         for i in range(imgs1.shape[0]):
@@ -190,7 +190,7 @@ class Effectiveness:
         return matching_count, valid_count
 
     def __get_facepp_matching_single(
-        self, img1: tensor, img2: tensor, key: str, secret: str
+        self, img1: Tensor, img2: Tensor, key: str, secret: str
     ):
         buffer1 = BytesIO()
         img1 = img1 * 255
@@ -245,7 +245,7 @@ class Effectiveness:
 
         return (0, 1e-10)
 
-    def __get_facepp_matching(self, imgs1: tensor, imgs2: tensor):
+    def __get_facepp_matching(self, imgs1: Tensor, imgs2: Tensor):
         api_keys = self.config.evaluate.facepp.api_key
         api_secrets = self.config.evaluate.facepp.api_secret
 
@@ -269,7 +269,7 @@ class Effectiveness:
 
         return (success_count, total_count)
 
-    def __get_aws_matching(self, imgs1: tensor, imgs2: tensor) -> tuple[float, float]:
+    def __get_aws_matching(self, imgs1: Tensor, imgs2: Tensor) -> tuple[float, float]:
         matching_count, valid_count = 0, 1e-10
         for img1, img2 in zip(imgs1, imgs2):
             try:
@@ -309,7 +309,7 @@ class Effectiveness:
 
         return matching_count, valid_count
 
-    def is_same_identity_via_facepp(self, img1: tensor, img2: tensor) -> list[bool]:
+    def is_same_identity_via_facepp(self, img1: Tensor, img2: Tensor) -> list[bool]:
         api_keys = self.config.evaluate.facepp.api_key
         api_secrets = self.config.evaluate.facepp.api_secret
 
@@ -349,11 +349,11 @@ class Effectiveness:
 
     def calculate_effectiveness(
         self,
-        source_imgs: tensor,
-        pert_imgs: tensor,
-        swap_imgs: tensor,
-        pert_swap_imgs: tensor,
-        cloak_imgs: tensor,
+        source_imgs: Tensor | None,
+        pert_imgs: Tensor | None,
+        swap_imgs: Tensor | None,
+        pert_swap_imgs: Tensor | None,
+        cloak_imgs: Tensor | None,
     ) -> dict:
         effectivenesses = {}
         for k, v in self.candi_funcs.items():
@@ -378,7 +378,7 @@ class AIEditing:
         self.logger = logger
         self.config = config
 
-    def face_beauty_via_ailabtools(self, imgs: tensor) -> tuple[tensor, int]:
+    def face_beauty_via_ailabtools(self, imgs: Tensor) -> tuple[Tensor, int]:
         url = self.config.evaluate.ai_lab_tools.face_beauty_url
         headers = {"ailabapi-api-key": self.config.evaluate.ai_lab_tools.api_key}
         data = {
@@ -430,7 +430,7 @@ class AIEditing:
         beauty_imgs = torch.stack(img_list, dim=0).cuda()
         return beauty_imgs, beauty_success_count
 
-    def cartoon_via_ailabtools(self, imgs: tensor) -> tuple[tensor, int]:
+    def cartoon_via_ailabtools(self, imgs: Tensor) -> tuple[Tensor, int]:
         url = self.config.evaluate.ai_lab_tools.cartoon_url
         headers = {"ailabapi-api-key": self.config.evaluate.ai_lab_tools.api_key}
         data = {"type": "jpcartoon"}
@@ -471,7 +471,7 @@ class AIEditing:
         cartoon_imgs = torch.stack(img_list, dim=0).cuda()
         return cartoon_imgs, cartoon_success_count
 
-    def face_beauty_via_tencentcloud(self, imgs: tensor) -> tuple[tensor, int]:
+    def face_beauty_via_tencentcloud(self, imgs: Tensor) -> tuple[Tensor, int]:
         def sign(key, msg):
             return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
 
@@ -649,7 +649,7 @@ class Cloak:
 
         return cloak_cache
 
-    def __hash_tensor(self, img: tensor):
+    def __hash_tensor(self, img: Tensor):
         return hash(tuple(img.view(-1).tolist()))
 
     def __get_cloak_imgs_path(self) -> dict:
@@ -687,7 +687,7 @@ class Cloak:
             "mix": self.__load_imgs(cloak_imgs_path["mix"]),
         }
 
-    def __check_imgs_gender_single(self, img: tensor, key: str, secret: str) -> dict:
+    def __check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
         result = {self.__hash_tensor(img): "fail"}
 
         buffered = BytesIO()
@@ -731,7 +731,7 @@ class Cloak:
 
         return result
 
-    def __check_imgs_gender(self, imgs: tensor):
+    def __check_imgs_gender(self, imgs: Tensor):
         from concurrent.futures import ThreadPoolExecutor
 
         api_keys = self.config.evaluate.facepp.api_key
@@ -754,7 +754,7 @@ class Cloak:
 
         return imgs_gender
 
-    def find_best_cloaks(self, imgs: tensor) -> tensor:
+    def find_best_cloaks(self, imgs: Tensor) -> Tensor:
         if not self.config.third_party.dataset.cloak_mix:
             imgs_gender = self.__check_imgs_gender(imgs)
 

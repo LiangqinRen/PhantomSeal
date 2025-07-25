@@ -84,6 +84,7 @@ def save_tensor_imgs(
     idx: int,
     img_labels: list[str],
     img_tensors: list[Tensor],
+    image_name: str = "summary",
     only_save_summary: bool = True,
 ) -> None:
     def prepend_white_column(imgs: Tensor) -> Tensor:
@@ -108,7 +109,7 @@ def save_tensor_imgs(
         y = i * cell_h
         draw.text((5, y + 5), label, fill="black", font=font)
 
-    grid.save(image_dir / f"summary_{idx}.png")
+    grid.save(image_dir / f"{image_name}_{idx}.png")
 
     if not only_save_summary:
         for label, imgs in zip(img_labels, img_tensors):

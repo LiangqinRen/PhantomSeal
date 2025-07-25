@@ -16,7 +16,12 @@ def main(config: DictConfig):
     timer = utils.Timer("main", logger)
 
     defense = Defense(logger, config)
-    defense_function_list = ["sample", "metric"]
+    defense_function_list = [
+        "sample",
+        "metric",
+        "robustness_sample",
+        "robustness_metric",
+    ]
     defense_functions = {name: getattr(defense, name) for name in defense_function_list}
 
     if config.third_party.function in defense_functions:
