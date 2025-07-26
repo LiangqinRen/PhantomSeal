@@ -95,6 +95,17 @@ def get_defense_metric(
     )
 
 
+def get_robustness_forensics_metric(
+    effectiveness, cloak_imgs: Tensor, swap_results: dict
+) -> dict:
+    effectivenesses = {}
+    for k, v in swap_results.items():
+        result = effectiveness.calculate_effectiveness(None, None, None, v, cloak_imgs)
+        effectivenesses[k] = result
+
+    return effectivenesses
+
+
 def merge_single_dict(sum: dict, item: dict):
     # sum and item must have identical structure
     for key in sum:
@@ -234,4 +245,14 @@ def generate_summary_robustness_log(data: dict) -> str:
         content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in source[effec].items())} "
     for effec in target:
         content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in target[effec].items())} "
+    return content
+
+
+def generate_forensics_robustness_log(data: dict) -> str:
+    content = "("
+    for _, v in data.items():
+        content += f"{v['anchor'][0]/v['anchor'][1]*100:.3f}/{v['anchor'][1]:.0f}, "
+    content = content[:-2]
+    content += ")"
+
     return content

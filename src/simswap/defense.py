@@ -429,6 +429,180 @@ class Defense(Base):
             """
             )
 
+    def robustness_forensics_sample(self):
+        dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+        logo = self.robustness.load_logo()
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+
+            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            x_imgs = self.robustness.webp_compress(x_imgs, 80)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+            x_imgs = self.robustness.webp_compress(x_imgs, 80)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+
+            imgs_A_identity = self._get_imgs_identity(imgs_A)
+            imgs_A_src_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
+            pert_imgs_A_identity = self._get_imgs_identity(x_imgs)
+            pert_imgs_A_src_swap = self.target(
+                None, imgs_B, pert_imgs_A_identity, None, True
+            )
+
+            results = {"clean": pert_imgs_A_src_swap}
+            results["noise"] = self.robustness._gauss_noise(pert_imgs_A_src_swap)
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_A_src_swap",
+                    "pert_imgs_A_src_swap",
+                    "noise",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_A_src_swap,
+                    pert_imgs_A_src_swap,
+                    results["noise"],
+                ],
+                only_save_summary=True,
+            )
+
+            results["compress"] = self.robustness.webp_compress(pert_imgs_A_src_swap)
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_A_src_swap",
+                    "pert_imgs_A_src_swap",
+                    "compress",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_A_src_swap,
+                    pert_imgs_A_src_swap,
+                    results["compress"],
+                ],
+                only_save_summary=True,
+            )
+
+            results["crop"] = self.robustness._crop(pert_imgs_A_src_swap)
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_A_src_swap",
+                    "pert_imgs_A_src_swap",
+                    "crop",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_A_src_swap,
+                    pert_imgs_A_src_swap,
+                    results["crop"],
+                ],
+                only_save_summary=True,
+            )
+
+            results["logo"] = self.robustness._logo(pert_imgs_A_src_swap, logo)
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_A_src_swap",
+                    "pert_imgs_A_src_swap",
+                    "logo",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_A_src_swap,
+                    pert_imgs_A_src_swap,
+                    results["logo"],
+                ],
+                only_save_summary=True,
+            )
+
+            results["inc_bright"] = self.robustness._brightness(
+                pert_imgs_A_src_swap, 1.25
+            )
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_A_src_swap",
+                    "pert_imgs_A_src_swap",
+                    "inc_bright",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_A_src_swap,
+                    pert_imgs_A_src_swap,
+                    results["inc_bright"],
+                ],
+                only_save_summary=True,
+            )
+
+            results["dec_bright"] = self.robustness._brightness(
+                pert_imgs_A_src_swap, 0.75
+            )
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_A_src_swap",
+                    "pert_imgs_A_src_swap",
+                    "dec_bright",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_A_src_swap,
+                    pert_imgs_A_src_swap,
+                    results["dec_bright"],
+                ],
+                only_save_summary=True,
+            )
+
+            forensic_metrics = metric.get_robustness_forensics_metric(
+                self.effectiveness, cloak_imgs, results
+            )
+
+            torch.cuda.empty_cache()
+            self.logger.info(
+                textwrap.dedent(
+                    f"""
+            effectiveness tools: {list(self.effectiveness.candi_funcs.keys())}, cloak
+            original: {metric.generate_forensics_robustness_log(forensic_metrics['clean'])}
+            noise: {metric.generate_forensics_robustness_log(forensic_metrics['noise'])}
+            compress: {metric.generate_forensics_robustness_log(forensic_metrics['compress'])}
+            crop: {metric.generate_forensics_robustness_log(forensic_metrics['crop'])}
+            overlay: {metric.generate_forensics_robustness_log(forensic_metrics['logo'])}
+            increase the brightness: {metric.generate_forensics_robustness_log(forensic_metrics['inc_bright'])}
+            decrease the brightness: {metric.generate_forensics_robustness_log(forensic_metrics['dec_bright'])}
+            """
+                )
+            )
+
     def _perturb_imgs(
         self, imgs: Tensor, cloak_imgs: Tensor, silent: bool = False
     ) -> Tensor:
