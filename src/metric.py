@@ -56,6 +56,24 @@ def get_robustness_metric_data_template(effectiveness) -> dict:
     return data
 
 
+def get_robustness_forensics_metric_data_template(effectiveness) -> dict:
+    item_data = {}
+    for effec in effectiveness.candi_funcs.keys():
+        item_data[effec] = {"anchor": (0, 0)}
+
+    data = {
+        "clean": deepcopy(item_data),
+        "noise": deepcopy(item_data),
+        "compress": deepcopy(item_data),
+        "crop": deepcopy(item_data),
+        "logo": deepcopy(item_data),
+        "inc_bright": deepcopy(item_data),
+        "dec_bright": deepcopy(item_data),
+    }
+
+    return data
+
+
 def get_defense_metric(
     utility,
     effectiveness,

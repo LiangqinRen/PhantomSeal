@@ -26,7 +26,7 @@ elif [[ $function == 'ai_beauty' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=metric log.file_suffix=$suffix log.record_level=$log_level third_party.robustness.ai_beauty=true third_party.robustness.ai_beauty_tool=ai_lab_tools 
     # third_party.robustness.ai_beauty_tool=ai_lab_tools or tencent_cloud
-elif [[ $function == 'robustness_sample' || $function == 'robustness_metric' || $function == 'robustness_forensics_sample' ]]
+elif [[ $function == 'robustness_sample' || $function == 'robustness_metric' || $function == 'robustness_forensics_sample' || $function == 'robustness_forensics_metric' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level third_party.defense.epochs=335
 else

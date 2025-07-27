@@ -25,6 +25,14 @@ class Robustness(Base):
         logo = self._load_imgs([self.config.third_party.robustness.logo_img_path])
         return logo
 
+    def gauss_noise(
+        self, pert: Tensor, gauss_mean: float = 0, gauss_std: float = 0.1
+    ) -> Tensor:
+        gauss_noise = gauss_mean + gauss_std * torch.randn(pert.shape).cuda()
+        noise_pert = pert + gauss_noise
+
+        return noise_pert
+
     def webp_compress(self, imgs: Tensor, quality: float = 80):
         compressed_imgs = []
         for i in range(imgs.size(0)):
@@ -42,7 +50,48 @@ class Robustness(Base):
 
         return torch.stack(compressed_imgs).cuda()
 
-    def get_gauss_noise_metrics(
+    def crop(self, imgs: Tensor, thickness: float = 20) -> Tensor:
+        crop_imgs = imgs.clone()
+        crop_imgs[:, :, :thickness, :] = 0
+        crop_imgs[:, :, -thickness:, :] = 0
+        crop_imgs[:, :, :, :thickness] = 0
+        crop_imgs[:, :, :, -thickness:] = 0
+
+        return crop_imgs
+
+    def logo(self, imgs: Tensor, logo: Tensor) -> Tensor:
+        alpha = 0.75
+        _, _, img_height, img_width = imgs.shape
+        logo = F.interpolate(logo, size=(30, 90), mode="bilinear", align_corners=False)
+        _, _, logo_height, logo_width = logo.shape
+
+        x_offset = img_width - logo_width
+        y_offset = img_height - logo_height
+
+        logo_imgs = imgs.clone()
+
+        logo_imgs[
+            :, :, y_offset : y_offset + logo_height, x_offset : x_offset + logo_width
+        ] = (
+            imgs[
+                :,
+                :,
+                y_offset : y_offset + logo_height,
+                x_offset : x_offset + logo_width,
+            ]
+            * (1 - alpha)
+            + logo * alpha
+        )
+
+        return logo_imgs
+
+    def brightness(self, imgs, brightness_factor: float):
+        adjusted_tensor = imgs * brightness_factor
+        adjusted_tensor = torch.clamp(adjusted_tensor, 0, 1)
+
+        return adjusted_tensor
+
+    def getgauss_noise_metrics(
         self,
         idx: int,
         imgs_A: Tensor,
@@ -53,9 +102,9 @@ class Robustness(Base):
     ) -> tuple[dict, dict]:
         gauss_mean, gauss_std = 0, 0.1
 
-        noise_imgs = self._gauss_noise(imgs_A, gauss_mean, gauss_std)
+        noise_imgs = self.gauss_noise(imgs_A, gauss_mean, gauss_std)
         noise_identity = self._get_imgs_identity(noise_imgs)
-        noise_pert_imgs = self._gauss_noise(x_imgs, gauss_mean, gauss_std)
+        noise_pert_imgs = self.gauss_noise(x_imgs, gauss_mean, gauss_std)
         noise_pert_identity = self._get_imgs_identity(noise_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
@@ -202,9 +251,9 @@ class Robustness(Base):
     ) -> tuple[dict, dict]:
         border_thickness = 20
 
-        crop_imgs = self._crop(imgs_A, border_thickness)
+        crop_imgs = self.crop(imgs_A, border_thickness)
         crop_identity = self._get_imgs_identity(crop_imgs)
-        crop_pert_imgs = self._crop(x_imgs, border_thickness)
+        crop_pert_imgs = self.crop(x_imgs, border_thickness)
         crop_pert_identity = self._get_imgs_identity(crop_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
@@ -272,9 +321,9 @@ class Robustness(Base):
         cloak_imgs: Tensor,
         image_dir: Path,
     ) -> tuple[dict, dict]:
-        logo_imgs = self._logo(imgs_A, logo)
+        logo_imgs = self.logo(imgs_A, logo)
         logo_identity = self._get_imgs_identity(logo_imgs)
-        logo_pert_imgs = self._logo(x_imgs, logo)
+        logo_pert_imgs = self.logo(x_imgs, logo)
         logo_pert_identity = self._get_imgs_identity(logo_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
@@ -342,9 +391,9 @@ class Robustness(Base):
         cloak_imgs: Tensor,
         image_dir: Path,
     ) -> tuple[dict, dict]:
-        brightness_imgs = self._brightness(imgs_A, factor)
+        brightness_imgs = self.brightness(imgs_A, factor)
         brightness_identity = self._get_imgs_identity(brightness_imgs)
-        brightness_pert_imgs = self._brightness(x_imgs, factor)
+        brightness_pert_imgs = self.brightness(x_imgs, factor)
         brightness_pert_identity = self._get_imgs_identity(brightness_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
@@ -429,52 +478,3 @@ class Robustness(Base):
         imgs = torch.stack(imgs)
 
         return imgs.cuda()
-
-    def _gauss_noise(
-        self, pert: Tensor, gauss_mean: float = 0, gauss_std: float = 0.1
-    ) -> Tensor:
-        gauss_noise = gauss_mean + gauss_std * torch.randn(pert.shape).cuda()
-        noise_pert = pert + gauss_noise
-
-        return noise_pert
-
-    def _crop(self, imgs: Tensor, thickness: float = 20) -> Tensor:
-        crop_imgs = imgs.clone()
-        crop_imgs[:, :, :thickness, :] = 0
-        crop_imgs[:, :, -thickness:, :] = 0
-        crop_imgs[:, :, :, :thickness] = 0
-        crop_imgs[:, :, :, -thickness:] = 0
-
-        return crop_imgs
-
-    def _logo(self, imgs: Tensor, logo: Tensor) -> Tensor:
-        alpha = 0.75
-        _, _, img_height, img_width = imgs.shape
-        logo = F.interpolate(logo, size=(30, 90), mode="bilinear", align_corners=False)
-        _, _, logo_height, logo_width = logo.shape
-
-        x_offset = img_width - logo_width
-        y_offset = img_height - logo_height
-
-        logo_imgs = imgs.clone()
-
-        logo_imgs[
-            :, :, y_offset : y_offset + logo_height, x_offset : x_offset + logo_width
-        ] = (
-            imgs[
-                :,
-                :,
-                y_offset : y_offset + logo_height,
-                x_offset : x_offset + logo_width,
-            ]
-            * (1 - alpha)
-            + logo * alpha
-        )
-
-        return logo_imgs
-
-    def _brightness(self, imgs, brightness_factor: float):
-        adjusted_tensor = imgs * brightness_factor
-        adjusted_tensor = torch.clamp(adjusted_tensor, 0, 1)
-
-        return adjusted_tensor

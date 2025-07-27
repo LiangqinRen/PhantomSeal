@@ -22,6 +22,7 @@ def main(config: DictConfig):
         "robustness_sample",
         "robustness_metric",
         "robustness_forensics_sample",
+        "robustness_forensics_metric",
     ]
     defense_functions = {name: getattr(defense, name) for name in defense_function_list}
 

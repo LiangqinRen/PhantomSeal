@@ -244,7 +244,7 @@ class Defense(Base):
             (
                 noise_source_effectivenesses,
                 noise_target_effectivenesses,
-            ) = self.robustness.get_gauss_noise_metrics(
+            ) = self.robustness.getgauss_noise_metrics(
                 idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
             )
 
@@ -327,7 +327,7 @@ class Defense(Base):
             (
                 noise_source_effectivenesses,
                 noise_target_effectivenesses,
-            ) = self.robustness.get_gauss_noise_metrics(
+            ) = self.robustness.getgauss_noise_metrics(
                 idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
@@ -453,7 +453,7 @@ class Defense(Base):
             )
 
             results = {"clean": pert_imgs_A_src_swap}
-            results["noise"] = self.robustness._gauss_noise(pert_imgs_A_src_swap)
+            results["noise"] = self.robustness.gauss_noise(pert_imgs_A_src_swap)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
@@ -495,7 +495,7 @@ class Defense(Base):
                 only_save_summary=True,
             )
 
-            results["crop"] = self.robustness._crop(pert_imgs_A_src_swap)
+            results["crop"] = self.robustness.crop(pert_imgs_A_src_swap)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
@@ -516,7 +516,7 @@ class Defense(Base):
                 only_save_summary=True,
             )
 
-            results["logo"] = self.robustness._logo(pert_imgs_A_src_swap, logo)
+            results["logo"] = self.robustness.logo(pert_imgs_A_src_swap, logo)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
@@ -537,7 +537,7 @@ class Defense(Base):
                 only_save_summary=True,
             )
 
-            results["inc_bright"] = self.robustness._brightness(
+            results["inc_bright"] = self.robustness.brightness(
                 pert_imgs_A_src_swap, 1.25
             )
             save_tensor_imgs(
@@ -560,7 +560,7 @@ class Defense(Base):
                 only_save_summary=True,
             )
 
-            results["dec_bright"] = self.robustness._brightness(
+            results["dec_bright"] = self.robustness.brightness(
                 pert_imgs_A_src_swap, 0.75
             )
             save_tensor_imgs(
@@ -601,6 +601,77 @@ class Defense(Base):
             decrease the brightness: {metric.generate_forensics_robustness_log(forensic_metrics['dec_bright'])}
             """
                 )
+            )
+
+    def robustness_forensics_metric(self):
+        data = metric.get_robustness_forensics_metric_data_template(self.effectiveness)
+
+        dataset = MetricDataset(self.config)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+        logo = self.robustness.load_logo()
+        total_count = 0
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            total_count += len(imgs_A)
+
+            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs = self.robustness.webp_compress(x_imgs, 80)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
+            x_imgs = self.robustness.webp_compress(x_imgs, 80)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
+
+            pert_imgs_A_identity = self._get_imgs_identity(x_imgs)
+            pert_imgs_A_src_swap = self.target(
+                None, imgs_B, pert_imgs_A_identity, None, True
+            )
+
+            swap_results = {"clean": pert_imgs_A_src_swap}
+            swap_results["noise"] = self.robustness.gauss_noise(pert_imgs_A_src_swap)
+            swap_results["compress"] = self.robustness.webp_compress(
+                pert_imgs_A_src_swap
+            )
+            swap_results["crop"] = self.robustness.crop(pert_imgs_A_src_swap)
+            swap_results["logo"] = self.robustness.logo(pert_imgs_A_src_swap, logo)
+            swap_results["inc_bright"] = self.robustness.brightness(
+                pert_imgs_A_src_swap, 1.25
+            )
+            swap_results["dec_bright"] = self.robustness.brightness(
+                pert_imgs_A_src_swap, 0.75
+            )
+
+            forensic_metrics = metric.get_robustness_forensics_metric(
+                self.effectiveness, cloak_imgs, swap_results
+            )
+            metric.merge_single_dict(data, forensic_metrics)
+
+            torch.cuda.empty_cache()
+            self.logger.info(
+                f"""
+            noise, compress, crop, overlay, increase and decrease the brightness {self.effectiveness.candi_funcs.keys()}
+            cloak images
+            {metric.generate_forensics_robustness_log(forensic_metrics['clean'])}
+            {metric.generate_forensics_robustness_log(forensic_metrics['noise'])}
+            {metric.generate_forensics_robustness_log(forensic_metrics['compress'])}
+            {metric.generate_forensics_robustness_log(forensic_metrics['crop'])}
+            {metric.generate_forensics_robustness_log(forensic_metrics['logo'])}
+            {metric.generate_forensics_robustness_log(forensic_metrics['inc_bright'])}
+            {metric.generate_forensics_robustness_log(forensic_metrics['dec_bright'])}
+            """
+            )
+
+            self.logger.info(
+                f"""[{idx}/{len(dataloader)}]Average of {total_count} pictures
+            {metric.generate_forensics_robustness_log(data['clean'])}
+            {metric.generate_forensics_robustness_log(data['noise'])}
+            {metric.generate_forensics_robustness_log(data['compress'])}
+            {metric.generate_forensics_robustness_log(data['crop'])}
+            {metric.generate_forensics_robustness_log(data['logo'])}
+            {metric.generate_forensics_robustness_log(data['inc_bright'])}
+            {metric.generate_forensics_robustness_log(data['dec_bright'])}
+            """
             )
 
     def _perturb_imgs(
