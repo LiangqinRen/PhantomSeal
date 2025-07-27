@@ -2,6 +2,7 @@
 
 **/__pycache__/**
 config/evaluate/evaluate.yaml
+checkpoints/
 data/
 logs/
 multirun/

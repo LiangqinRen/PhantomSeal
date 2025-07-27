@@ -22,7 +22,7 @@ def main(config: DictConfig):
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()
     else:
-        sys.exit(f"⚠️ Oops! That function doesn't exist")
+        sys.exit(f"⚠️ Oops! Fail to find {config.third_party.function}")
 
 
 if __name__ == "__main__":

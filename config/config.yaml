@@ -7,6 +7,7 @@ log:
   file_suffix: ""
   record_level: info # one of [debug, info, warning, error, critical]
 
+log_dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
 image_dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}/image
 random_seed: 0
 

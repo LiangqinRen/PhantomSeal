@@ -1,0 +1,8 @@
+**/__pycache__/**
+
+checkpoint/
+dataset/
+dataset_backup/
+log/
+
+run.sh

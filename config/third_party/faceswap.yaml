@@ -1,0 +1,27 @@
+name: faceswap
+function: metric
+
+data_dir: data/faceswap
+
+model_path: checkpoints/faceswap.pth
+
+worker:
+  batch_size: 128
+  epochs: 50000
+  log_interval: 100
+  pert_prefix: pgd
+  poison_percent: 0
+  identity: null
+
+defense:
+  batch_size: 128
+  epochs: 1000
+  epsilon: 0.005
+  limit:
+    R: 0.08
+    G: 0.002
+    B: 0.1
+    latent: 75
+  weight:
+    perturb: 750
+    latent: 0.1
