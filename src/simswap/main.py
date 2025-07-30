@@ -22,6 +22,8 @@ def main(config: DictConfig):
         "robustness_metric",
         "robustness_forensics_sample",
         "robustness_forensics_metric",
+        "image_robustness_metric",
+        "adaptive_attack",
     ]
     defense_functions = {name: getattr(defense, name) for name in defense_function_list}
 

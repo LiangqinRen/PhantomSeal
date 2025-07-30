@@ -74,6 +74,20 @@ def get_robustness_forensics_metric_data_template(effectiveness) -> dict:
     return data
 
 
+def get_image_robustness_data_template(effectiveness) -> dict:
+    data_item = get_metric_data_template(effectiveness)
+    data = {
+        "noise": deepcopy(data_item),
+        "compress": deepcopy(data_item),
+        "crop": deepcopy(data_item),
+        "logo": deepcopy(data_item),
+        "inc_bright": deepcopy(data_item),
+        "dec_bright": deepcopy(data_item),
+    }
+
+    return data
+
+
 def get_defense_metric(
     utility,
     effectiveness,

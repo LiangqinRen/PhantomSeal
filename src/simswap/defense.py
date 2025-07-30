@@ -1,6 +1,6 @@
 import metric
 from simswap.base import Base
-from dataset import SampleDataset, MetricDataset
+from dataset import SampleDataset, MetricDataset, AdaptiveMetricDataset
 from robustness import Robustness
 from utils import save_tensor_imgs
 
@@ -10,6 +10,7 @@ import torch
 from torch import tensor, Tensor, nn
 from torch.utils.data import DataLoader
 from pathlib import Path
+from typing import Callable
 
 
 class Defense(Base):
@@ -674,6 +675,223 @@ class Defense(Base):
             """
             )
 
+    def image_robustness_metric(self):
+        data = metric.get_image_robustness_data_template(self.effectiveness)
+        dataset = MetricDataset(self.config)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+        logo = self.robustness.load_logo()
+        total_count = 0
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            total_count += len(imgs_A)
+
+            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+
+            noise_imgs_A = self.robustness.gauss_noise(imgs_A)
+            self._get_single_robustness_operate_metric(
+                imgs_B,
+                noise_imgs_A,
+                cloak_imgs,
+                data["noise"],
+            )
+
+            compress_imgs_A = self.robustness.webp_compress(imgs_A)
+            self._get_single_robustness_operate_metric(
+                imgs_B,
+                compress_imgs_A,
+                cloak_imgs,
+                data["compress"],
+            )
+
+            crop_imgs_A = self.robustness.crop(imgs_A)
+            self._get_single_robustness_operate_metric(
+                imgs_B,
+                crop_imgs_A,
+                cloak_imgs,
+                data["crop"],
+            )
+
+            logo_imgs_A = self.robustness.logo(imgs_A, logo)
+            self._get_single_robustness_operate_metric(
+                imgs_B,
+                logo_imgs_A,
+                cloak_imgs,
+                data["logo"],
+            )
+
+            inc_bright_imgs_A = self.robustness.brightness(imgs_A, 1.25)
+            self._get_single_robustness_operate_metric(
+                imgs_B,
+                inc_bright_imgs_A,
+                cloak_imgs,
+                data["inc_bright"],
+            )
+
+            dec_bright_imgs_A = self.robustness.brightness(imgs_A, 0.75)
+            self._get_single_robustness_operate_metric(
+                imgs_B,
+                dec_bright_imgs_A,
+                cloak_imgs,
+                data["dec_bright"],
+            )
+
+            torch.cuda.empty_cache()
+            self.logger.info(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            noise
+            {metric.generate_summary_utility_log(data['noise'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data['noise'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data['noise'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data['noise'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data['noise'], 'tgt_pert_swap_effectiveness')}
+
+            compress
+            {metric.generate_summary_utility_log(data['compress'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data['compress'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data['compress'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data['compress'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data['compress'], 'tgt_pert_swap_effectiveness')}
+
+            crop
+            {metric.generate_summary_utility_log(data['crop'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data['crop'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data['crop'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data['crop'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data['crop'], 'tgt_pert_swap_effectiveness')}
+
+            logo
+            {metric.generate_summary_utility_log(data['logo'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data['logo'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data['logo'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data['logo'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data['logo'], 'tgt_pert_swap_effectiveness')}
+
+            inc_bright
+            {metric.generate_summary_utility_log(data['inc_bright'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data['inc_bright'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data['inc_bright'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data['inc_bright'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data['inc_bright'], 'tgt_pert_swap_effectiveness')}
+
+            dec_bright
+            {metric.generate_summary_utility_log(data['dec_bright'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data['dec_bright'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data['dec_bright'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data['dec_bright'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data['dec_bright'], 'tgt_pert_swap_effectiveness')}
+            """
+            )
+
+    def adaptive_attack(self) -> None:
+        data = metric.get_metric_data_template(self.effectiveness)
+
+        dataset = AdaptiveMetricDataset(self.config)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+        total_count = 0
+        for idx, (imgs_A, imgs_B, imgs_C) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B, imgs_C = imgs_A.cuda(), imgs_B.cuda(), imgs_C.cuda()
+
+            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs_B = self._perturb_imgs(imgs_B, cloak_imgs, silent=True)
+
+            x_imgs = x_imgs_A - (x_imgs_B - imgs_B)
+            (
+                imgs_A_src_swap,
+                pert_imgs_A_src_swap,
+                imgs_A_tgt_swap,
+                pert_imgs_A_tgt_swap,
+            ) = self._get_full_swap_results(imgs_A, imgs_C, x_imgs)
+
+            (
+                pert_utilities,
+                pert_as_src_swap_utilities,
+                pert_as_tgt_swap_utilities,
+                source_effectivenesses,
+                target_effectivenesses,
+            ) = metric.get_defense_metric(
+                self.utility,
+                self.effectiveness,
+                imgs_A,
+                imgs_C,
+                x_imgs,
+                cloak_imgs,
+                imgs_A_src_swap,
+                pert_imgs_A_src_swap,
+                imgs_A_tgt_swap,
+                pert_imgs_A_tgt_swap,
+            )
+
+            metric.merge_metric(
+                self.effectiveness,
+                data,
+                pert_utilities,
+                pert_as_src_swap_utilities,
+                pert_as_tgt_swap_utilities,
+                source_effectivenesses,
+                target_effectivenesses,
+            )
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_C",
+                    "cloak_imgs",
+                    "x_imgs",
+                    "imgs_A\ndiff",
+                    "imgs_B\ndiff",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_C,
+                    cloak_imgs,
+                    x_imgs,
+                    (x_imgs_B - imgs_B) * 10,
+                    (x_imgs_A - imgs_A) * 10,
+                ],
+                only_save_summary=True,
+            )
+
+            del imgs_A, imgs_B, imgs_C, x_imgs, cloak_imgs
+            del (
+                imgs_A_src_swap,
+                pert_imgs_A_src_swap,
+                imgs_A_tgt_swap,
+                pert_imgs_A_tgt_swap,
+            )
+            torch.cuda.empty_cache()
+
+            self.logger.info(
+                f"""
+            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
+            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
+            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
+            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
+            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
+            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            """
+            )
+
+            self.logger.info(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            {metric.generate_summary_utility_log(data, 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data, 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data, 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data, 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
+            """
+            )
+
     def _perturb_imgs(
         self, imgs: Tensor, cloak_imgs: Tensor, silent: bool = False
     ) -> Tensor:
@@ -773,4 +991,48 @@ class Defense(Base):
             pert_imgs_A_src_swap,
             imgs_A_tgt_swap,
             pert_imgs_A_tgt_swap,
+        )
+
+    def _get_single_robustness_operate_metric(
+        self,
+        imgs_B: Tensor,
+        operate_imgs_A: Tensor,
+        cloak_imgs: Tensor,
+        data: dict,
+    ) -> None:
+        operate_x_imgs = self._perturb_imgs(operate_imgs_A, cloak_imgs, silent=True)
+        (
+            imgs_A_src_swap,
+            pert_imgs_A_src_swap,
+            imgs_A_tgt_swap,
+            pert_imgs_A_tgt_swap,
+        ) = self._get_full_swap_results(operate_imgs_A, imgs_B, operate_x_imgs)
+
+        (
+            pert_utilities,
+            pert_as_src_swap_utilities,
+            pert_as_tgt_swap_utilities,
+            source_effectivenesses,
+            target_effectivenesses,
+        ) = metric.get_defense_metric(
+            self.utility,
+            self.effectiveness,
+            operate_imgs_A,
+            imgs_B,
+            operate_x_imgs,
+            cloak_imgs,
+            imgs_A_src_swap,
+            pert_imgs_A_src_swap,
+            imgs_A_tgt_swap,
+            pert_imgs_A_tgt_swap,
+        )
+
+        metric.merge_metric(
+            self.effectiveness,
+            data,
+            pert_utilities,
+            pert_as_src_swap_utilities,
+            pert_as_tgt_swap_utilities,
+            source_effectivenesses,
+            target_effectivenesses,
         )

@@ -19,7 +19,7 @@ ROOT=$(dirname $(dirname $(realpath "$0")))
 if [[ $function == 'sample' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
-elif [[ $function == 'metric' ]]
+elif [[ $function == 'metric' || $function == 'adaptive_attack' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 elif [[ $function == 'ai_beauty' ]]
@@ -29,6 +29,9 @@ then
 elif [[ $function == 'robustness_sample' || $function == 'robustness_metric' || $function == 'robustness_forensics_sample' || $function == 'robustness_forensics_metric' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level third_party.defense.epochs=335
+elif [[ $function == 'image_robustness_metric' ]]
+then
+    PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level third_party.defense.epochs=1000
 else
     echo "⚠️ Oops! That function doesn't exist"
 fi

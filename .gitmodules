@@ -7,3 +7,6 @@
 [submodule "third_party/FaceShifter"]
 	path = third_party/FaceShifter
 	url = https://github.com/richarduuz/Research_Project.git
+[submodule "third_party/SepMark"]
+	path = third_party/SepMark
+	url = https://github.com/sh1newu/SepMark.git
