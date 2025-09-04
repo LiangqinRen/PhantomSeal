@@ -795,6 +795,7 @@ class Defense(Base):
         total_count = 0
         for idx, (imgs_A, imgs_B, imgs_C) in enumerate(dataloader, start=1):
             imgs_A, imgs_B, imgs_C = imgs_A.cuda(), imgs_B.cuda(), imgs_C.cuda()
+            total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
             x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
@@ -862,6 +863,116 @@ class Defense(Base):
             )
 
             del imgs_A, imgs_B, imgs_C, x_imgs, cloak_imgs
+            del (
+                imgs_A_src_swap,
+                pert_imgs_A_src_swap,
+                imgs_A_tgt_swap,
+                pert_imgs_A_tgt_swap,
+            )
+            torch.cuda.empty_cache()
+
+            self.logger.info(
+                f"""
+            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
+            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
+            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
+            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
+            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
+            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            """
+            )
+
+            self.logger.info(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            {metric.generate_summary_utility_log(data, 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(data, 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(data, 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(data, 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
+            """
+            )
+
+    def adaptive_attack_self(self) -> None:
+        data = metric.get_metric_data_template(self.effectiveness)
+
+        dataset = MetricDataset(self.config)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+        total_count = 0
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            total_count += len(imgs_A)
+
+            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_x_imgs_A = self._perturb_imgs(x_imgs_A, cloak_imgs, silent=True)
+
+            x_imgs = x_imgs_A - (x_x_imgs_A - x_imgs_A)
+            (
+                imgs_A_src_swap,
+                pert_imgs_A_src_swap,
+                imgs_A_tgt_swap,
+                pert_imgs_A_tgt_swap,
+            ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs)
+
+            (
+                pert_utilities,
+                pert_as_src_swap_utilities,
+                pert_as_tgt_swap_utilities,
+                source_effectivenesses,
+                target_effectivenesses,
+            ) = metric.get_defense_metric(
+                self.utility,
+                self.effectiveness,
+                imgs_A,
+                imgs_B,
+                x_imgs,
+                cloak_imgs,
+                imgs_A_src_swap,
+                pert_imgs_A_src_swap,
+                imgs_A_tgt_swap,
+                pert_imgs_A_tgt_swap,
+            )
+
+            metric.merge_metric(
+                self.effectiveness,
+                data,
+                pert_utilities,
+                pert_as_src_swap_utilities,
+                pert_as_tgt_swap_utilities,
+                source_effectivenesses,
+                target_effectivenesses,
+            )
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "cloak_imgs",
+                    "x_imgs",
+                    "pert_imgs_A\nsrc_swap",
+                    "pert_imgs_A\ntgt_swap",
+                    "protect\ndiff",
+                    "attack\ndiff",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    cloak_imgs,
+                    x_imgs,
+                    pert_imgs_A_src_swap,
+                    pert_imgs_A_tgt_swap,
+                    (x_imgs_A - imgs_A) * 10,
+                    (x_x_imgs_A - x_imgs_A) * 10,
+                ],
+                only_save_summary=False,
+            )
+
+            del imgs_A, imgs_B, cloak_imgs, x_imgs
             del (
                 imgs_A_src_swap,
                 pert_imgs_A_src_swap,

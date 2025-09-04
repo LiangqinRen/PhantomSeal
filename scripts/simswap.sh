@@ -19,7 +19,7 @@ ROOT=$(dirname $(dirname $(realpath "$0")))
 if [[ $function == 'sample' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
-elif [[ $function == 'metric' || $function == 'adaptive_attack' ]]
+elif [[ $function == 'metric' || $function == 'adaptive_attack' || $function == 'adaptive_attack_self' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 elif [[ $function == 'ai_beauty' ]]
