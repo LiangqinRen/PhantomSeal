@@ -6,5 +6,6 @@ checkpoints/
 data/
 logs/
 multirun/
+notebooks/
 
 config/evaluate/evaluate.yaml

@@ -94,7 +94,7 @@ def get_defense_metric(
     imgs_A: Tensor,
     imgs_B: Tensor,
     x_imgs: Tensor,
-    cloak_imgs: Tensor,
+    cloak_imgs: Tensor | None,
     imgs_A_src_swap: Tensor,
     pert_imgs_A_src_swap: Tensor,
     imgs_A_tgt_swap: Tensor,

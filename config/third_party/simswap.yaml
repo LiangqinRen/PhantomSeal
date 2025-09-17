@@ -14,7 +14,7 @@ dataset:
   cloak_min_distance: 1.04
 
 defense:
-  batch_size: 10
+  batch_size: 15
   epochs: 1000
   epsilon: 0.005
   limit:
@@ -26,6 +26,14 @@ defense:
     perturb: 1000
     identity: 10000
     context: 0.1
+
+lowkey:
+  batch_size: 15
+  epochs: 300
+  epsilon: 0.005
+  weight:
+    perturb: 1000
+    identity: 10000
 
 robustness:
   ai_beauty: false

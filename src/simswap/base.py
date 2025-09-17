@@ -1,11 +1,16 @@
 from models.models import create_model
 from evaluate import Utility, Effectiveness, AIEditing, Cloak
+from models import arcface_models
+
 
 import torch
+import inspect
+import torch.nn as nn
 import torch.nn.functional as F
 from argparse import Namespace
 from torch import Tensor
 from types import MethodType
+from torch.serialization import add_safe_globals
 
 
 class Base:
@@ -25,6 +30,30 @@ class Base:
             which_epoch="latest",
             verbose=False,
         )
+
+        add_safe_globals(
+            [
+                nn.Conv2d,
+                nn.Linear,
+                nn.BatchNorm2d,
+                nn.BatchNorm1d,
+                nn.ReLU,
+                nn.PReLU,
+                nn.Sigmoid,
+                nn.Dropout,
+                nn.Sequential,
+                nn.MaxPool2d,
+                nn.AdaptiveAvgPool2d,
+            ]
+        )
+
+        for _, obj in inspect.getmembers(arcface_models):
+            if inspect.isfunction(obj):
+                add_safe_globals([obj])
+            elif inspect.isclass(obj):
+                from typing import Callable, Any, cast
+
+                add_safe_globals([cast(Callable[..., Any], obj)])
 
         self.target = create_model(self.test_options)
         self.target.cuda().eval()

@@ -1,5 +1,6 @@
 import utils
 from simswap.defense import Defense
+from simswap.defense_compare import Lowkey
 
 import sys
 import hydra
@@ -15,18 +16,19 @@ def main(config: DictConfig):
     timer = utils.Timer("main", logger)
 
     defense = Defense(logger, config)
-    defense_function_list = [
-        "sample",
-        "metric",
-        "robustness_sample",
-        "robustness_metric",
-        "robustness_forensics_sample",
-        "robustness_forensics_metric",
-        "image_robustness_metric",
-        "adaptive_attack",
-        "adaptive_attack_self",
-    ]
-    defense_functions = {name: getattr(defense, name) for name in defense_function_list}
+    lowkey_defense = Lowkey(logger, config)
+    defense_functions = {
+        "sample": defense.sample,
+        "metric": defense.metric,
+        "robustness_sample": defense.robustness_sample,
+        "robustness_metric": defense.robustness_metric,
+        "robustness_forensics_sample": defense.robustness_forensics_sample,
+        "robustness_forensics_metric": defense.robustness_forensics_metric,
+        "image_robustness_metric": defense.image_robustness_metric,
+        "adaptive_attack": defense.adaptive_attack,
+        "adaptive_attack_self": defense.adaptive_attack_self,
+        "lowkey": lowkey_defense.metric,
+    }
 
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()
