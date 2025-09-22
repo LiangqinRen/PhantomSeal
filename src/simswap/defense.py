@@ -10,7 +10,6 @@ import torch
 from torch import tensor, Tensor, nn
 from torch.utils.data import DataLoader
 from pathlib import Path
-from typing import Callable
 
 
 class Defense(Base):
@@ -114,6 +113,7 @@ class Defense(Base):
         )
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             if self.config.third_party.robustness.ai_beauty:
                 ai_beauty_tool = self.config.third_party.robustness.ai_beauty_tool
@@ -125,18 +125,93 @@ class Defense(Base):
                     self.logger.critical(f"Unknown ai_beauty_tool: {ai_beauty_tool}")
                     raise ValueError(f"Unknown ai_beauty_tool: {ai_beauty_tool}")
                 total_count += count
-            else:
+            elif not self.config.third_party.defense.failure_defense_tracing:
                 total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
             x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
 
+            torch.set_grad_enabled(False)
             (
                 imgs_A_src_swap,
                 pert_imgs_A_src_swap,
                 imgs_A_tgt_swap,
                 pert_imgs_A_tgt_swap,
             ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs)
+
+            if self.config.third_party.defense.failure_defense_tracing:
+                success_swap_indices = self.effectiveness.get_success_swap_indices(
+                    imgs_A, pert_imgs_A_src_swap
+                )
+                if len(success_swap_indices) == 0:
+                    continue
+                else:
+                    total_count += len(success_swap_indices)
+                    idx_cpu = success_swap_indices.to("cpu")
+
+                    imgs_A_cpu = imgs_A.detach().to("cpu")
+                    del imgs_A
+                    torch.cuda.synchronize()
+                    torch.cuda.empty_cache()
+                    imgs_A = self._pick_on_cpu_then_to_gpu(
+                        imgs_A_cpu, idx_cpu, device="cuda"
+                    )
+                    imgs_B_cpu = imgs_B.detach().to("cpu")
+                    del imgs_B
+                    torch.cuda.synchronize()
+                    torch.cuda.empty_cache()
+                    imgs_B = self._pick_on_cpu_then_to_gpu(
+                        imgs_B_cpu, idx_cpu, device="cuda"
+                    )
+                    x_imgs_cpu = x_imgs.detach().to("cpu")
+                    del x_imgs
+                    self._free_gpu()
+                    x_imgs = self._pick_on_cpu_then_to_gpu(
+                        x_imgs_cpu, idx_cpu, device="cuda"
+                    )
+                    cloak_imgs_cpu = cloak_imgs.detach().to("cpu")
+                    del cloak_imgs
+                    self._free_gpu()
+                    cloak_imgs = self._pick_on_cpu_then_to_gpu(
+                        cloak_imgs_cpu, idx_cpu, device="cuda"
+                    )
+                    imgs_A_src_swap_cpu = imgs_A_src_swap.detach().to("cpu")
+                    del imgs_A_src_swap
+                    self._free_gpu()
+                    imgs_A_src_swap = self._pick_on_cpu_then_to_gpu(
+                        imgs_A_src_swap_cpu, idx_cpu, device="cuda"
+                    )
+                    pert_imgs_A_src_swap_cpu = pert_imgs_A_src_swap.detach().to("cpu")
+                    del pert_imgs_A_src_swap
+                    self._free_gpu()
+                    pert_imgs_A_src_swap = self._pick_on_cpu_then_to_gpu(
+                        pert_imgs_A_src_swap_cpu, idx_cpu, device="cuda"
+                    )
+                    imgs_A_tgt_swap_cpu = imgs_A_tgt_swap.detach().to("cpu")
+                    del imgs_A_tgt_swap
+                    self._free_gpu()
+                    imgs_A_tgt_swap = self._pick_on_cpu_then_to_gpu(
+                        imgs_A_tgt_swap_cpu, idx_cpu, device="cuda"
+                    )
+                    pert_imgs_A_tgt_swap_cpu = pert_imgs_A_tgt_swap.detach().to("cpu")
+                    del pert_imgs_A_tgt_swap
+                    self._free_gpu()
+                    pert_imgs_A_tgt_swap = self._pick_on_cpu_then_to_gpu(
+                        pert_imgs_A_tgt_swap_cpu, idx_cpu, device="cuda"
+                    )
+
+                    del (
+                        idx_cpu,
+                        imgs_A_cpu,
+                        imgs_B_cpu,
+                        x_imgs_cpu,
+                        cloak_imgs_cpu,
+                        imgs_A_src_swap_cpu,
+                        imgs_A_tgt_swap_cpu,
+                        pert_imgs_A_src_swap_cpu,
+                        pert_imgs_A_tgt_swap_cpu,
+                    )
+                    self._free_gpu()
 
             (
                 pert_utilities,
@@ -200,7 +275,7 @@ class Defense(Base):
                 imgs_A_tgt_swap,
                 pert_imgs_A_tgt_swap,
             )
-            torch.cuda.empty_cache()
+            self._free_gpu()
 
             self.logger.info(
                 f"""
@@ -284,7 +359,7 @@ class Defense(Base):
                 idx, imgs_A, imgs_B, x_imgs, 0.75, cloak_imgs, self.image_dir
             )
 
-            torch.cuda.empty_cache()
+            self._free_gpu()
             self.logger.info(
                 textwrap.dedent(
                     f"""
@@ -312,6 +387,7 @@ class Defense(Base):
         )
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             total_count += len(imgs_A)
 
@@ -322,6 +398,7 @@ class Defense(Base):
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
             x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
 
+            torch.set_grad_enabled(False)
             pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
             metric.merge_single_dict(data["utility"], pert_utilities)
 
@@ -403,7 +480,7 @@ class Defense(Base):
                 "dec_bright",
             )
 
-            torch.cuda.empty_cache()
+            self._free_gpu()
             self.logger.info(
                 f"""
             utility: {metric.generate_iter_utility_log(pert_utilities)}
@@ -588,7 +665,7 @@ class Defense(Base):
                 self.effectiveness, cloak_imgs, results
             )
 
-            torch.cuda.empty_cache()
+            self._free_gpu()
             self.logger.info(
                 textwrap.dedent(
                     f"""
@@ -614,6 +691,7 @@ class Defense(Base):
         logo = self.robustness.load_logo()
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             total_count += len(imgs_A)
 
@@ -624,6 +702,7 @@ class Defense(Base):
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
             x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
 
+            torch.set_grad_enabled(False)
             pert_imgs_A_identity = self._get_imgs_identity(x_imgs)
             pert_imgs_A_src_swap = self.target(
                 None, imgs_B, pert_imgs_A_identity, None, True
@@ -648,7 +727,7 @@ class Defense(Base):
             )
             metric.merge_single_dict(data, forensic_metrics)
 
-            torch.cuda.empty_cache()
+            self._free_gpu()
             self.logger.info(
                 f"""
             noise, compress, crop, overlay, increase and decrease the brightness {self.effectiveness.candi_funcs.keys()}
@@ -794,6 +873,7 @@ class Defense(Base):
         )
         total_count = 0
         for idx, (imgs_A, imgs_B, imgs_C) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
             imgs_A, imgs_B, imgs_C = imgs_A.cuda(), imgs_B.cuda(), imgs_C.cuda()
             total_count += len(imgs_A)
 
@@ -801,6 +881,7 @@ class Defense(Base):
             x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
             x_imgs_B = self._perturb_imgs(imgs_B, cloak_imgs, silent=True)
 
+            torch.set_grad_enabled(False)
             x_imgs = x_imgs_A - (x_imgs_B - imgs_B)
             (
                 imgs_A_src_swap,
@@ -869,7 +950,7 @@ class Defense(Base):
                 imgs_A_tgt_swap,
                 pert_imgs_A_tgt_swap,
             )
-            torch.cuda.empty_cache()
+            self._free_gpu()
 
             self.logger.info(
                 f"""
@@ -902,6 +983,7 @@ class Defense(Base):
         )
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             total_count += len(imgs_A)
 
@@ -909,6 +991,7 @@ class Defense(Base):
             x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
             x_x_imgs_A = self._perturb_imgs(x_imgs_A, cloak_imgs, silent=True)
 
+            torch.set_grad_enabled(False)
             x_imgs = x_imgs_A - (x_x_imgs_A - x_imgs_A)
             (
                 imgs_A_src_swap,
@@ -979,7 +1062,7 @@ class Defense(Base):
                 imgs_A_tgt_swap,
                 pert_imgs_A_tgt_swap,
             )
-            torch.cuda.empty_cache()
+            self._free_gpu()
 
             self.logger.info(
                 f"""
@@ -1111,7 +1194,9 @@ class Defense(Base):
         cloak_imgs: Tensor,
         data: dict,
     ) -> None:
+        torch.set_grad_enabled(True)
         operate_x_imgs = self._perturb_imgs(operate_imgs_A, cloak_imgs, silent=True)
+        torch.set_grad_enabled(False)
         (
             imgs_A_src_swap,
             pert_imgs_A_src_swap,
@@ -1147,3 +1232,15 @@ class Defense(Base):
             source_effectivenesses,
             target_effectivenesses,
         )
+
+    def _pick_on_cpu_then_to_gpu(
+        self, big_cpu: Tensor, idx_cpu: Tensor, device="cuda"
+    ) -> Tensor:
+        with torch.no_grad():
+            small_cpu = torch.index_select(big_cpu, 0, idx_cpu)
+            small_gpu = small_cpu.to(device, non_blocking=True)
+            return small_gpu
+
+    def _free_gpu(self) -> None:
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()

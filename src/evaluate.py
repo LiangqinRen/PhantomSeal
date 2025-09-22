@@ -75,7 +75,7 @@ class Effectiveness:
         self.logger = logger
         self.config = config
 
-        self.candi_funcs = self.__init_functions()
+        self.candi_funcs = self._init_functions()
 
         self.mtcnn = MTCNN(
             image_size=160,
@@ -95,17 +95,17 @@ class Effectiveness:
             region_name=self.config.evaluate.aws.api_region,
         )
 
-    def __init_functions(self) -> dict:
+    def _init_functions(self) -> dict:
         candidate_functions = {}
 
         if self.config.evaluate.facenet_512.use:
-            candidate_functions["facenet"] = self.__get_facenet_matching
+            candidate_functions["facenet"] = self._get_facenet_matching
         if self.config.evaluate.face_recognition.use:
-            candidate_functions["facerec"] = self.__get_facerec_matching
+            candidate_functions["facerec"] = self._get_facerec_matching
         if self.config.evaluate.facepp.use:
-            candidate_functions["face++"] = self.__get_facepp_matching
+            candidate_functions["face++"] = self._get_facepp_matching
         if self.config.evaluate.aws.use:
-            candidate_functions["aws"] = self.__get_aws_matching
+            candidate_functions["aws"] = self._get_aws_matching
 
         return candidate_functions
 
@@ -141,7 +141,7 @@ class Effectiveness:
 
         return distances
 
-    def __get_facenet_matching(
+    def _get_facenet_matching(
         self, imgs1: Tensor, imgs2: Tensor
     ) -> tuple[float, float]:
         matching_count, valid_count = 0, 1e-10
@@ -155,7 +155,7 @@ class Effectiveness:
 
         return matching_count, valid_count
 
-    def __get_facerec_matching(
+    def _get_facerec_matching(
         self, imgs1: Tensor, imgs2: Tensor
     ) -> tuple[float, float]:
         matching_count, valid_count = 0, 1e-10
@@ -189,7 +189,7 @@ class Effectiveness:
 
         return matching_count, valid_count
 
-    def __get_facepp_matching_single(
+    def _get_facepp_matching_single(
         self, img1: Tensor, img2: Tensor, key: str, secret: str
     ):
         buffer1 = BytesIO()
@@ -245,14 +245,14 @@ class Effectiveness:
 
         return (0, 1e-10)
 
-    def __get_facepp_matching(self, imgs1: Tensor, imgs2: Tensor):
+    def _get_facepp_matching(self, imgs1: Tensor, imgs2: Tensor):
         api_keys = self.config.evaluate.facepp.api_key
         api_secrets = self.config.evaluate.facepp.api_secret
 
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
-                    self.__get_facepp_matching_single,
+                    self._get_facepp_matching_single,
                     imgs1[i],
                     imgs2[i],
                     api_keys[i % len(api_keys)],
@@ -269,7 +269,7 @@ class Effectiveness:
 
         return (success_count, total_count)
 
-    def __get_aws_matching(self, imgs1: Tensor, imgs2: Tensor) -> tuple[float, float]:
+    def _get_aws_matching(self, imgs1: Tensor, imgs2: Tensor) -> tuple[float, float]:
         matching_count, valid_count = 0, 1e-10
         for img1, img2 in zip(imgs1, imgs2):
             try:
@@ -317,7 +317,7 @@ class Effectiveness:
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
-                    self.__get_facepp_matching_single,
+                    self._get_facepp_matching_single,
                     img1,
                     img2,
                     api_keys[index],
@@ -346,6 +346,21 @@ class Effectiveness:
                 distances.append(distance)
 
         return distances
+
+    def get_success_swap_indices(
+        self, src_imgs: Tensor, swap_result_imgs: Tensor
+    ) -> Tensor:
+        success_indices = []
+        for i, (src_img, swap_result_img) in enumerate(zip(src_imgs, swap_result_imgs)):
+            for (
+                _,
+                v,
+            ) in self.candi_funcs.items():  # there should be only one function
+                matching, valid = v(src_img.unsqueeze(0), swap_result_img.unsqueeze(0))
+                if int(matching) == 1 and int(valid) == 1:
+                    success_indices.append(i)
+
+        return torch.tensor(success_indices, dtype=torch.long)
 
     def calculate_effectiveness(
         self,
@@ -620,10 +635,10 @@ class Cloak:
         if not config.third_party.dataset.use_224:
             self.cloak_dir = self.cloak_dir.replace("cloak_224", "cloak_512")
 
-        self.cloak_imgs = self.__get_cloak_imgs()
-        self.cloak_cache = self.__cache_cloak_imgs()
+        self.cloak_imgs = self._get_cloak_imgs()
+        self.cloak_cache = self._cache_cloak_imgs()
 
-    def __cache_cloak_imgs(self) -> dict:
+    def _cache_cloak_imgs(self) -> dict:
         mtcnn = MTCNN(
             image_size=160,
             device="cuda",
@@ -649,10 +664,10 @@ class Cloak:
 
         return cloak_cache
 
-    def __hash_tensor(self, img: Tensor):
+    def _hash_tensor(self, img: Tensor):
         return hash(tuple(img.view(-1).tolist()))
 
-    def __get_cloak_imgs_path(self) -> dict:
+    def _get_cloak_imgs_path(self) -> dict:
         male_imgs_path = sorted(os.listdir(join(self.cloak_dir, "male")))
         male_imgs_path = [join(self.cloak_dir, "male", name) for name in male_imgs_path]
 
@@ -667,7 +682,7 @@ class Cloak:
             "mix": male_imgs_path[:15] + female_imgs_path[:15],
         }
 
-    def __load_imgs(self, imgs_path) -> dict:
+    def _load_imgs(self, imgs_path) -> dict:
         transform = (
             transforms.Compose([transforms.ToTensor()])
             if self.config.third_party.dataset.use_224
@@ -678,17 +693,17 @@ class Cloak:
 
         return imgs.cuda()
 
-    def __get_cloak_imgs(self) -> dict:
-        cloak_imgs_path = self.__get_cloak_imgs_path()
+    def _get_cloak_imgs(self) -> dict:
+        cloak_imgs_path = self._get_cloak_imgs_path()
 
         return {
-            "male": self.__load_imgs(cloak_imgs_path["male"]),
-            "female": self.__load_imgs(cloak_imgs_path["female"]),
-            "mix": self.__load_imgs(cloak_imgs_path["mix"]),
+            "male": self._load_imgs(cloak_imgs_path["male"]),
+            "female": self._load_imgs(cloak_imgs_path["female"]),
+            "mix": self._load_imgs(cloak_imgs_path["mix"]),
         }
 
-    def __check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
-        result = {self.__hash_tensor(img): "fail"}
+    def _check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
+        result = {self._hash_tensor(img): "fail"}
 
         buffered = BytesIO()
         img_image = img * 255
@@ -714,7 +729,7 @@ class Cloak:
                         return result
 
                     gender = response["faces"][0]["attributes"]["gender"]["value"]
-                    result[self.__hash_tensor(img)] = gender.lower()
+                    result[self._hash_tensor(img)] = gender.lower()
                     break
                 elif response.status_code == 400:
                     self.logger.info(response["time_used"])
@@ -731,7 +746,7 @@ class Cloak:
 
         return result
 
-    def __check_imgs_gender(self, imgs: Tensor):
+    def _check_imgs_gender(self, imgs: Tensor):
         from concurrent.futures import ThreadPoolExecutor
 
         api_keys = self.config.evaluate.facepp.api_key
@@ -739,7 +754,7 @@ class Cloak:
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
-                    self.__check_imgs_gender_single,
+                    self._check_imgs_gender_single,
                     imgs[i],
                     api_keys[i % len(api_keys)],
                     api_secrets[i % len(api_secrets)],
@@ -756,7 +771,7 @@ class Cloak:
 
     def find_best_cloaks(self, imgs: Tensor) -> Tensor:
         if not self.config.third_party.dataset.cloak_mix:
-            imgs_gender = self.__check_imgs_gender(imgs)
+            imgs_gender = self._check_imgs_gender(imgs)
 
         imgs_ndarray = imgs.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
         best_anchors = []
@@ -767,12 +782,12 @@ class Cloak:
             else:
                 candidates = (
                     self.cloak_imgs["female"]
-                    if imgs_gender[self.__hash_tensor(imgs[i])] == "male"
+                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"
                     else self.cloak_imgs["male"]
                 )
                 cache = (
                     self.cloak_cache["female"]
-                    if imgs_gender[self.__hash_tensor(imgs[i])] == "male"
+                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"
                     else self.cloak_cache["male"]
                 )
 

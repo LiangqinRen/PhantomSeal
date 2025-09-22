@@ -75,6 +75,7 @@ def fix_random_seed(logger, random_seed: int) -> None:
     random.seed(random_seed)
     np.random.seed(random_seed)
     torch.manual_seed(random_seed)
+    torch.cuda.manual_seed_all(random_seed)
 
     logger.info(f"Fix random, numpy and torch random seed to {random_seed}")
 
