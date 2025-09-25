@@ -1,0 +1,47 @@
+name: sepmark
+function: metric
+
+project_name: Dual_watermark
+epoch_number: 100
+lr: 0.0002
+beta1: 0.5
+image_size: 256
+message_length: 128
+message_range: 0.1
+attention_encoder: se
+attention_decoder: se
+weight:
+  - 1 # encoder
+  - 10 # decoder_C
+  - 10 # decoder_R
+  - 10 # decoder_F
+  - 0.1 # discriminator
+dataset_path: data/dual_watermark/
+save_images_number: 8
+noise_layers:
+  pool_R:
+    - Identity()
+    - JpegTest()
+    - Resize()
+    - GaussianBlur()
+    - MedianBlur()
+    - Brightness()
+    - Contrast()
+    - Saturation()
+    - Hue()
+    - Dropout()
+    - SaltPepper()
+    - GaussianNoise()
+  pool_F:
+    - SimSwap()
+
+result_folder: simswap
+model_epoch: 90
+batch_size: 1
+with_mask: true
+strength_factor: 1
+noise_layer: Identity()
+
+model_path: third_party/SepMark/checkpoints/EC_90.pth
+test_dir: data/vggface2_224
+dataset_path: third_party/SepMark/data/dual_watermark/test_256

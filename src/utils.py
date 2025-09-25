@@ -22,7 +22,7 @@ class Timer:
     def __del__(self):
         elapsed = time.time() - self.begin_time
         self.logger.info(
-            f"{self.function_name} costs {self.format_seconds(elapsed)} ({elapsed:.3f} seconds)"
+            f"{self.function_name} took {self.format_seconds(elapsed)} ({elapsed:.3f} seconds)"
         )
 
     def format_seconds(self, seconds: float) -> str:

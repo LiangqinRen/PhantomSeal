@@ -13,3 +13,6 @@
 [submodule "third_party/ArtificialGANFingerprints"]
 	path = third_party/ArtificialGANFingerprints
 	url = https://github.com/ningyu1991/ArtificialGANFingerprints.git
+[submodule "third_party/DiffSwap"]
+	path = third_party/DiffSwap
+	url = https://github.com/wl-zhao/DiffSwap.git
