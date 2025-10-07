@@ -215,3 +215,51 @@ class AdaptiveMetricDataset(Dataset):
         img_C = self.transform(Image.open(img_C_path).convert("RGB"))
 
         return img_A, img_B, img_C
+
+
+class FFHQDataset(Dataset):
+    def __init__(self, config):
+        self.config = config
+        self.root_dir = Path(config.third_party.dataset.metric_dir)
+
+        self.metric_pairs = config.third_party.dataset.metric_pairs
+        self.A, self.B = self.__get_double_imgs_list()
+
+        image_size = config.third_party.dataset.input_size
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize((image_size, image_size)),
+                transforms.ToTensor(),
+            ]
+        )
+
+    def __get_double_imgs_list(self):
+        images_path = [f for f in self.root_dir.iterdir() if f.is_file()]
+        images_path = sorted(images_path)
+        random.shuffle(images_path)
+
+        A, B = [], []
+        for idx, img_path in enumerate(images_path):
+            if idx % 2 == 0:
+                A.append(img_path)
+            else:
+                B.append(img_path)
+
+        A, B = sorted(A), sorted(B)
+        random.shuffle(A)
+        random.shuffle(B)
+
+        min_count = min(len(A), len(B), self.metric_pairs)
+
+        return A[:min_count], B[:min_count]
+
+    def __len__(self):
+        return len(self.A)
+
+    def __getitem__(self, idx):
+        img_A_path, img_B_path = self.A[idx], self.B[idx]
+
+        img_A = self.transform(Image.open(img_A_path).convert("RGB"))
+        img_B = self.transform(Image.open(img_B_path).convert("RGB"))
+
+        return img_A, img_B

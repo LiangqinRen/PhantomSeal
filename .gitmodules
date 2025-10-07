@@ -16,3 +16,6 @@
 [submodule "third_party/DiffSwap"]
 	path = third_party/DiffSwap
 	url = https://github.com/wl-zhao/DiffSwap.git
+[submodule "third_party/DiffFace"]
+	path = third_party/DiffFace
+	url = https://github.com/hxngiee/DiffFace.git
