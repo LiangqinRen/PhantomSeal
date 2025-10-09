@@ -1,5 +1,6 @@
-from diffface.base import Base
-from dataset import FFHQDataset
+from src.diffface.base import Base
+from src.dataset import FFHQDataset
+from src.utils import save_tensor_imgs
 
 from pathlib import Path
 from torch.utils.data import DataLoader
@@ -18,7 +19,18 @@ class Defense(Base):
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
         )
         total_count = 0
-        print(len(dataloader))
-        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
-            print(imgs_A.shape, imgs_B.shape)
+        for idx, (img_A, img_B) in enumerate(dataloader, start=1):
+            img_A, img_B = img_A.cuda(), img_B.cuda()
+            result = self.swap_face(img_A, img_B)
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "img_A",
+                    "img_B",
+                    "result",
+                ],
+                [img_A, img_B, result],
+                only_save_summary=False,
+            )
             break

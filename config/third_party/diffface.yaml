@@ -1,7 +1,15 @@
 name: diffface
 function: metric
 
-# origin:
+project_root: third_party/DiffFace
+
+origin:
+  skip_timesteps: 25
+  model: ddpm # ddim or ddpm
+  timestep_respacing: 100
+  aug_num: 8
+  iterations_num: 4
+  masking_threshold: 30
 
 dataset:
   resolution: 1024

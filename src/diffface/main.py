@@ -1,5 +1,5 @@
-import utils
-from diffface.defense import Defense
+import src.utils
+from src.diffface.defense import Defense
 
 import sys
 import hydra
@@ -8,11 +8,11 @@ from omegaconf import DictConfig
 
 @hydra.main(config_path="../../config", config_name="config", version_base=None)
 def main(config: DictConfig):
-    logger = utils.get_customized_logger(config.log.record_level)
+    logger = src.utils.get_customized_logger(config.log.record_level)
 
-    utils.check_cuda_availability(logger)
-    utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer("main", logger)
+    src.utils.check_cuda_availability(logger)
+    src.utils.fix_random_seed(logger, config.random_seed)
+    timer = src.utils.Timer("main", logger)
 
     defense = Defense(logger, config)
     defense_functions = {"metric": defense.metric}
