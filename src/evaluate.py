@@ -15,6 +15,7 @@ import hmac
 import hashlib
 import json
 import boto3
+from omegaconf import OmegaConf
 from http.client import HTTPSConnection
 from datetime import datetime, timedelta, timezone
 from facenet_pytorch import MTCNN, InceptionResnetV1
@@ -632,7 +633,10 @@ class Cloak:
         self.effectiveness = effectiveness
 
         self.cloak_dir = self.config.third_party.dataset.cloak_dir
-        if not config.third_party.dataset.use_224:
+        if (
+            OmegaConf.select(config, "third_party.dataset.use_224") is not None
+            and not config.third_party.dataset.use_224
+        ):
             self.cloak_dir = self.cloak_dir.replace("cloak_224", "cloak_512")
 
         self.cloak_imgs = self._get_cloak_imgs()
@@ -685,7 +689,8 @@ class Cloak:
     def _load_imgs(self, imgs_path) -> dict:
         transform = (
             transforms.Compose([transforms.ToTensor()])
-            if self.config.third_party.dataset.use_224
+            if OmegaConf.select(self.config, "third_party.dataset.use_224") is not None
+            and self.config.third_party.dataset.use_224
             else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
         )
         imgs = [transform(Image.open(path).convert("RGB")) for path in imgs_path]
