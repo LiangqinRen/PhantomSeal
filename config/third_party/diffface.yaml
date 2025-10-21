@@ -14,7 +14,7 @@ origin:
 dataset:
   resolution: 1024
   metric_dir: data/FFHQ_${third_party.dataset.resolution}
-  metric_pairs: 600
+  metric_pairs: 5
   input_size: 256
   cloak: real
   cloak_dir: "data/FFHQ_cloak_${third_party.dataset.resolution}/${third_party.dataset.cloak}"
@@ -23,15 +23,14 @@ dataset:
   cloak_min_distance: 1.04
 
 defense:
-  batch_size: 30 # cloak selection
+  batch_size: 5 # cloak selection
   epochs: 1000
   epsilon: 0.005
   limit:
-    R: 0.075
-    G: 0.03
-    B: 0.075
-    context: 30
+    R: 0.1
+    G: 0.1
+    B: 0.1
   weight:
-    perturb: 1000
-    identity: 10000
-    context: 10
+    perturb: 0.005
+    identity: 500000
+    context: 100

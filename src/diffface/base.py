@@ -279,8 +279,6 @@ class Base:
                             self.metrics_accumulator.update_metric(
                                 "gaze_loss", gaze_loss.item()
                             )
-                        else:
-                            print("no eye detected")
                 except Exception as e:
                     self.logger.warning(f"Gaze loss failed: {e}")
 

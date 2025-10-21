@@ -38,7 +38,7 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
 
             results = self._face_swap_per_image(imgs_A, imgs_B)
             rev_results = self._face_swap_per_image(imgs_B, imgs_A)
