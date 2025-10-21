@@ -9,7 +9,7 @@ log:
 
 log_dir: ${hydra:runtime.output_dir}${log.file_suffix}
 image_dir: ${log_dir}/image
-random_seed: 2025
+random_seed: 0
 
 hydra:
   run:

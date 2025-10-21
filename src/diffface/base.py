@@ -40,6 +40,7 @@ from torch.nn.functional import mse_loss, l1_loss
 from torchvision.utils import save_image
 
 warnings.filterwarnings("ignore", category=SourceChangeWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 ROOT = Path(__file__).resolve().parents[1]
 DIFFFACE_ROOT = ROOT.parent / "third_party" / "DiffFace"
@@ -160,12 +161,9 @@ class Base:
         return np.expand_dims(mask, axis=0)
 
     def id_loss(self, x_in, targ, embedder):
-
         id_loss = torch.tensor(0)
 
         masked_input = x_in * self.mask
-        # masked_input = x_in
-
         masked_input = F.interpolate(masked_input, (112, 112))
         targ = F.interpolate(targ, (112, 112))
 
@@ -216,20 +214,16 @@ class Base:
 
                 # Segmentation loss
                 src_mask = (x_in + 1) / 2
-                # src_mask = transforms.Resize((512, 512))(src_mask)
                 src_mask = transforms.Normalize(
                     (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
                 )(src_mask)
                 targ_mask = (tgt_img + 1) / 2
-                # targ_mask = transforms.Resize((512, 512))(targ_mask)
                 targ_mask = transforms.Normalize(
                     (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
                 )(targ_mask)
 
                 src_seg = self.netSeg(self.spNorm(src_mask))[0]
-                # src_seg = transforms.Resize((256, 256))(src_seg)
                 targ_seg = self.netSeg(self.spNorm(targ_mask))[0]
-                # targ_seg = transforms.Resize((256, 256))(targ_seg)
 
                 seg_loss = torch.tensor(0).to(self.device).float()
 
@@ -238,7 +232,6 @@ class Base:
 
                 for id in ids:
                     seg_loss += l1_loss(src_seg[0, id, :, :], targ_seg[0, id, :, :])
-                    # seg_loss += mse_loss(src_seg[0,id,:,:], targ_seg[0,id,:,:])
 
                 loss = loss + seg_loss * 200
                 self.metrics_accumulator.update_metric("seg_loss", seg_loss.item())
@@ -337,12 +330,10 @@ class Base:
         ]
 
         targ_mask = tgt_img.detach().clone()
-        # targ_mask = transforms.Resize((512, 512))(targ_mask)
         targ_mask = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))(
             targ_mask
         )
         targ_mask = self.netSeg(self.spNorm(targ_mask))[0]
-        # targ_mask = transforms.Resize((256, 256))(targ_mask)
         parsing = targ_mask.squeeze(0).detach().cpu().numpy().argmax(0)
         targ_base = np.zeros((256, 256, 3))
         for idx, color in enumerate(color_list):
@@ -355,9 +346,6 @@ class Base:
         src_img = src_img * 2.0 - 1.0
         tgt_img = tgt_img * 2.0 - 1.0
 
-        # self.args.iterations_num: 8
-        # for iteration_number in range(1):  # self.args.iterations_num: 8
-        #     print(f"Start iterations {iteration_number}")
         sample_func = (
             self.diffusion.ddim_sample_loop_progressive
             if self.config.third_party.origin.model == "ddim"
