@@ -197,89 +197,107 @@ class Base:
 
                 loss = torch.tensor(0)
 
-                # ID loss
-                targ = src_img
-                arc_src = (x_in + 1) / 2
-                arc_src = transforms.Normalize(
-                    [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-                )(arc_src)
-                arc_targ = (targ + 1) / 2
-                arc_targ = transforms.Normalize(
-                    [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-                )(arc_targ)
-                id_loss = self.id_loss(arc_src, arc_targ, self.netArc) * 6000
+                try:
+                    # ID loss
+                    targ = src_img
+                    arc_src = (x_in + 1) / 2
+                    arc_src = transforms.Normalize(
+                        [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+                    )(arc_src)
+                    arc_targ = (targ + 1) / 2
+                    arc_targ = transforms.Normalize(
+                        [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+                    )(arc_targ)
+                    id_loss = self.id_loss(arc_src, arc_targ, self.netArc) * 6000
 
-                loss = loss + id_loss
-                self.metrics_accumulator.update_metric("id_loss", id_loss.item())
+                    loss = loss + id_loss
+                    self.metrics_accumulator.update_metric("id_loss", id_loss.item())
+                except Exception as e:
+                    self.logger.warning(f"ID loss failed: {e}")
 
-                # Segmentation loss
-                src_mask = (x_in + 1) / 2
-                src_mask = transforms.Normalize(
-                    (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-                )(src_mask)
-                targ_mask = (tgt_img + 1) / 2
-                targ_mask = transforms.Normalize(
-                    (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-                )(targ_mask)
+                try:
+                    # Segmentation loss
+                    src_mask = (x_in + 1) / 2
+                    src_mask = transforms.Normalize(
+                        (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+                    )(src_mask)
+                    targ_mask = (tgt_img + 1) / 2
+                    targ_mask = transforms.Normalize(
+                        (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+                    )(targ_mask)
 
-                src_seg = self.netSeg(self.spNorm(src_mask))[0]
-                targ_seg = self.netSeg(self.spNorm(targ_mask))[0]
+                    src_seg = self.netSeg(self.spNorm(src_mask))[0]
+                    targ_seg = self.netSeg(self.spNorm(targ_mask))[0]
 
-                seg_loss = torch.tensor(0).to(self.device).float()
+                    seg_loss = torch.tensor(0).to(self.device).float()
 
-                # Attributes = [0, 'background', 1 'skin', 2 'r_brow', 3 'l_brow', 4 'r_eye', 5 'l_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
-                ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
+                    # Attributes = [0, 'background', 1 'skin', 2 'r_brow', 3 'l_brow', 4 'r_eye', 5 'l_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
+                    ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
 
-                for id in ids:
-                    seg_loss += l1_loss(src_seg[0, id, :, :], targ_seg[0, id, :, :])
+                    for id in ids:
+                        seg_loss += l1_loss(src_seg[0, id, :, :], targ_seg[0, id, :, :])
 
-                loss = loss + seg_loss * 200
-                self.metrics_accumulator.update_metric("seg_loss", seg_loss.item())
+                    loss = loss + seg_loss * 200
+                    self.metrics_accumulator.update_metric("seg_loss", seg_loss.item())
+                except Exception as e:
+                    self.logger.warning(f"Segmentation loss failed: {e}")
 
-                # Gaze loss
-                if t < 50 and t > 10:
-                    src_eye = x_in * 0.5 + 0.5
-                    targ_eye = tgt_img
-                    targ_eye = targ_eye * 0.5 + 0.5
-                    llx, lly, lrx, lry, rlx, rly, rrx, rry = get_eye_coords(
-                        self.fa, targ_eye
-                    )
-
-                    if llx is not None:
-                        targ_left_eye = targ_eye[:, :, lly:lry, llx:lrx]
-                        src_left_eye = src_eye[:, :, lly:lry, llx:lrx]
-                        targ_right_eye = targ_eye[:, :, rly:rry, rlx:rrx]
-                        src_right_eye = src_eye[:, :, rly:rry, rlx:rrx]
-                        targ_left_eye = torch.mean(targ_left_eye, dim=1, keepdim=True)
-                        src_left_eye = torch.mean(src_left_eye, dim=1, keepdim=True)
-                        targ_right_eye = torch.mean(targ_right_eye, dim=1, keepdim=True)
-                        src_right_eye = torch.mean(src_right_eye, dim=1, keepdim=True)
-                        targ_left_gaze = self.netGaze(targ_left_eye.squeeze(0))
-                        src_left_gaze = self.netGaze(src_left_eye.squeeze(0))
-                        targ_right_gaze = self.netGaze(targ_right_eye.squeeze(0))
-                        src_right_gaze = self.netGaze(src_right_eye.squeeze(0))
-                        left_gaze_loss = l1_loss(targ_left_gaze, src_left_gaze)
-                        right_gaze_loss = l1_loss(targ_right_gaze, src_right_gaze)
-                        gaze_loss = (left_gaze_loss + right_gaze_loss) * 200
-
-                        loss = loss + gaze_loss.sum()
-                        self.metrics_accumulator.update_metric(
-                            "gaze_loss", gaze_loss.item()
+                try:
+                    # Gaze loss
+                    if t < 50 and t > 10:
+                        src_eye = x_in * 0.5 + 0.5
+                        targ_eye = tgt_img
+                        targ_eye = targ_eye * 0.5 + 0.5
+                        llx, lly, lrx, lry, rlx, rly, rrx, rry = get_eye_coords(
+                            self.fa, targ_eye
                         )
-                    else:
-                        print("no eye detected")
 
-                # Background loss
-                masked_background = x_in
+                        if llx is not None:
+                            targ_left_eye = targ_eye[:, :, lly:lry, llx:lrx]
+                            src_left_eye = src_eye[:, :, lly:lry, llx:lrx]
+                            targ_right_eye = targ_eye[:, :, rly:rry, rlx:rrx]
+                            src_right_eye = src_eye[:, :, rly:rry, rlx:rrx]
+                            targ_left_eye = torch.mean(
+                                targ_left_eye, dim=1, keepdim=True
+                            )
+                            src_left_eye = torch.mean(src_left_eye, dim=1, keepdim=True)
+                            targ_right_eye = torch.mean(
+                                targ_right_eye, dim=1, keepdim=True
+                            )
+                            src_right_eye = torch.mean(
+                                src_right_eye, dim=1, keepdim=True
+                            )
+                            targ_left_gaze = self.netGaze(targ_left_eye.squeeze(0))
+                            src_left_gaze = self.netGaze(src_left_eye.squeeze(0))
+                            targ_right_gaze = self.netGaze(targ_right_eye.squeeze(0))
+                            src_right_gaze = self.netGaze(src_right_eye.squeeze(0))
+                            left_gaze_loss = l1_loss(targ_left_gaze, src_left_gaze)
+                            right_gaze_loss = l1_loss(targ_right_gaze, src_right_gaze)
+                            gaze_loss = (left_gaze_loss + right_gaze_loss) * 200
 
-                loss = loss + mse_loss(masked_background, tgt_img) * 50
-                self.metrics_accumulator.update_metric(
-                    "l2_loss", mse_loss(masked_background, tgt_img).item()
-                )
-                self.metrics_accumulator.update_metric(
-                    "bg_loss",
-                    mse_loss(masked_background, tgt_img * (1 - self.mask)).item(),
-                )
+                            loss = loss + gaze_loss.sum()
+                            self.metrics_accumulator.update_metric(
+                                "gaze_loss", gaze_loss.item()
+                            )
+                        else:
+                            print("no eye detected")
+                except Exception as e:
+                    self.logger.warning(f"Gaze loss failed: {e}")
+
+                try:
+                    # Background loss
+                    masked_background = x_in
+
+                    loss = loss + mse_loss(masked_background, tgt_img) * 50
+                    self.metrics_accumulator.update_metric(
+                        "l2_loss", mse_loss(masked_background, tgt_img).item()
+                    )
+                    self.metrics_accumulator.update_metric(
+                        "bg_loss",
+                        mse_loss(masked_background, tgt_img * (1 - self.mask)).item(),
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Background loss failed: {e}")
 
                 return -torch.autograd.grad(loss, x)[0]
 
