@@ -27,3 +27,6 @@ ai_lab_tools:
 tencent_cloud:
   secret_id: ""
   secret_key: ""
+
+arcface_resnet_path: checkpoints/glintr100.onnx
+cosface_resnet_path: checkpoints/16_backbone.pth

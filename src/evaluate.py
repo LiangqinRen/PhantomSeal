@@ -1,3 +1,7 @@
+from third_party.insightface.recognition.arcface_torch.backbones.iresnet import (
+    iresnet100,
+)
+
 import torch
 import lpips
 import math
@@ -15,6 +19,7 @@ import hmac
 import hashlib
 import json
 import boto3
+import torch.nn.functional as F
 from omegaconf import OmegaConf
 from http.client import HTTPSConnection
 from datetime import datetime, timedelta, timezone
@@ -27,6 +32,7 @@ from io import BytesIO
 from os.path import join
 from torchvision.transforms.functional import to_pil_image
 from concurrent.futures import ThreadPoolExecutor
+from insightface.model_zoo import get_model
 
 
 class Utility:
@@ -96,6 +102,16 @@ class Effectiveness:
             region_name=self.config.evaluate.aws.api_region,
         )
 
+        self.arcface_resnet = get_model(self.config.evaluate.arcface_resnet_path)
+        self.arcface_resnet.prepare(ctx_id=0)  # type: ignore
+
+        self.cosface_resnet = iresnet100(fp16=False)
+        self.cosface_resnet.eval()
+
+        state = torch.load(self.config.evaluate.cosface_resnet_path, map_location="cpu")
+        self.cosface_resnet.load_state_dict(state, strict=False)
+        self.cosface_resnet.cuda()
+
     def _init_functions(self) -> dict:
         candidate_functions = {}
 
@@ -109,6 +125,44 @@ class Effectiveness:
             candidate_functions["aws"] = self._get_aws_matching
 
         return candidate_functions
+
+    def _convert_to_bgr112_ndarray(self, x: Tensor) -> np.ndarray:
+        assert x.ndim == 4 and x.shape[0] == 1 and x.shape[1] == 3
+        x = x.detach().float()
+
+        xmax, xmin = float(x.max().item()), float(x.min().item())
+        if xmax <= 1.5 and xmin >= -0.5:
+            x = x * 255.0
+        elif xmin >= -1.1 and xmax <= 1.1:
+            x = (x * 127.5) + 127.5
+        x = x.clamp(0, 255)
+
+        x = F.interpolate(
+            x, size=(112, 112), mode="bilinear", align_corners=False, antialias=True
+        )
+
+        img = x[0].permute(1, 2, 0).cpu().numpy()
+        img = img[..., ::-1]
+        img = np.ascontiguousarray(img.astype(np.uint8))
+
+        return img
+
+    def _convert_to_bgr112_tensor(self, x: Tensor) -> Tensor:
+        assert x.dim() in (3, 4), f"unexpected shape: {x.shape}"
+        if x.dim() == 3:
+            x = x.unsqueeze(0)
+
+        x = x.detach().clone().float()
+
+        if x.max() <= 1.5:
+            x = x * 255.0
+
+        x = x[:, [2, 1, 0], :, :]
+
+        x = F.interpolate(x, size=(112, 112), mode="bilinear", align_corners=False)
+        x = (x - 127.5) / 128.0
+
+        return x.contiguous()
 
     def get_images_distance(self, imgs1: Tensor, imgs2: Tensor) -> list[float]:
         distances = []
@@ -387,6 +441,68 @@ class Effectiveness:
                 effectivenesses[k]["anchor"] = v(pert_swap_imgs, cloak_imgs)
 
         return effectivenesses
+
+    def _get_ndarray_similarity(self, e1: np.ndarray, e2: np.ndarray):
+        e1 = np.asarray(e1).reshape(-1).astype(np.float32)
+        e2 = np.asarray(e2).reshape(-1).astype(np.float32)
+
+        e1 /= np.linalg.norm(e1) + 1e-12
+        e2 /= np.linalg.norm(e2) + 1e-12
+
+        return float(np.dot(e1, e2))
+
+    def _get_tensor_similarity(self, e1: Tensor, e2: Tensor):
+        f1 = F.normalize(e1, p=2, dim=1)
+        f2 = F.normalize(e2, p=2, dim=1)
+        sim = (f1 * f2).sum(dim=1)
+
+        return sim
+
+    def evaluate_similarity_via_arcface(
+        self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
+    ) -> tuple[int, int]:
+        imgs3_close_to_imgs1 = 0
+        imgs3_close_to_imgs2 = 0
+        for img1, img2, img3 in zip(imgs1, imgs2, imgs3):
+            e1 = self.arcface_resnet.get_feat(  # type: ignore
+                self._convert_to_bgr112_ndarray(img1.unsqueeze(0))
+            ).astype(np.float32)
+            e2 = self.arcface_resnet.get_feat(  # type: ignore
+                self._convert_to_bgr112_ndarray(img2.unsqueeze(0))
+            ).astype(np.float32)
+            e3 = self.arcface_resnet.get_feat(  # type: ignore
+                self._convert_to_bgr112_ndarray(img3.unsqueeze(0))
+            ).astype(np.float32)
+
+            imgs3_close_to_imgs1 += self._get_ndarray_similarity(
+                e3, e1
+            ) >= self._get_ndarray_similarity(e3, e2)
+            imgs3_close_to_imgs2 += self._get_ndarray_similarity(
+                e3, e1
+            ) < self._get_ndarray_similarity(e3, e2)
+
+        return imgs3_close_to_imgs1, imgs3_close_to_imgs2
+
+    def evaluate_similarity_via_cosface(
+        self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
+    ) -> tuple[int, int]:
+        imgs3_close_to_imgs1 = 0
+        imgs3_close_to_imgs2 = 0
+        for img1, img2, img3 in zip(imgs1, imgs2, imgs3):
+            e1 = self.cosface_resnet(self._convert_to_bgr112_tensor(img1.unsqueeze(0)))
+            e2 = self.cosface_resnet(self._convert_to_bgr112_tensor(img2.unsqueeze(0)))
+            e3 = self.cosface_resnet(self._convert_to_bgr112_tensor(img3.unsqueeze(0)))
+
+            imgs3_close_to_imgs1 += (
+                self._get_tensor_similarity(e3, e1).item()
+                >= self._get_tensor_similarity(e3, e2).item()
+            )
+            imgs3_close_to_imgs2 += (
+                self._get_tensor_similarity(e3, e1).item()
+                < self._get_tensor_similarity(e3, e2).item()
+            )
+
+        return imgs3_close_to_imgs1, imgs3_close_to_imgs2
 
 
 class AIEditing:
