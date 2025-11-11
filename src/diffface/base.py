@@ -1,17 +1,8 @@
-from optimization.image_editor import VGGDataset
 from third_party.DiffFace.models.guided_diffusion.script_util import (
     create_model_and_diffusion,
     model_and_diffusion_defaults,
 )
-from third_party.DiffFace.optimization.constants import (
-    ASSETS_DIR_NAME,
-    RANKED_RESULTS_DIR,
-)
-from third_party.DiffFace.optimization.augmentations import (
-    ImageAugmentations,
-    StructureAugmentations,
-)
-from third_party.DiffFace.utils.metrics_accumulator import MetricsAccumulator
+from third_party.DiffFace.optimization.augmentations import ImageAugmentations
 from third_party.DiffFace.utils.module import SpecificNorm
 from third_party.DiffFace.models.parsing import BiSeNet
 from third_party.DiffFace.models.gaze_estimation.gaze_estimator import (
@@ -37,7 +28,6 @@ from torch.serialization import SourceChangeWarning, add_safe_globals
 from torch.nn.parallel.data_parallel import DataParallel
 from torchvision import transforms
 from torch.nn.functional import mse_loss, l1_loss
-from torchvision.utils import save_image
 
 warnings.filterwarnings("ignore", category=SourceChangeWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -111,13 +101,9 @@ class Base:
 
         self.lpips_model = lpips.LPIPS(net="vgg").to(self.device)
 
-        self.image_structureAugmentations = StructureAugmentations(
-            224, config.third_party.origin.aug_num // 2
-        )
         self.image_augmentations = ImageAugmentations(
             112, config.third_party.origin.aug_num
         )
-        self.metrics_accumulator = MetricsAccumulator()
 
         netArc_checkpoint = torch.load(
             f"{self.project_root}/checkpoints/Arcface_model_only.tar"
@@ -141,24 +127,6 @@ class Base:
             self.fa = face_alignment.FaceAlignment(
                 face_alignment.LandmarksType.TWO_D, flip_input=False
             )
-
-    def unscale_timestep(self, t):
-        unscaled_timestep = (t * (self.diffusion.num_timesteps / 1000)).long()
-        return unscaled_timestep
-
-    def makeMask(self, origin_mask):
-        numpy = origin_mask.squeeze(0).detach().cpu().numpy().argmax(0)
-        numpy = numpy.copy().astype(np.uint8)
-
-        # atts = [1 'skin', 2 'l_brow', 3 'r_brow', 4 'l_eye', 5 'r_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
-        ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
-
-        mask = np.zeros([256, 256])
-        for id in ids:
-            index = np.where(numpy == id)
-            mask[index] = 1
-
-        return np.expand_dims(mask, axis=0)
 
     def id_loss(self, x_in, targ, embedder):
         id_loss = torch.tensor(0)
@@ -187,7 +155,8 @@ class Base:
         def cond_fn(x, t, img_id, y=None):
             with torch.enable_grad():
                 x = x.detach().requires_grad_()
-                t = self.unscale_timestep(t)
+
+                t = self._unscale_timestep(t)
                 out = self.diffusion.p_mean_variance(
                     self.model, x, t, img_id, clip_denoised=False, model_kwargs={"y": y}
                 )
@@ -197,37 +166,33 @@ class Base:
 
                 loss = torch.tensor(0)
 
+                # ID loss
                 try:
-                    # ID loss
                     targ = src_img
                     arc_src = (x_in + 1) / 2
-                    arc_src = transforms.Normalize(
-                        [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-                    )(arc_src)
+                    arc_src = self._normalize(arc_src)
                     arc_targ = (targ + 1) / 2
-                    arc_targ = transforms.Normalize(
-                        [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-                    )(arc_targ)
+                    arc_targ = self._normalize(arc_targ)
                     id_loss = self.id_loss(arc_src, arc_targ, self.netArc) * 6000
 
                     loss = loss + id_loss
-                    self.metrics_accumulator.update_metric("id_loss", id_loss.item())
                 except Exception as e:
                     self.logger.warning(f"ID loss failed: {e}")
 
+                # Segmentation loss
                 try:
-                    # Segmentation loss
                     src_mask = (x_in + 1) / 2
-                    src_mask = transforms.Normalize(
-                        (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-                    )(src_mask)
+                    src_mask = transforms.Resize((512, 512))(src_mask)
+                    src_mask = self._normalize(src_mask)
+
                     targ_mask = (tgt_img + 1) / 2
-                    targ_mask = transforms.Normalize(
-                        (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-                    )(targ_mask)
+                    targ_mask = transforms.Resize((512, 512))(targ_mask)
+                    targ_mask = self._normalize(targ_mask)
 
                     src_seg = self.netSeg(self.spNorm(src_mask))[0]
+                    src_seg = transforms.Resize((256, 256))(src_seg)
                     targ_seg = self.netSeg(self.spNorm(targ_mask))[0]
+                    targ_seg = transforms.Resize((256, 256))(targ_seg)
 
                     seg_loss = torch.tensor(0).to(self.device).float()
 
@@ -238,12 +203,11 @@ class Base:
                         seg_loss += l1_loss(src_seg[0, id, :, :], targ_seg[0, id, :, :])
 
                     loss = loss + seg_loss * 200
-                    self.metrics_accumulator.update_metric("seg_loss", seg_loss.item())
                 except Exception as e:
                     self.logger.warning(f"Segmentation loss failed: {e}")
 
+                # Gaze loss
                 try:
-                    # Gaze loss
                     if t < 50 and t > 10:
                         src_eye = x_in * 0.5 + 0.5
                         targ_eye = tgt_img
@@ -273,27 +237,17 @@ class Base:
                             src_right_gaze = self.netGaze(src_right_eye.squeeze(0))
                             left_gaze_loss = l1_loss(targ_left_gaze, src_left_gaze)
                             right_gaze_loss = l1_loss(targ_right_gaze, src_right_gaze)
-                            gaze_loss = (left_gaze_loss + right_gaze_loss) * 200
+                            gaze_loss = (left_gaze_loss + right_gaze_loss) * 100
 
                             loss = loss + gaze_loss.sum()
-                            self.metrics_accumulator.update_metric(
-                                "gaze_loss", gaze_loss.item()
-                            )
                 except Exception as e:
                     self.logger.warning(f"Gaze loss failed: {e}")
 
+                # Background loss
                 try:
-                    # Background loss
                     masked_background = x_in
 
                     loss = loss + mse_loss(masked_background, tgt_img) * 50
-                    self.metrics_accumulator.update_metric(
-                        "l2_loss", mse_loss(masked_background, tgt_img).item()
-                    )
-                    self.metrics_accumulator.update_metric(
-                        "bg_loss",
-                        mse_loss(masked_background, tgt_img * (1 - self.mask)).item(),
-                    )
                 except Exception as e:
                     self.logger.warning(f"Background loss failed: {e}")
 
@@ -346,16 +300,16 @@ class Base:
         ]
 
         targ_mask = tgt_img.detach().clone()
-        targ_mask = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))(
-            targ_mask
-        )
+        targ_mask = self._normalize(targ_mask)
         targ_mask = self.netSeg(self.spNorm(targ_mask))[0]
+        targ_mask = transforms.Resize((256, 256))(targ_mask)
         parsing = targ_mask.squeeze(0).detach().cpu().numpy().argmax(0)
         targ_base = np.zeros((256, 256, 3))
         for idx, color in enumerate(color_list):
             targ_base[parsing == idx] = color
         targ_base /= 255.0
-        mask = self.makeMask(targ_mask)
+
+        mask = self._makeMask(targ_mask)
         self.mask = torch.from_numpy(mask).unsqueeze(0).to(self.device).float()
         self.mask.requires_grad_()
 
@@ -369,9 +323,8 @@ class Base:
         )
 
         img = (src_img + 1) / 2
-        img = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
-
-        img_id = self.get_imgs_identity(img)
+        img = self._normalize(img)
+        img_id = self._get_imgs_identity(img)
 
         samples = sample_func(
             self.model,
@@ -407,8 +360,29 @@ class Base:
 
         return final_pred_tensor.unsqueeze(0)  # type: ignore
 
-    def get_imgs_identity(self, img: torch.Tensor) -> torch.Tensor:
+    def _makeMask(self, origin_mask):
+        numpy = origin_mask.squeeze(0).detach().cpu().numpy().argmax(0)
+        numpy = numpy.copy().astype(np.uint8)
+
+        # atts = [1 'skin', 2 'l_brow', 3 'r_brow', 4 'l_eye', 5 'r_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
+        ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
+
+        mask = np.zeros([256, 256])
+        for id in ids:
+            index = np.where(numpy == id)
+            mask[index] = 1
+
+        return np.expand_dims(mask, axis=0)
+
+    def _get_imgs_identity(self, img: torch.Tensor) -> torch.Tensor:
         img_id = F.interpolate(img, (112, 112))
         img_id = self.netArc(img_id)
         img_id = F.normalize(img_id, p=2, dim=1)
         return img_id
+
+    def _unscale_timestep(self, t):
+        unscaled_timestep = (t * (self.diffusion.num_timesteps / 1000)).long()
+        return unscaled_timestep
+
+    def _normalize(self, image: Tensor) -> Tensor:
+        return transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(image)

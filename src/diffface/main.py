@@ -15,7 +15,7 @@ def main(config: DictConfig):
     timer = src.utils.Timer("main", logger)
 
     defense = Defense(logger, config)
-    defense_functions = {"metric": defense.metric}
+    defense_functions = {"metric": defense.metric, "validate": defense.validate}
 
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()

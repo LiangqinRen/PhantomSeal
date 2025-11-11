@@ -24,7 +24,7 @@ class Defense(Base):
         self.cloak = Cloak(logger, config, self.effectiveness)
 
         self.face_ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
-        self.target_nonface_id = 0
+        self.target_nonface_id = 10
 
     def metric(self) -> None:
         data = metric.get_metric_data_template(self.effectiveness)
@@ -134,6 +134,9 @@ class Defense(Base):
             """
             )
 
+    def validate(self) -> None:
+        pass
+
     def _face_swap_per_image(self, imgs_A: Tensor, imgs_B: Tensor) -> Tensor:
         assert imgs_A.shape[0] == imgs_B.shape[0]
 
@@ -157,7 +160,7 @@ class Defense(Base):
 
     def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor, silent=True) -> Tensor:
         l2_loss = nn.MSELoss()
-        cloak_identity = self.get_imgs_identity(
+        cloak_identity = self._get_imgs_identity(
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
                 cloak_imgs
             )
@@ -187,7 +190,7 @@ class Defense(Base):
                 x_imgs, imgs.detach()
             )
 
-            x_identity = self.get_imgs_identity(
+            x_identity = self._get_imgs_identity(
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
                     x_imgs
                 )
