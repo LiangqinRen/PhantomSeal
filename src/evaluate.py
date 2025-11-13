@@ -13,26 +13,43 @@ import random
 import warnings
 import urllib3
 import traceback
-import numpy as np
-import torchvision.transforms as transforms
 import hmac
 import hashlib
 import json
 import boto3
+import face_recognition
+import numpy as np
 import torch.nn.functional as F
+import torchvision.transforms as transforms
 from omegaconf import OmegaConf
 from http.client import HTTPSConnection
 from datetime import datetime, timedelta, timezone
 from facenet_pytorch import MTCNN, InceptionResnetV1
 from skimage import metrics
 from torch import Tensor
-import face_recognition
 from PIL import Image
 from io import BytesIO
 from os.path import join
 from torchvision.transforms.functional import to_pil_image
 from concurrent.futures import ThreadPoolExecutor
 from insightface.model_zoo import get_model
+from pathlib import Path
+
+_ORIG_TORCH_LOAD = torch.load
+
+
+def _load_patch(*args, **kwargs):
+    if (
+        args
+        and isinstance(args[0], str)
+        and os.path.basename(args[0]) in ("Arcface_model_only.tar")
+    ):
+        kwargs.setdefault("weights_only", False)
+        kwargs.setdefault("map_location", "cpu")
+    return _ORIG_TORCH_LOAD(*args, **kwargs)
+
+
+torch.load = _load_patch
 
 
 class Utility:
@@ -111,6 +128,10 @@ class Effectiveness:
         state = torch.load(self.config.evaluate.cosface_resnet_path, map_location="cpu")
         self.cosface_resnet.load_state_dict(state, strict=False)
         self.cosface_resnet.cuda()
+
+        arcface_diffface_checkpoint = torch.load(f"checkpoints/Arcface_model_only.tar")
+        self.arcface_diffface = arcface_diffface_checkpoint["model"].module
+        self.arcface_diffface = self.arcface_diffface.cuda().eval()
 
     def _init_functions(self) -> dict:
         candidate_functions = {}
@@ -460,10 +481,10 @@ class Effectiveness:
 
     def evaluate_similarity_via_arcface(
         self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
-    ) -> tuple[int, int]:
-        imgs3_close_to_imgs1 = 0
-        imgs3_close_to_imgs2 = 0
-        for img1, img2, img3 in zip(imgs1, imgs2, imgs3):
+    ) -> tuple[list[int], list[int]]:
+        imgs3_close_to_imgs1 = []
+        imgs3_close_to_imgs2 = []
+        for idx, (img1, img2, img3) in enumerate(zip(imgs1, imgs2, imgs3)):
             e1 = self.arcface_resnet.get_feat(  # type: ignore
                 self._convert_to_bgr112_ndarray(img1.unsqueeze(0))
             ).astype(np.float32)
@@ -474,35 +495,154 @@ class Effectiveness:
                 self._convert_to_bgr112_ndarray(img3.unsqueeze(0))
             ).astype(np.float32)
 
-            imgs3_close_to_imgs1 += self._get_ndarray_similarity(
-                e3, e1
-            ) >= self._get_ndarray_similarity(e3, e2)
-            imgs3_close_to_imgs2 += self._get_ndarray_similarity(
-                e3, e1
-            ) < self._get_ndarray_similarity(e3, e2)
+            if self._get_ndarray_similarity(e3, e1) >= self._get_ndarray_similarity(
+                e3, e2
+            ):
+                imgs3_close_to_imgs1.append(idx)
+            else:
+                imgs3_close_to_imgs2.append(idx)
 
         return imgs3_close_to_imgs1, imgs3_close_to_imgs2
 
     def evaluate_similarity_via_cosface(
         self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
-    ) -> tuple[int, int]:
-        imgs3_close_to_imgs1 = 0
-        imgs3_close_to_imgs2 = 0
-        for img1, img2, img3 in zip(imgs1, imgs2, imgs3):
+    ) -> tuple[list[int], list[int]]:
+        imgs3_close_to_imgs1 = []
+        imgs3_close_to_imgs2 = []
+        for idx, (img1, img2, img3) in enumerate(zip(imgs1, imgs2, imgs3)):
             e1 = self.cosface_resnet(self._convert_to_bgr112_tensor(img1.unsqueeze(0)))
             e2 = self.cosface_resnet(self._convert_to_bgr112_tensor(img2.unsqueeze(0)))
             e3 = self.cosface_resnet(self._convert_to_bgr112_tensor(img3.unsqueeze(0)))
 
-            imgs3_close_to_imgs1 += (
+            if (
                 self._get_tensor_similarity(e3, e1).item()
                 >= self._get_tensor_similarity(e3, e2).item()
-            )
-            imgs3_close_to_imgs2 += (
-                self._get_tensor_similarity(e3, e1).item()
-                < self._get_tensor_similarity(e3, e2).item()
-            )
+            ):
+                imgs3_close_to_imgs1.append(idx)
+            else:
+                imgs3_close_to_imgs2.append(idx)
 
         return imgs3_close_to_imgs1, imgs3_close_to_imgs2
+
+    def evaluate_similarity_via_arcface_diffface(
+        self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
+    ) -> tuple[list[int], list[int]]:
+        def cosin_metric(x1, x2):
+            return torch.sum(x1 * x2, dim=1) / (
+                torch.norm(x1, dim=1) * torch.norm(x2, dim=1)
+            )
+
+        imgs3_close_to_imgs1 = []
+        imgs3_close_to_imgs2 = []
+        for idx, (img1, img2, img3) in enumerate(zip(imgs1, imgs2, imgs3)):
+            img1 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                img1.unsqueeze(0)
+            )
+            img1 = F.interpolate(img1, (112, 112))
+            img1_id = self.arcface_diffface(img1)
+
+            img2 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                img2.unsqueeze(0)
+            )
+            img2 = F.interpolate(img2, (112, 112))
+            img2_id = self.arcface_diffface(img2)
+
+            img3 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                img3.unsqueeze(0)
+            )
+            img3 = F.interpolate(img3, (112, 112))
+            img3_id = self.arcface_diffface(img3)
+
+            if cosin_metric(img3_id, img1_id) >= cosin_metric(img3_id, img2_id):
+                imgs3_close_to_imgs1.append(idx)
+            else:
+                imgs3_close_to_imgs2.append(idx)
+
+        return imgs3_close_to_imgs1, imgs3_close_to_imgs2
+
+    def get_arcface_scores(
+        self, imgs_A: Tensor, imgs_B: Tensor, results: Tensor
+    ) -> tuple[list[float], list[float]]:
+        scores, scoresR = [], []
+        for img1, img2, img3 in zip(imgs_A, imgs_B, results):
+            e1 = self.arcface_resnet.get_feat(  # type: ignore
+                self._convert_to_bgr112_ndarray(img1.unsqueeze(0))
+            ).astype(np.float32)
+            e2 = self.arcface_resnet.get_feat(  # type: ignore
+                self._convert_to_bgr112_ndarray(img2.unsqueeze(0))
+            ).astype(np.float32)
+            e3 = self.arcface_resnet.get_feat(  # type: ignore
+                self._convert_to_bgr112_ndarray(img3.unsqueeze(0))
+            ).astype(np.float32)
+
+            score = self._get_ndarray_similarity(e3, e1)
+            scoreR = self._get_ndarray_similarity(e3, e1) / (
+                self._get_ndarray_similarity(e3, e1)
+                + self._get_ndarray_similarity(e2, e1)
+            )
+
+            scores.append(score)
+            scoresR.append(scoreR)
+
+        return scores, scoresR
+
+    def get_arcface_diffface_scores(
+        self, imgs_A: Tensor, imgs_B: Tensor, results: Tensor
+    ) -> tuple[list[float], list[float]]:
+        def cosin_metric(x1, x2):
+            return torch.sum(x1 * x2, dim=1) / (
+                torch.norm(x1, dim=1) * torch.norm(x2, dim=1)
+            )
+
+        scores, scoresR = [], []
+        for img1, img2, img3 in zip(imgs_A, imgs_B, results):
+            img1 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                img1.unsqueeze(0)
+            )
+            img1 = F.interpolate(img1, (112, 112))
+            img1_id = self.arcface_diffface(img1)
+
+            img2 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                img2.unsqueeze(0)
+            )
+            img2 = F.interpolate(img2, (112, 112))
+            img2_id = self.arcface_diffface(img2)
+
+            img3 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                img3.unsqueeze(0)
+            )
+            img3 = F.interpolate(img3, (112, 112))
+            img3_id = self.arcface_diffface(img3)
+
+            score = cosin_metric(img3_id, img1_id)
+            scoreR = cosin_metric(img3_id, img1_id) / (
+                cosin_metric(img3_id, img1_id) + cosin_metric(img3_id, img2_id)
+            )
+
+            scores.append(score.item())
+            scoresR.append(scoreR.item())
+
+        return scores, scoresR
+
+    def get_cosface_scores(
+        self, imgs_A: Tensor, imgs_B: Tensor, results: Tensor
+    ) -> tuple[list[float], list[float]]:
+        scores, scoresR = [], []
+        for img1, img2, img3 in zip(imgs_A, imgs_B, results):
+            e1 = self.cosface_resnet(self._convert_to_bgr112_tensor(img1.unsqueeze(0)))
+            e2 = self.cosface_resnet(self._convert_to_bgr112_tensor(img2.unsqueeze(0)))
+            e3 = self.cosface_resnet(self._convert_to_bgr112_tensor(img3.unsqueeze(0)))
+
+            score = self._get_tensor_similarity(e3, e1)
+            scoreR = self._get_tensor_similarity(e3, e1) / (
+                self._get_tensor_similarity(e3, e1)
+                + self._get_tensor_similarity(e3, e2)
+            )
+
+            scores.append(score.item())
+            scoresR.append(scoreR.item())
+
+        return scores, scoresR
 
 
 class AIEditing:
@@ -748,12 +888,7 @@ class Cloak:
         self.config = config
         self.effectiveness = effectiveness
 
-        self.cloak_dir = self.config.third_party.dataset.cloak_dir
-        if (
-            OmegaConf.select(config, "third_party.dataset.use_224") is not None
-            and not config.third_party.dataset.use_224
-        ):
-            self.cloak_dir = self.cloak_dir.replace("cloak_224", "cloak_512")
+        self.cloak_dir = Path(self.config.third_party.dataset.cloak_dir)
 
         self.cloak_imgs = self._get_cloak_imgs()
         self.cloak_cache = self._cache_cloak_imgs()
@@ -788,29 +923,43 @@ class Cloak:
         return hash(tuple(img.view(-1).tolist()))
 
     def _get_cloak_imgs_path(self) -> dict:
-        male_imgs_path = sorted(os.listdir(join(self.cloak_dir, "male")))
-        male_imgs_path = [join(self.cloak_dir, "male", name) for name in male_imgs_path]
+        cloak_count = self.config.third_party.dataset.cloak_count
 
-        female_imgs_path = sorted(os.listdir(join(self.cloak_dir, "female")))
-        female_imgs_path = [
-            join(self.cloak_dir, "female", name) for name in female_imgs_path
+        male_imgs_path_list = [
+            p
+            for p in (self.cloak_dir / f"male_{cloak_count}").rglob("*")
+            if p.is_file()
+        ]
+        female_imgs_path_list = [
+            p
+            for p in (self.cloak_dir / f"female_{cloak_count}").rglob("*")
+            if p.is_file()
+        ]
+        mix_imgs_path_list = [
+            p for p in (self.cloak_dir / f"mix_{cloak_count}").rglob("*") if p.is_file()
         ]
 
         return {
-            "male": male_imgs_path,
-            "female": female_imgs_path,
-            "mix": male_imgs_path[:15] + female_imgs_path[:15],
+            "male": male_imgs_path_list,
+            "female": female_imgs_path_list,
+            "mix": mix_imgs_path_list,
         }
 
-    def _load_imgs(self, imgs_path) -> dict:
+    def _load_imgs(self, imgs_path: list[Path]) -> Tensor:
+        from typing import List, cast
+
         transform = (
-            transforms.Compose([transforms.ToTensor()])
+            transforms.Compose([transforms.Resize(224), transforms.ToTensor()])
             if OmegaConf.select(self.config, "third_party.dataset.use_224") is not None
             and self.config.third_party.dataset.use_224
             else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
         )
-        imgs = [transform(Image.open(path).convert("RGB")) for path in imgs_path]
-        imgs = torch.stack(imgs)
+        imgs_list = [
+            cast(Tensor, transform(Image.open(path).convert("RGB")))
+            for path in imgs_path
+        ]
+
+        imgs = torch.stack(imgs_list)
 
         return imgs.cuda()
 
