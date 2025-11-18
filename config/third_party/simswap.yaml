@@ -2,14 +2,14 @@ name: simswap
 function: metric
 
 dataset:
-  sample_dir: data/samples_224
+  sample_dir: data/vggface2_samples_224
   metric_224_dir: data/vggface2_224
   metric_512_dir: data/vggface2_512
   use_224: true
-  metric_pairs: 3000
-  cloak: real
-  cloak_dir: "data/vggface2_cloak_224/${third_party.dataset.cloak}"
+  metric_pairs: 1500
+  cloak_dir: data/vggface2_cloak
   cloak_mix: true
+  cloak_count: 30
   cloak_index: 0
   cloak_min_distance: 1.04
 
@@ -26,7 +26,11 @@ defense:
     perturb: 1000
     identity: 10000
     context: 0.1
+  momentum: 0.8
   failure_defense_tracing: false
+  silent_perturb: true
+  only_save_summary: true
+
 
 lowkey:
   batch_size: 15
@@ -39,4 +43,4 @@ lowkey:
 robustness:
   ai_beauty: false
   ai_beauty_tool: null
-  logo_img_path: data/samples_224/NDSS.jpg
+  logo_img_path: data/samples_224/ccs.png
