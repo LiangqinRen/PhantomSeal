@@ -1,6 +1,7 @@
 import utils
 from simswap.defense import Defense
 from simswap.defense_compare import Lowkey
+from simswap.misc import Misc
 
 import sys
 import hydra
@@ -17,6 +18,7 @@ def main(config: DictConfig):
 
     defense = Defense(logger, config)
     lowkey_defense = Lowkey(logger, config)
+    misc = Misc(logger, config)
     defense_functions = {
         "sample": defense.sample,
         "metric": defense.metric,
@@ -28,6 +30,7 @@ def main(config: DictConfig):
         "adaptive_attack": defense.adaptive_attack,
         "adaptive_attack_self": defense.adaptive_attack_self,
         "lowkey": lowkey_defense.metric,
+        "misclassify": misc.compute_misclassification_rate,
     }
 
     if config.third_party.function in defense_functions:

@@ -15,7 +15,6 @@ fi
 
 ROOT=$(dirname $(dirname $(realpath "$0")))
 
-
 if [[ $function == 'sample' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
@@ -39,6 +38,9 @@ then
 elif [[ $function == 'lowkey' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" -m third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level third_party.lowkey.weight.identity='range(31000,35000,1000)'
+elif [[ $function == 'misclassify' ]]
+then
+    PYTHONPATH="$ROOT:$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 else
     echo "⚠️ Oops! That function doesn't exist"
 fi

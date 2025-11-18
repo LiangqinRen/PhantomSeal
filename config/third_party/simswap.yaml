@@ -6,7 +6,7 @@ dataset:
   metric_224_dir: data/vggface2_224
   metric_512_dir: data/vggface2_512
   use_224: true
-  metric_pairs: 1500
+  metric_pairs: 3000
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
   cloak_count: 30
@@ -44,3 +44,6 @@ robustness:
   ai_beauty: false
   ai_beauty_tool: null
   logo_img_path: data/samples_224/ccs.png
+
+misc:
+  dataset: vggface2
