@@ -129,7 +129,11 @@ class Defense(Base):
                 total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(
+                imgs_A,
+                cloak_imgs,
+                silent=self.config.third_party.defense.silent_perturb,
+            )
 
             torch.set_grad_enabled(False)
             (
@@ -265,7 +269,7 @@ class Defense(Base):
                     imgs_A_tgt_swap,
                     pert_imgs_A_tgt_swap,
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             del imgs_A, imgs_B, x_imgs, cloak_imgs

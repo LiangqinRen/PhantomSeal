@@ -1086,6 +1086,6 @@ class Cloak:
                 ][1]
                 best_anchors.append(candidates[best_anchor_idx])
             else:
-                best_anchors.append(candidates[-1])
+                best_anchors.append(candidates[sorted_distances[-1][1]])
 
         return torch.stack(best_anchors, dim=0)
