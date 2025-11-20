@@ -88,25 +88,35 @@ def save_tensor_imgs(
     image_name: str = "summary",
     only_save_summary: bool = True,
 ) -> None:
+    def prepend_white_row(imgs: Tensor) -> Tensor:
+        B, C, H, W = imgs.shape
+        white_img = torch.ones((B + 1, C, H, W), device=imgs.device, dtype=imgs.dtype)
+        return white_img
+
     def prepend_white_column(imgs: Tensor) -> Tensor:
         _, C, H, W = imgs.shape
         white_img = torch.ones((1, C, H, W), device=imgs.device, dtype=imgs.dtype)
         return torch.cat([white_img, imgs], dim=0)
 
+    index_row = prepend_white_row(img_tensors[0])
     summary_imgs = torch.cat(
         [prepend_white_column(img) for img in img_tensors],
         dim=0,
     )
+    summary_imgs = torch.cat([index_row, summary_imgs], dim=0)
 
     nrow = len(img_tensors[0]) + 1
     grid = make_grid(summary_imgs, nrow=nrow, padding=2)
     grid = to_pil_image(torch.clamp(grid, 0, 1))
 
     draw = ImageDraw.Draw(grid)
-    font = ImageFont.truetype("DejaVuSans.ttf", size=35)
+    font = ImageFont.load_default().font_variant(size=40)
 
-    cell_h = grid.height // (len(summary_imgs) // nrow)
-    for i, label in enumerate(img_labels):
+    cell_w = cell_h = grid.height // (len(summary_imgs) // nrow)
+    for i in range(1, index_row.shape[0]):
+        x = i * cell_w
+        draw.text((x + 5, 5), str(i), fill="black", font=font)
+    for i, label in enumerate(img_labels, start=1):  # skip the first line
         y = i * cell_h
         draw.text((5, y + 5), label, fill="black", font=font)
 
