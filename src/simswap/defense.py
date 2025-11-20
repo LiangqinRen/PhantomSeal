@@ -1095,6 +1095,7 @@ class Defense(Base):
     ) -> Tensor:
         l2_loss = nn.MSELoss().cuda()
         x_imgs = imgs.clone().detach() + torch.randn_like(imgs) * 1e-5
+        self_identity = self._get_imgs_identity(imgs)
         cloak_identity = self._get_imgs_identity(cloak_imgs)
         imgs_latent_code = self.target.netG.encoder(x_imgs)
         epsilon = (
@@ -1123,22 +1124,30 @@ class Defense(Base):
             )
 
             x_identity = self._get_imgs_identity(x_imgs)
-            identity_diff_loss = (
+            identity_diff_loss = -torch.clamp(
                 self.config.third_party.defense.weight.identity
-                * l2_loss(x_identity, cloak_identity.detach())
+                * l2_loss(x_identity, self_identity.detach()),
+                0,
+                self.config.third_party.defense.limit.identity,
+            )
+            cloak_diff_loss = self.config.third_party.defense.weight.cloak * l2_loss(
+                x_identity, cloak_identity.detach()
             )
 
             x_latent_code = self.target.netG.encoder(x_imgs)
-            context_diff_loss = (
+            context_diff_loss = -torch.clamp(
                 self.config.third_party.defense.weight.context
-                * -torch.clamp(
-                    l2_loss(x_latent_code, imgs_latent_code.detach()),
-                    0,
-                    self.config.third_party.defense.limit.context,
-                )
+                * l2_loss(x_latent_code, imgs_latent_code.detach()),
+                0,
+                self.config.third_party.defense.limit.context,
             )
 
-            loss = pert_diff_loss + identity_diff_loss + context_diff_loss
+            loss = (
+                pert_diff_loss
+                + identity_diff_loss
+                + cloak_diff_loss
+                + context_diff_loss
+            )
             loss.backward()
 
             if x_imgs.grad is not None:
@@ -1161,7 +1170,7 @@ class Defense(Base):
 
             if not silent:
                 self.logger.info(
-                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}]loss: {loss:.5f}({pert_diff_loss.item():.5f}, {identity_diff_loss.item():.5f}, {context_diff_loss.item():.5f})"
+                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}]loss: {loss:.5f}({pert_diff_loss.item():.5f}, {identity_diff_loss.item():.5f}, {cloak_diff_loss.item():.5f}, {context_diff_loss.item():.5f})"
                 )
 
         return best_imgs

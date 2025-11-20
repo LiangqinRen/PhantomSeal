@@ -6,7 +6,7 @@ dataset:
   metric_224_dir: data/vggface2_224
   metric_512_dir: data/vggface2_512
   use_224: true
-  metric_pairs: 3000
+  metric_pairs: 500
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
   cloak_count: 30
@@ -21,14 +21,16 @@ defense:
     R: 0.075
     G: 0.03
     B: 0.075
-    context: 30
+    context: 2.5
+    identity: 10
   weight:
     perturb: 1000
     identity: 10000
+    cloak: 10000
     context: 0.1
   momentum: 0.8
   failure_defense_tracing: false
-  silent_perturb: true
+  silent_perturb: false
   only_save_summary: true
 
 
