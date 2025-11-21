@@ -29,11 +29,13 @@ from skimage import metrics
 from torch import Tensor
 from PIL import Image
 from io import BytesIO
-from os.path import join
+from sklearn.cluster import KMeans
 from torchvision.transforms.functional import to_pil_image
 from concurrent.futures import ThreadPoolExecutor
 from insightface.model_zoo import get_model
 from pathlib import Path
+from typing import cast
+from torchvision.utils import save_image
 
 _ORIG_TORCH_LOAD = torch.load
 
@@ -891,9 +893,9 @@ class Cloak:
         self.cloak_dir = Path(self.config.third_party.dataset.cloak_dir)
 
         self.cloak_imgs = self._get_cloak_imgs()
-        self.cloak_cache = self._cache_cloak_imgs()
+        self.cloak_cache = self._cache_cloak_embeddings()
 
-    def _cache_cloak_imgs(self) -> dict:
+    def _cache_cloak_embeddings(self) -> dict:
         mtcnn = MTCNN(
             image_size=160,
             device="cuda",
@@ -906,18 +908,19 @@ class Cloak:
         FaceVerification.eval()
 
         cloak_cache = {}
-        for k, v in self.cloak_imgs.items():
-            imgs_ndarray = v.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
-            embeddings = []
-            for i, img in enumerate(imgs_ndarray):
-                img_cropped = mtcnn(img)
-                if img_cropped is None:
-                    self.logger.fatal(f"Cannot detect the face from {i}th {k}")
-                embedding = FaceVerification(img_cropped.unsqueeze(0).cuda())
-                embeddings.append(embedding)
-            cloak_cache[k] = embeddings
+        with torch.no_grad():
+            for k, v in self.cloak_imgs.items():
+                imgs_ndarray = v.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
+                embeddings = []
+                for i, img in enumerate(imgs_ndarray):
+                    img_cropped = mtcnn(img)
+                    if img_cropped is None:
+                        self.logger.fatal(f"Cannot detect the face from {i}th {k}")
+                    embedding = FaceVerification(img_cropped.unsqueeze(0).cuda())
+                    embeddings.append(embedding)
+                cloak_cache[k] = embeddings
 
-        return cloak_cache
+            return cloak_cache
 
     def _hash_tensor(self, img: Tensor):
         return hash(tuple(img.view(-1).tolist()))
@@ -946,8 +949,6 @@ class Cloak:
         }
 
     def _load_imgs(self, imgs_path: list[Path]) -> Tensor:
-        from typing import List, cast
-
         transform = (
             transforms.Compose([transforms.Resize(224), transforms.ToTensor()])
             if OmegaConf.select(self.config, "third_party.dataset.use_224") is not None
@@ -994,15 +995,18 @@ class Cloak:
             try:
                 response = requests.post(url, data=payload)
                 if response.status_code == 200:
-                    response = response.json()
-                    if len(response["faces"]) > 1:
+                    response_json = response.json()
+                    if len(response_json["faces"]) > 1:
                         return result
 
-                    gender = response["faces"][0]["attributes"]["gender"]["value"]
+                    gender = response_json["faces"][0]["attributes"]["gender"]["value"]
                     result[self._hash_tensor(img)] = gender.lower()
                     break
                 elif response.status_code == 400:
-                    self.logger.info(response["time_used"])
+                    try:
+                        self.logger.info(response.json().get("time_used"))
+                    except Exception:
+                        self.logger.info("face++ returned status 400")
                     return result
                 elif response.status_code == 403:
                     fail_count += 0.25
@@ -1017,8 +1021,6 @@ class Cloak:
         return result
 
     def _check_imgs_gender(self, imgs: Tensor):
-        from concurrent.futures import ThreadPoolExecutor
-
         api_keys = self.config.evaluate.facepp.api_key
         api_secrets = self.config.evaluate.facepp.api_secret
         with ThreadPoolExecutor() as executor:
@@ -1089,3 +1091,261 @@ class Cloak:
                 best_anchors.append(candidates[sorted_distances[-1][1]])
 
         return torch.stack(best_anchors, dim=0)
+
+
+class KMeansCloakSelector:
+    def __init__(self, logger, config, effectiveness):
+        self.logger = logger
+        self.config = config
+        self.effectiveness = effectiveness
+
+        self.cloak_dir = Path(self.config.third_party.dataset.cloak_dir)
+
+        self.cloak_imgs = self._get_cloak_imgs()
+        self.cloak_embeddings = self._cache_cloak_embeddings()
+        self.clusters = self._cluster_cloak_imgs()
+        self.print_cluster_summary()
+
+    def _get_cloak_imgs_path(self) -> dict:
+        male_imgs_path_list = [
+            p for p in (self.cloak_dir / "male_full").rglob("*") if p.is_file()
+        ]
+        female_imgs_path_list = [
+            p for p in (self.cloak_dir / "female_full").rglob("*") if p.is_file()
+        ]
+        mix_imgs_path_list = [
+            p for p in (self.cloak_dir / "mix_full").rglob("*") if p.is_file()
+        ]
+
+        if self.config.third_party.dataset.cloak_mix:
+            return {"mix": mix_imgs_path_list}
+        else:
+            return {"male": male_imgs_path_list, "female": female_imgs_path_list}
+
+    def _load_imgs(self, imgs_path: list[Path]) -> Tensor:
+        transform = (
+            transforms.Compose([transforms.Resize(224), transforms.ToTensor()])
+            if OmegaConf.select(self.config, "third_party.dataset.use_224") is not None
+            and self.config.third_party.dataset.use_224
+            else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
+        )
+        imgs_list = [
+            cast(Tensor, transform(Image.open(path).convert("RGB")))
+            for path in imgs_path
+        ]
+
+        imgs = torch.stack(imgs_list)
+
+        return imgs.cuda()
+
+    def _get_cloak_imgs(self) -> dict:
+        cloak_imgs_path = self._get_cloak_imgs_path()
+        return {k: self._load_imgs(v) for k, v in cloak_imgs_path.items()}
+
+    def _cluster_cloak_imgs(self) -> dict:
+        cluster_count = self.config.third_party.dataset.cluster_count
+        clusters = {}
+        for k in self.cloak_embeddings.keys():
+            clusters[k] = {i: {} for i in range(cluster_count)}
+
+            embeddings = torch.stack(self.cloak_embeddings[k], dim=0).squeeze(1)
+            features = embeddings.numpy()
+            kmeans = KMeans(n_clusters=cluster_count, random_state=0, n_init="auto")
+            kmeans.fit(features)
+
+            centers = kmeans.cluster_centers_
+            for i, center in enumerate(centers):
+                clusters[k][i]["center"] = center
+                clusters[k][i]["indexes"] = []
+
+            labels = kmeans.labels_
+            for i, label in enumerate(labels):
+                clusters[k][label]["indexes"].append(i)
+
+        return clusters
+
+    def _cache_cloak_embeddings(self) -> dict:
+        cloak_embeddings = {}
+        for k, v in self.cloak_imgs.items():
+            imgs_ndarray = v.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
+
+            embeddings = []
+            for i, img in enumerate(imgs_ndarray):
+                img_cropped = self.effectiveness.mtcnn(img)
+                if img_cropped is None:
+                    self.logger.fatal(f"Cannot detect the face from {i}-th cloak")
+                    save_image(v, self.config.image_dir / "cloak_without_face.png")
+
+                embedding = self.effectiveness.FaceVerification(
+                    img_cropped.unsqueeze(0).cuda()
+                )
+                embedding = embedding.detach().cpu()
+                embeddings.append(embedding)
+
+            cloak_embeddings[k] = embeddings
+
+        return cloak_embeddings
+
+    def print_cluster_summary(self):
+        message = f"Cluster count is {self.config.third_party.dataset.cluster_count}\n"
+        for k, v in self.clusters.items():
+            message += f"{k}\n"
+            for kk, vv in v.items():
+                message += f"   node {kk} has {len(vv['indexes'])} cloak images\n"
+        self.logger.info(message)
+
+    def _hash_tensor(self, img: Tensor):
+        return hash(tuple(img.view(-1).tolist()))
+
+    def _check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
+        result = {self._hash_tensor(img): "fail"}
+
+        buffered = BytesIO()
+        img_image = img * 255
+        img_image = Image.fromarray(img_image.cpu().permute(1, 2, 0).byte().numpy())
+        img_image.save(buffered, format="PNG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        url = "https://api-us.faceplusplus.com/facepp/v3/detect"
+        payload = {
+            "api_key": key,
+            "api_secret": secret,
+            "image_base64": img_base64,
+            "return_attributes": "gender",
+        }
+
+        fail_count = 0
+        while fail_count < 10:
+            try:
+                response = requests.post(url, data=payload)
+                if response.status_code == 200:
+                    response = response.json()
+                    if len(response["faces"]) > 1:
+                        return result
+
+                    gender = response["faces"][0]["attributes"]["gender"]["value"]
+                    result[self._hash_tensor(img)] = gender.lower()
+                    break
+                elif response.status_code == 400:
+                    return result
+                elif response.status_code == 403:
+                    fail_count += 0.25
+                    time.sleep(0.3)
+                else:
+                    fail_count += 1
+                    self.logger.error(response)
+            except BaseException as e:
+                fail_count += 1
+                self.logger.error(e)
+
+        return result
+
+    def _check_imgs_gender(self, imgs: Tensor):
+        api_keys = self.config.evaluate.facepp.api_key
+        api_secrets = self.config.evaluate.facepp.api_secret
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    self._check_imgs_gender_single,
+                    imgs[i],
+                    api_keys[i % len(api_keys)],
+                    api_secrets[i % len(api_secrets)],
+                )
+                for i in range(imgs.shape[0])
+            ]
+            results = [future.result() for future in futures]
+
+        imgs_gender = {}
+        for result in results:
+            imgs_gender.update(result)
+
+        return imgs_gender
+
+    def find_best_cloaks(self, imgs: Tensor) -> Tensor:
+        if not self.config.third_party.dataset.cloak_mix:
+            imgs_gender = self._check_imgs_gender(imgs)
+
+        imgs_ndarray = imgs.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
+        best_cloak_imgs = []
+        for i in range(imgs.shape[0]):
+            if self.config.third_party.dataset.cloak_mix:
+                candidates = self.cloak_imgs["mix"]
+                embeddings = self.cloak_embeddings["mix"]
+                clusters = self.clusters["mix"]
+            else:
+                candidates = (
+                    self.cloak_imgs["female"]
+                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
+                    else self.cloak_imgs["male"]
+                )
+                embeddings = (
+                    self.cloak_embeddings["female"]
+                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
+                    else self.cloak_embeddings["male"]
+                )
+                clusters = (
+                    self.clusters["female"]
+                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
+                    else self.clusters["male"]
+                )
+
+            cluster_centers_embedding = [
+                torch.from_numpy(v["center"]).cuda() for _, v in clusters.items()
+            ]
+            distances = self.effectiveness.get_image_distance(
+                imgs_ndarray[i], cluster_centers_embedding
+            )
+            cluster_distances = []
+            for j, distance in enumerate(distances):
+                if (
+                    distance is math.nan
+                    or distance <= self.config.third_party.dataset.cloak_min_distance
+                ):
+                    continue
+
+                cluster_distances.append((distance, j))
+
+            sorted_cluster_distances = sorted(cluster_distances)
+            if (
+                len(sorted_cluster_distances)
+                > self.config.third_party.dataset.cluster_index
+            ):
+                best_cluster_idx = sorted_cluster_distances[
+                    self.config.third_party.dataset.cluster_index
+                ][1]
+            else:
+                best_cluster_idx = sorted_cluster_distances[-1][1]
+
+            best_cluster = clusters[best_cluster_idx]
+            cluster_cloak_embeddings = [
+                embeddings[i].cuda() for i in best_cluster["indexes"]
+            ]
+            distances = self.effectiveness.get_image_distance(
+                imgs_ndarray[i], cluster_cloak_embeddings
+            )
+            cloak_distances = []
+            for j, distance in enumerate(distances):
+                if (
+                    distance is math.nan
+                    or distance <= self.config.third_party.dataset.cloak_min_distance
+                ):
+                    continue
+
+                cloak_distances.append((distance, j))
+
+            sorted_cluster_distances = sorted(cloak_distances)
+            if (
+                len(sorted_cluster_distances)
+                > self.config.third_party.dataset.cloak_index
+            ):
+                best_cloak_imgs.append(
+                    candidates[
+                        sorted_cluster_distances[
+                            self.config.third_party.dataset.cloak_index
+                        ][1]
+                    ]
+                )
+            else:
+                best_cloak_imgs.append(candidates[sorted_cluster_distances[-1][1]])
+
+        return torch.stack(best_cloak_imgs, dim=0)

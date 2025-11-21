@@ -6,12 +6,14 @@ dataset:
   metric_224_dir: data/vggface2_224
   metric_512_dir: data/vggface2_512
   use_224: true
-  metric_pairs: 500
+  metric_pairs: 3000
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
-  cloak_count: 30
-  cloak_index: 0
+  cloak_count: full
   cloak_min_distance: 1.04
+  cluster_count: 10
+  cluster_index: 0
+  cloak_index: 0
 
 defense:
   batch_size: 30
@@ -22,7 +24,7 @@ defense:
     G: 0.03
     B: 0.075
     context: 2.5
-    identity: 10
+    identity: 30
   weight:
     perturb: 1000
     identity: 10000
