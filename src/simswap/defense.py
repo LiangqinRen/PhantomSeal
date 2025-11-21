@@ -1093,11 +1093,16 @@ class Defense(Base):
     def _perturb_imgs(
         self, imgs: Tensor, cloak_imgs: Tensor, silent: bool = False
     ) -> Tensor:
-        l2_loss = nn.MSELoss().cuda()
+        def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
+            return ((x - y) ** 2).view(x.size(0), -1).mean(dim=1)
+
         x_imgs = imgs.clone().detach() + torch.randn_like(imgs) * 1e-5
-        self_identity = self._get_imgs_identity(imgs)
-        cloak_identity = self._get_imgs_identity(cloak_imgs)
-        imgs_latent_code = self.target.netG.encoder(x_imgs)
+
+        with torch.no_grad():
+            self_identity = self._get_imgs_identity(imgs)
+            cloak_identity = self._get_imgs_identity(cloak_imgs)
+            imgs_latent_code = self.target.netG.encoder(x_imgs)
+
         epsilon = (
             self.config.third_party.defense.epsilon
             * (torch.max(x_imgs) - torch.min(x_imgs))
@@ -1112,51 +1117,62 @@ class Defense(Base):
                 ]
             )
             .view(1, 3, 1, 1)
-            .cuda()
+            .to(imgs.device)
         )
 
-        best_imgs, best_loss = torch.ones_like(imgs), float("inf")
+        B = imgs.size(0)
+        best_imgs = imgs.clone()
+        best_loss = torch.full((B,), float("inf"), device=imgs.device)
+
         for epoch in range(self.config.third_party.defense.epochs):
             x_imgs = x_imgs.clone().detach().requires_grad_(True)
 
-            pert_diff_loss = self.config.third_party.defense.weight.perturb * l2_loss(
-                x_imgs, imgs.detach()
+            pert_diff_loss = (
+                self.config.third_party.defense.weight.perturb
+                * l2_per_image(x_imgs, imgs.detach())
             )
 
             x_identity = self._get_imgs_identity(x_imgs)
-            identity_diff_loss = -torch.clamp(
+            identity_raw = (
                 self.config.third_party.defense.weight.identity
-                * l2_loss(x_identity, self_identity.detach()),
+                * l2_per_image(x_identity, self_identity)
+            )
+            identity_diff_loss = -torch.clamp(
+                identity_raw,
                 0,
                 self.config.third_party.defense.limit.identity,
             )
-            cloak_diff_loss = self.config.third_party.defense.weight.cloak * l2_loss(
-                x_identity, cloak_identity.detach()
+
+            cloak_diff_loss = (
+                self.config.third_party.defense.weight.cloak
+                * l2_per_image(x_identity, cloak_identity)
             )
 
             x_latent_code = self.target.netG.encoder(x_imgs)
+            context_raw = self.config.third_party.defense.weight.context * l2_per_image(
+                x_latent_code, imgs_latent_code
+            )
             context_diff_loss = -torch.clamp(
-                self.config.third_party.defense.weight.context
-                * l2_loss(x_latent_code, imgs_latent_code.detach()),
+                context_raw,
                 0,
                 self.config.third_party.defense.limit.context,
             )
 
-            loss = (
+            loss_per_img = (
                 pert_diff_loss
                 + identity_diff_loss
                 + cloak_diff_loss
                 + context_diff_loss
             )
+            loss = loss_per_img.mean()
             loss.backward()
 
             if x_imgs.grad is not None:
-                grad_sign = x_imgs.grad.sign().clone().detach()
+                grad_sign = x_imgs.grad.sign().detach()
             else:
                 grad_sign = torch.zeros_like(x_imgs)
 
-            x_imgs = x_imgs.clone().detach() - epsilon * grad_sign
-
+            x_imgs = x_imgs.detach() - epsilon * grad_sign
             x_imgs = torch.clamp(
                 x_imgs,
                 min=imgs - limits,
@@ -1164,13 +1180,19 @@ class Defense(Base):
             )
             x_imgs = torch.clamp(x_imgs, 0, 1)
 
-            if loss.item() < best_loss:
-                best_loss = loss.item()
-                best_imgs = x_imgs
+            loss_per_img_detached = loss_per_img.detach()
+            improved = loss_per_img_detached < best_loss
+            best_loss[improved] = loss_per_img_detached[improved]
+            best_imgs[improved] = x_imgs[improved].detach()
 
             if not silent:
                 self.logger.info(
-                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}]loss: {loss:.5f}({pert_diff_loss.item():.5f}, {identity_diff_loss.item():.5f}, {cloak_diff_loss.item():.5f}, {context_diff_loss.item():.5f})"
+                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}] "
+                    f"loss: {loss.item():.5f}("
+                    f"{pert_diff_loss.mean().item():.5f}, "
+                    f"{identity_diff_loss.mean().item():.5f}, "
+                    f"{cloak_diff_loss.mean().item():.5f}, "
+                    f"{context_diff_loss.mean().item():.5f})"
                 )
 
         return best_imgs
