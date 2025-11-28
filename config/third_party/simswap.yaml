@@ -14,9 +14,10 @@ dataset:
   cluster_count: 10
   cluster_index: 0
   cloak_index: 0
+  cloak_distance: 1.04
 
 defense:
-  batch_size: 30
+  batch_size: 60
   epochs: 1000
   epsilon: 0.005
   limit:

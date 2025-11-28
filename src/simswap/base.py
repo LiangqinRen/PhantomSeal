@@ -1,5 +1,12 @@
 from models.models import create_model
-from evaluate import Utility, Effectiveness, AIEditing, Cloak, KMeansCloakSelector
+from evaluate import (
+    Utility,
+    Effectiveness,
+    AIEditing,
+    Cloak,
+    KMeansCloakSelector,
+    DistanceCloakSelector,
+)
 from models import arcface_models
 
 
@@ -63,7 +70,7 @@ class Base:
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)
         self.aiediting = AIEditing(logger, config)
-        self.cloak = KMeansCloakSelector(logger, config, self.effectiveness)
+        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
     def _get_imgs_identity(self, imgs: Tensor) -> Tensor:
         imgs_downsample = F.interpolate(imgs, size=(112, 112))

@@ -1349,3 +1349,245 @@ class KMeansCloakSelector:
                 best_cloak_imgs.append(candidates[sorted_cluster_distances[-1][1]])
 
         return torch.stack(best_cloak_imgs, dim=0)
+
+
+class DistanceCloakSelector:
+    def __init__(self, logger, config, effectiveness):
+        self.logger = logger
+        self.config = config
+        self.effectiveness = effectiveness
+
+        self.cloak_dir = Path(self.config.third_party.dataset.cloak_dir)
+
+        self.cloak_imgs = self._get_cloak_imgs()
+        self.cloak_embeddings = self._cache_cloak_embeddings()
+
+    def _get_cloak_imgs_path(self) -> dict:
+        male_imgs_path_list = [
+            p for p in (self.cloak_dir / "male_full").rglob("*") if p.is_file()
+        ]
+        female_imgs_path_list = [
+            p for p in (self.cloak_dir / "female_full").rglob("*") if p.is_file()
+        ]
+        mix_imgs_path_list = [
+            p for p in (self.cloak_dir / "mix_full").rglob("*") if p.is_file()
+        ]
+
+        if self.config.third_party.dataset.cloak_mix:
+            return {"mix": mix_imgs_path_list}
+        else:
+            return {"male": male_imgs_path_list, "female": female_imgs_path_list}
+
+    def _load_imgs(self, imgs_path: list[Path]) -> Tensor:
+        transform = (
+            transforms.Compose([transforms.Resize(224), transforms.ToTensor()])
+            if OmegaConf.select(self.config, "third_party.dataset.use_224") is not None
+            and self.config.third_party.dataset.use_224
+            else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
+        )
+        imgs_list = [
+            cast(Tensor, transform(Image.open(path).convert("RGB")))
+            for path in imgs_path
+        ]
+
+        imgs = torch.stack(imgs_list)
+
+        return imgs.cuda()
+
+    def _get_cloak_imgs(self) -> dict:
+        cloak_imgs_path = self._get_cloak_imgs_path()
+        return {k: self._load_imgs(v) for k, v in cloak_imgs_path.items()}
+
+    def _cache_cloak_embeddings(self) -> dict:
+        cloak_embeddings = {}
+        for k, v in self.cloak_imgs.items():
+            imgs_ndarray = v.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
+
+            embeddings = []
+            for i, img in enumerate(imgs_ndarray):
+                img_cropped = self.effectiveness.mtcnn(img)
+                if img_cropped is None:
+                    self.logger.fatal(f"Cannot detect the face from {i}-th cloak")
+                    save_image(v, self.config.image_dir / "cloak_without_face.png")
+
+                embedding = self.effectiveness.FaceVerification(
+                    img_cropped.unsqueeze(0).cuda()
+                )
+                embedding = embedding.detach().cpu()
+                embeddings.append(embedding)
+
+            cloak_embeddings[k] = embeddings
+
+        return cloak_embeddings
+
+    def _hash_tensor(self, img: Tensor):
+        return hash(tuple(img.view(-1).tolist()))
+
+    def _check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
+        result = {self._hash_tensor(img): "fail"}
+
+        buffered = BytesIO()
+        img_image = img * 255
+        img_image = Image.fromarray(img_image.cpu().permute(1, 2, 0).byte().numpy())
+        img_image.save(buffered, format="PNG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        url = "https://api-us.faceplusplus.com/facepp/v3/detect"
+        payload = {
+            "api_key": key,
+            "api_secret": secret,
+            "image_base64": img_base64,
+            "return_attributes": "gender",
+        }
+
+        fail_count = 0
+        while fail_count < 10:
+            try:
+                response = requests.post(url, data=payload)
+                if response.status_code == 200:
+                    response = response.json()
+                    if len(response["faces"]) > 1:
+                        return result
+
+                    gender = response["faces"][0]["attributes"]["gender"]["value"]
+                    result[self._hash_tensor(img)] = gender.lower()
+                    break
+                elif response.status_code == 400:
+                    return result
+                elif response.status_code == 403:
+                    fail_count += 0.25
+                    time.sleep(0.3)
+                else:
+                    fail_count += 1
+                    self.logger.error(response)
+            except BaseException as e:
+                fail_count += 1
+                self.logger.error(e)
+
+        return result
+
+    def _check_imgs_gender(self, imgs: Tensor):
+        api_keys = self.config.evaluate.facepp.api_key
+        api_secrets = self.config.evaluate.facepp.api_secret
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    self._check_imgs_gender_single,
+                    imgs[i],
+                    api_keys[i % len(api_keys)],
+                    api_secrets[i % len(api_secrets)],
+                )
+                for i in range(imgs.shape[0])
+            ]
+            results = [future.result() for future in futures]
+
+        imgs_gender = {}
+        for result in results:
+            imgs_gender.update(result)
+
+        return imgs_gender
+
+    def find_best_cloaks(self, imgs: Tensor) -> Tensor:
+        if not self.config.third_party.dataset.cloak_mix:
+            imgs_gender = self._check_imgs_gender(imgs)
+
+        imgs_ndarray = imgs.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
+        best_cloak_imgs = []
+        for i in range(imgs.shape[0]):
+            if self.config.third_party.dataset.cloak_mix:
+                candidates = self.cloak_imgs["mix"]
+                embeddings = self.cloak_embeddings["mix"]
+            else:
+                candidates = (
+                    self.cloak_imgs["female"]
+                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
+                    else self.cloak_imgs["male"]
+                )
+                embeddings = (
+                    self.cloak_embeddings["female"]
+                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
+                    else self.cloak_embeddings["male"]
+                )
+
+            distances = self.effectiveness.get_image_distance(
+                imgs_ndarray[i], [emb.cuda() for emb in embeddings]
+            )
+            cluster_distances = []
+            for j, distance in enumerate(distances):
+                if (
+                    distance is math.nan
+                    or distance <= self.config.third_party.dataset.cloak_min_distance
+                ):
+                    continue
+
+                cluster_distances.append((distance, j))
+
+            sorted_cluster_distances = sorted(cluster_distances)
+            min_distance = float("inf")
+            min_index = 0
+            for distance, idx in sorted_cluster_distances:
+                if (
+                    abs(distance - self.config.third_party.dataset.cloak_distance)
+                    < min_distance
+                ):
+                    min_distance = abs(
+                        distance - self.config.third_party.dataset.cloak_distance
+                    )
+                    min_index = idx
+
+            best_cloak_imgs.append(candidates[min_index])
+
+        return torch.stack(best_cloak_imgs, dim=0)
+
+
+class ScoreCalculator:
+    def __init__(self, logger, config):
+        self.logger = logger
+        self.config = config
+
+    def calculate_score(
+        self, iter_source_metric: dict, iter_context_metric: dict, metric: dict
+    ) -> dict:
+        scores = {key: {"iter": 0, "total": 0} for key in iter_source_metric.keys()}
+        identity_weight = self.config.evaluate.score.identity
+        context_weight = self.config.evaluate.score.context
+        trace_weight = self.config.evaluate.score.trace
+        for key in scores.keys():
+            iter_source_swap = (
+                iter_source_metric[key]["pert_swap"][0]
+                / iter_source_metric[key]["pert_swap"][1]
+            )
+            iter_trace = (
+                iter_source_metric[key]["anchor"][0]
+                / iter_source_metric[key]["anchor"][1]
+            )
+            iter_context_swap = (
+                iter_context_metric[key]["pert_swap"][0]
+                / iter_context_metric[key]["pert_swap"][1]
+            )
+
+            total_source_swap = (
+                metric["src_pert_swap_effectiveness"][key]["pert_swap"][0]
+                / metric["src_pert_swap_effectiveness"][key]["pert_swap"][1]
+            )
+            total_trace = (
+                metric["src_pert_swap_effectiveness"][key]["anchor"][0]
+                / metric["src_pert_swap_effectiveness"][key]["anchor"][1]
+            )
+            total_context_swap = (
+                metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][0]
+                / metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][1]
+            )
+
+            scores[key]["iter"] = (
+                identity_weight * (1 - iter_source_swap)
+                + context_weight * (1 - iter_context_swap)
+                + trace_weight * iter_trace
+            )
+            scores[key]["total"] = (
+                identity_weight * (1 - total_source_swap)
+                + context_weight * (1 - total_context_swap)
+                + trace_weight * total_trace
+            )
+
+        return scores

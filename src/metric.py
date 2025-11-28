@@ -240,6 +240,14 @@ def generate_iter_effectiveness_log(effectiveness: dict) -> str:
     return content
 
 
+def generate_iter_score_log(scores: dict) -> str:
+    iter_scores = []
+    for effec in scores:
+        iter_scores.append(f"{scores[effec]['iter']:.3f}")
+
+    return str(tuple(iter_scores))
+
+
 def generate_summary_utility_log(data: dict, item: str, batch: int) -> str:
     return f"""
         {tuple(f'{x / (batch):.5f}' for x in data[item])}
@@ -252,6 +260,14 @@ def generate_summary_effectiveness_log(data: dict, item: str) -> str:
         content += f"{tuple(f'{v[0]/v[1]*100:.3f}/{v[1]:.0f}' for _,v in data[item][effec].items())} "
 
     return content
+
+
+def generate_summary_score_log(scores: dict) -> str:
+    total_scores = []
+    for effec in scores:
+        total_scores.append(f"{scores[effec]['total']:.3f}")
+
+    return str(tuple(total_scores))
 
 
 def generate_iter_robustness_log(source: dict, target: dict) -> str:

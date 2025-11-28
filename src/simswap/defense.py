@@ -2,6 +2,7 @@ import metric
 from simswap.base import Base
 from dataset import SampleDataset, MetricDataset, AdaptiveMetricDataset
 from robustness import Robustness
+from evaluate import ScoreCalculator
 from utils import save_tensor_imgs
 
 
@@ -20,6 +21,7 @@ class Defense(Base):
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
         self.robustness = Robustness(logger, config)
+        self.score_calculator = ScoreCalculator(logger, config)
 
         if self.config.third_party.robustness.ai_beauty:
             logger.info(
@@ -246,6 +248,12 @@ class Defense(Base):
                 target_effectivenesses,
             )
 
+            scores = self.score_calculator.calculate_score(
+                source_effectivenesses, target_effectivenesses, data
+            )
+            # print(scores)
+            # quit()
+
             save_tensor_imgs(
                 self.image_dir,
                 idx,
@@ -289,6 +297,7 @@ class Defense(Base):
             pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
             pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
             pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            scores: {metric.generate_iter_score_log(scores)}
             """
             )
 
@@ -300,6 +309,7 @@ class Defense(Base):
             {metric.generate_summary_utility_log(data, 'tgt_pert_swap_utility', idx)}
             {metric.generate_summary_effectiveness_log(data, 'src_pert_swap_effectiveness')}
             {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
+            scores: {metric.generate_summary_score_log(scores)}
             """
             )
 

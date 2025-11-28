@@ -30,3 +30,8 @@ tencent_cloud:
 
 arcface_resnet_path: checkpoints/glintr100.onnx
 cosface_resnet_path: checkpoints/16_backbone.pth
+
+score:
+  identity: 1
+  context: 1
+  trace: 1
