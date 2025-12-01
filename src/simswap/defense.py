@@ -37,7 +37,7 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
 
             (
                 imgs_A_src_swap,
@@ -131,11 +131,7 @@ class Defense(Base):
                 total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(
-                imgs_A,
-                cloak_imgs,
-                silent=self.config.third_party.defense.silent_perturb,
-            )
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
 
             torch.set_grad_enabled(False)
             (
@@ -251,8 +247,6 @@ class Defense(Base):
             scores = self.score_calculator.calculate_score(
                 source_effectivenesses, target_effectivenesses, data
             )
-            # print(scores)
-            # quit()
 
             save_tensor_imgs(
                 self.image_dir,
@@ -323,11 +317,11 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
 
             pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
 
@@ -406,11 +400,11 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
 
             torch.set_grad_enabled(False)
             pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
@@ -531,11 +525,11 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
 
             imgs_A_identity = self._get_imgs_identity(imgs_A)
             imgs_A_src_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
@@ -710,11 +704,11 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
 
             torch.set_grad_enabled(False)
             pert_imgs_A_identity = self._get_imgs_identity(x_imgs)
@@ -892,8 +886,8 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
-            x_imgs_B = self._perturb_imgs(imgs_B, cloak_imgs, silent=True)
+            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs)
+            x_imgs_B = self._perturb_imgs(imgs_B, cloak_imgs)
 
             torch.set_grad_enabled(False)
             x_imgs = x_imgs_A - (x_imgs_B - imgs_B)
@@ -1002,8 +996,8 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
-            x_x_imgs_A = self._perturb_imgs(x_imgs_A, cloak_imgs, silent=True)
+            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs)
+            x_x_imgs_A = self._perturb_imgs(x_imgs_A, cloak_imgs)
 
             torch.set_grad_enabled(False)
             x_imgs = x_imgs_A - (x_x_imgs_A - x_imgs_A)
@@ -1100,9 +1094,7 @@ class Defense(Base):
             """
             )
 
-    def _perturb_imgs(
-        self, imgs: Tensor, cloak_imgs: Tensor, silent: bool = False
-    ) -> Tensor:
+    def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor) -> Tensor:
         def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
             return ((x - y) ** 2).view(x.size(0), -1).mean(dim=1)
 
@@ -1195,7 +1187,10 @@ class Defense(Base):
             best_loss[improved] = loss_per_img_detached[improved]
             best_imgs[improved] = x_imgs[improved].detach()
 
-            if not silent:
+            if (
+                not self.config.third_party.defense.silent_perturb
+                and (epoch + 1) % self.config.third_party.defense.log_interval == 0
+            ):
                 self.logger.info(
                     f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}] "
                     f"loss: {loss.item():.5f}("
@@ -1240,7 +1235,7 @@ class Defense(Base):
         data: dict,
     ) -> None:
         torch.set_grad_enabled(True)
-        operate_x_imgs = self._perturb_imgs(operate_imgs_A, cloak_imgs, silent=True)
+        operate_x_imgs = self._perturb_imgs(operate_imgs_A, cloak_imgs)
         torch.set_grad_enabled(False)
         (
             imgs_A_src_swap,

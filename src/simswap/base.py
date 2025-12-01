@@ -18,6 +18,7 @@ from argparse import Namespace
 from torch import Tensor
 from types import MethodType
 from torch.serialization import add_safe_globals
+from torchvision import transforms
 
 
 class Base:
@@ -36,6 +37,12 @@ class Base:
             Arc_path="third_party/SimSwap/arcface_model/arcface_checkpoint.tar",
             which_epoch="latest",
             verbose=False,
+        )
+
+        self.transformer_Arcface = transforms.Compose(
+            [
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
         )
 
         add_safe_globals(
@@ -70,9 +77,10 @@ class Base:
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)
         self.aiediting = AIEditing(logger, config)
-        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
+        self.cloak = Cloak(logger, config, self.effectiveness)
 
     def _get_imgs_identity(self, imgs: Tensor) -> Tensor:
+        imgs = self.transformer_Arcface(imgs)
         imgs_downsample = F.interpolate(imgs, size=(112, 112))
         prior = self.target.netArc(imgs_downsample)
         prior = prior / torch.norm(prior, p=2, dim=1)[0]

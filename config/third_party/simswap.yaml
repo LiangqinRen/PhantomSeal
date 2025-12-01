@@ -3,8 +3,8 @@ function: metric
 
 dataset:
   sample_dir: data/vggface2_samples_224
-  metric_224_dir: data/vggface2_224
-  metric_512_dir: data/vggface2_512
+  metric_224_dir: data/vggface2_224_validate
+  metric_512_dir: data/vggface2_512_validate
   use_224: true
   metric_pairs: 3000
   cloak_dir: data/vggface2_cloak
@@ -35,6 +35,7 @@ defense:
   failure_defense_tracing: false
   silent_perturb: false
   only_save_summary: true
+  log_interval: 50
 
 
 lowkey:
