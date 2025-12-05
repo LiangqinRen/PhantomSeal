@@ -8,4 +8,6 @@ logs/
 multirun/
 notebooks/
 
+pull_remote.sh
+
 config/evaluate/evaluate.yaml

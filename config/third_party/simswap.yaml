@@ -14,7 +14,7 @@ dataset:
   cluster_count: 10
   cluster_index: 0
   cloak_index: 0
-  cloak_distance: 1.04
+  cloak_distance: 1.20
 
 defense:
   batch_size: 60

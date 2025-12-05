@@ -291,7 +291,7 @@ class Effectiveness:
         }
 
         fail_count = 0
-        while fail_count < 10:
+        while fail_count < 5:
             try:
                 response = requests.post(url, data=payload)
                 if response.status_code == 200:
@@ -312,8 +312,11 @@ class Effectiveness:
                 elif response.status_code == 400:
                     return (0, 1)
                 elif response.status_code == 403:
-                    time.sleep(0.3)
+                    time.sleep(10)
                     fail_count += 1
+                    self.logger.debug(
+                        f"Face++ API rate limit reached, retrying... {response.status_code}, {response.text}"
+                    )
                 else:
                     self.logger.error(response)
                     return (0, 1e-10)
@@ -326,15 +329,14 @@ class Effectiveness:
     def _get_facepp_matching(self, imgs1: Tensor, imgs2: Tensor):
         api_keys = self.config.evaluate.facepp.api_key
         api_secrets = self.config.evaluate.facepp.api_secret
-
+        key_secret_pairs = list(zip(api_keys, api_secrets))
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
                     self._get_facepp_matching_single,
                     imgs1[i],
                     imgs2[i],
-                    api_keys[i % len(api_keys)],
-                    api_secrets[i % len(api_secrets)],
+                    *random.choice(key_secret_pairs),
                 )
                 for i in range(imgs1.shape[0])
             ]
