@@ -35,3 +35,9 @@ score:
   identity: 1
   context: 1
   trace: 1
+
+effectiveness:
+  perturb: true
+  ASRo: true
+  ASRp: true
+  TSR: true

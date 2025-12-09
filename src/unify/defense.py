@@ -417,19 +417,19 @@ class Defense(Base):
                 "pert": (0, 0),
                 "swap": (0, 0),
                 "pert_swap": (0, 0),
-                "anchor": (0, 0),
+                "cloak": (0, 0),
             }
             data["faceshifter"][effec] = {
                 "pert": (0, 0),
                 "swap": (0, 0),
                 "pert_swap": (0, 0),
-                "anchor": (0, 0),
+                "cloak": (0, 0),
             }
             data["hififace"][effec] = {
                 "pert": (0, 0),
                 "swap": (0, 0),
                 "pert_swap": (0, 0),
-                "anchor": (0, 0),
+                "cloak": (0, 0),
             }
         return data
 

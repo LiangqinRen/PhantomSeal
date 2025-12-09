@@ -16,7 +16,7 @@ def get_metric_data_template(effectiveness) -> dict:
             "pert": (0, 0),
             "swap": (0, 0),
             "pert_swap": (0, 0),
-            "anchor": (0, 0),
+            "cloak": (0, 0),
         }
         data["tgt_pert_swap_effectiveness"][function] = {
             "swap": (0, 0),
@@ -36,7 +36,7 @@ def get_robustness_metric_data_template(effectiveness) -> dict:
         data["pert_as_src_effectiveness"][effec] = {
             "swap": (0, 0),
             "pert_swap": (0, 0),
-            "anchor": (0, 0),
+            "cloak": (0, 0),
         }
         data["pert_as_tgt_effectiveness"][effec] = {
             "swap": (0, 0),
@@ -59,7 +59,7 @@ def get_robustness_metric_data_template(effectiveness) -> dict:
 def get_robustness_forensics_metric_data_template(effectiveness) -> dict:
     item_data = {}
     for effec in effectiveness.candi_funcs.keys():
-        item_data[effec] = {"anchor": (0, 0)}
+        item_data[effec] = {"cloak": (0, 0)}
 
     data = {
         "clean": deepcopy(item_data),
@@ -165,17 +165,17 @@ def merge_single_robustness_metric(
 
 def merge_metric(
     effectiveness,
-    data: dict,
+    metrics: dict,
     pert_utilities: dict,
     pert_as_src_swap_utilities: dict,
     pert_as_tgt_swap_utilities: dict,
     source_effectivenesses: dict,
     target_effectivenesses: dict,
 ) -> None:
-    data["pert_utility"] = tuple(
+    metrics["pert_utility"] = tuple(
         x + y
         for x, y in zip(
-            data["pert_utility"],
+            metrics["pert_utility"],
             (
                 pert_utilities["mse"],
                 pert_utilities["psnr"],
@@ -184,10 +184,10 @@ def merge_metric(
             ),
         )
     )
-    data["src_pert_swap_utility"] = tuple(
+    metrics["src_pert_swap_utility"] = tuple(
         x + y
         for x, y in zip(
-            data["src_pert_swap_utility"],
+            metrics["src_pert_swap_utility"],
             (
                 pert_as_src_swap_utilities["mse"],
                 pert_as_src_swap_utilities["psnr"],
@@ -196,10 +196,10 @@ def merge_metric(
             ),
         )
     )
-    data["tgt_pert_swap_utility"] = tuple(
+    metrics["tgt_pert_swap_utility"] = tuple(
         x + y
         for x, y in zip(
-            data["tgt_pert_swap_utility"],
+            metrics["tgt_pert_swap_utility"],
             (
                 pert_as_tgt_swap_utilities["mse"],
                 pert_as_tgt_swap_utilities["psnr"],
@@ -210,17 +210,17 @@ def merge_metric(
     )
 
     for effec in effectiveness.candi_funcs.keys():
-        data["src_pert_swap_effectiveness"][effec] = {
-            key1: (value1[0] + value2[0], value1[1] + value2[1])
+        metrics["src_pert_swap_effectiveness"][effec] = {
+            key2: (value1[0] + value2[0], value1[1] + value2[1])
             for (key1, value1), (key2, value2) in zip(
-                data["src_pert_swap_effectiveness"][effec].items(),
+                metrics["src_pert_swap_effectiveness"][effec].items(),
                 source_effectivenesses[effec].items(),
             )
         }
-        data["tgt_pert_swap_effectiveness"][effec] = {
-            key1: (value1[0] + value2[0], value1[1] + value2[1])
+        metrics["tgt_pert_swap_effectiveness"][effec] = {
+            key2: (value1[0] + value2[0], value1[1] + value2[1])
             for (key1, value1), (key2, value2) in zip(
-                data["tgt_pert_swap_effectiveness"][effec].items(),
+                metrics["tgt_pert_swap_effectiveness"][effec].items(),
                 target_effectivenesses[effec].items(),
             )
         }
@@ -228,7 +228,7 @@ def merge_metric(
 
 def generate_iter_utility_log(utilities: dict) -> str:
     return f"""
-    {tuple(f'{v:.5f}' for _,v in utilities.items())}
+    {tuple(f'{v:.3f}' for _,v in utilities.items())}
     """.strip()
 
 

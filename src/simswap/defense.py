@@ -91,6 +91,10 @@ class Defense(Base):
                 only_save_summary=False,
             )
 
+            scores = self.score_calculator.calculate_score(
+                source_effectivenesses, target_effectivenesses, None
+            )
+
             self.logger.info(
                 textwrap.dedent(
                     f"""
@@ -104,10 +108,24 @@ class Defense(Base):
                 )
             )
 
+            iter_log_str = textwrap.dedent(
+                f"""
+            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
+            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
+            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
+            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
+            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
+            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            scores: {metric.generate_iter_score_log(scores)}
+            """
+            )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+
     def metric(
         self,
     ) -> None:
-        data = metric.get_metric_data_template(self.effectiveness)
+        metrics = metric.get_metric_data_template(self.effectiveness)
 
         dataset = MetricDataset(self.config)
         dataloader = DataLoader(
@@ -236,16 +254,12 @@ class Defense(Base):
 
             metric.merge_metric(
                 self.effectiveness,
-                data,
+                metrics,
                 pert_utilities,
                 pert_as_src_swap_utilities,
                 pert_as_tgt_swap_utilities,
                 source_effectivenesses,
                 target_effectivenesses,
-            )
-
-            scores = self.score_calculator.calculate_score(
-                source_effectivenesses, target_effectivenesses, data
             )
 
             save_tensor_imgs(
@@ -283,9 +297,13 @@ class Defense(Base):
             )
             self._free_gpu()
 
-            self.logger.info(
+            scores = self.score_calculator.calculate_score(
+                source_effectivenesses, target_effectivenesses, metrics
+            )
+
+            iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
+            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
             pert utility: {metric.generate_iter_utility_log(pert_utilities)}
             pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
             pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
@@ -294,18 +312,20 @@ class Defense(Base):
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
-
-            self.logger.info(
+            summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(data, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
 
     def robustness_sample(self) -> None:
         dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
@@ -386,7 +406,7 @@ class Defense(Base):
             )
 
     def robustness_metric(self) -> None:
-        data = metric.get_robustness_metric_data_template(self.effectiveness)
+        metrics = metric.get_robustness_metric_data_template(self.effectiveness)
 
         logo = self.robustness.load_logo()
         dataset = MetricDataset(self.config)
@@ -408,7 +428,7 @@ class Defense(Base):
 
             torch.set_grad_enabled(False)
             pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
-            metric.merge_single_dict(data["utility"], pert_utilities)
+            metric.merge_single_dict(metrics["utility"], pert_utilities)
 
             (
                 noise_source_effectivenesses,
@@ -417,7 +437,7 @@ class Defense(Base):
                 idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
-                data,
+                metrics,
                 noise_source_effectivenesses,
                 noise_target_effectivenesses,
                 "noise",
@@ -430,7 +450,7 @@ class Defense(Base):
                 idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
-                data,
+                metrics,
                 compress_source_effectivenesses,
                 compress_target_effectivenesses,
                 "compress",
@@ -443,7 +463,7 @@ class Defense(Base):
                 idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
-                data,
+                metrics,
                 crop_source_effectivenesses,
                 crop_target_effectivenesses,
                 "crop",
@@ -456,7 +476,7 @@ class Defense(Base):
                 idx, imgs_A, imgs_B, x_imgs, logo, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
-                data,
+                metrics,
                 logo_source_effectivenesses,
                 logo_target_effectivenesses,
                 "logo",
@@ -469,7 +489,7 @@ class Defense(Base):
                 idx, imgs_A, imgs_B, x_imgs, 1.25, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
-                data,
+                metrics,
                 inc_bright_source_effectivenesses,
                 inc_bright_target_effectivenesses,
                 "inc_bright",
@@ -482,7 +502,7 @@ class Defense(Base):
                 idx, imgs_A, imgs_B, x_imgs, 0.75, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
-                data,
+                metrics,
                 dec_bright_source_effectivenesses,
                 dec_bright_target_effectivenesses,
                 "dec_bright",
@@ -505,13 +525,13 @@ class Defense(Base):
 
             self.logger.info(
                 f"""[{idx}/{len(dataloader)}]Average of {total_count} pictures
-            utility: {metric.generate_summary_robustness_utility_log(data['utility'], idx)}
-            {metric.generate_summary_robustness_log(data['noise'])}
-            {metric.generate_summary_robustness_log(data['compress'])}
-            {metric.generate_summary_robustness_log(data['crop'])}
-            {metric.generate_summary_robustness_log(data['logo'])}
-            {metric.generate_summary_robustness_log(data['inc_bright'])}
-            {metric.generate_summary_robustness_log(data['dec_bright'])}
+            utility: {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
+            {metric.generate_summary_robustness_log(metrics['noise'])}
+            {metric.generate_summary_robustness_log(metrics['compress'])}
+            {metric.generate_summary_robustness_log(metrics['crop'])}
+            {metric.generate_summary_robustness_log(metrics['logo'])}
+            {metric.generate_summary_robustness_log(metrics['inc_bright'])}
+            {metric.generate_summary_robustness_log(metrics['dec_bright'])}
             """
             )
 
@@ -690,7 +710,9 @@ class Defense(Base):
             )
 
     def robustness_forensics_metric(self):
-        data = metric.get_robustness_forensics_metric_data_template(self.effectiveness)
+        metrics = metric.get_robustness_forensics_metric_data_template(
+            self.effectiveness
+        )
 
         dataset = MetricDataset(self.config)
         dataloader = DataLoader(
@@ -733,7 +755,7 @@ class Defense(Base):
             forensic_metrics = metric.get_robustness_forensics_metric(
                 self.effectiveness, cloak_imgs, swap_results
             )
-            metric.merge_single_dict(data, forensic_metrics)
+            metric.merge_single_dict(metrics, forensic_metrics)
 
             self._free_gpu()
             self.logger.info(
@@ -752,18 +774,18 @@ class Defense(Base):
 
             self.logger.info(
                 f"""[{idx}/{len(dataloader)}]Average of {total_count} pictures
-            {metric.generate_forensics_robustness_log(data['clean'])}
-            {metric.generate_forensics_robustness_log(data['noise'])}
-            {metric.generate_forensics_robustness_log(data['compress'])}
-            {metric.generate_forensics_robustness_log(data['crop'])}
-            {metric.generate_forensics_robustness_log(data['logo'])}
-            {metric.generate_forensics_robustness_log(data['inc_bright'])}
-            {metric.generate_forensics_robustness_log(data['dec_bright'])}
+            {metric.generate_forensics_robustness_log(metrics['clean'])}
+            {metric.generate_forensics_robustness_log(metrics['noise'])}
+            {metric.generate_forensics_robustness_log(metrics['compress'])}
+            {metric.generate_forensics_robustness_log(metrics['crop'])}
+            {metric.generate_forensics_robustness_log(metrics['logo'])}
+            {metric.generate_forensics_robustness_log(metrics['inc_bright'])}
+            {metric.generate_forensics_robustness_log(metrics['dec_bright'])}
             """
             )
 
     def image_robustness_metric(self):
-        data = metric.get_image_robustness_data_template(self.effectiveness)
+        metrics = metric.get_image_robustness_data_template(self.effectiveness)
         dataset = MetricDataset(self.config)
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
@@ -781,7 +803,7 @@ class Defense(Base):
                 imgs_B,
                 noise_imgs_A,
                 cloak_imgs,
-                data["noise"],
+                metrics["noise"],
             )
 
             compress_imgs_A = self.robustness.webp_compress(imgs_A)
@@ -789,7 +811,7 @@ class Defense(Base):
                 imgs_B,
                 compress_imgs_A,
                 cloak_imgs,
-                data["compress"],
+                metrics["compress"],
             )
 
             crop_imgs_A = self.robustness.crop(imgs_A)
@@ -797,7 +819,7 @@ class Defense(Base):
                 imgs_B,
                 crop_imgs_A,
                 cloak_imgs,
-                data["crop"],
+                metrics["crop"],
             )
 
             logo_imgs_A = self.robustness.logo(imgs_A, logo)
@@ -805,7 +827,7 @@ class Defense(Base):
                 imgs_B,
                 logo_imgs_A,
                 cloak_imgs,
-                data["logo"],
+                metrics["logo"],
             )
 
             inc_bright_imgs_A = self.robustness.brightness(imgs_A, 1.25)
@@ -813,7 +835,7 @@ class Defense(Base):
                 imgs_B,
                 inc_bright_imgs_A,
                 cloak_imgs,
-                data["inc_bright"],
+                metrics["inc_bright"],
             )
 
             dec_bright_imgs_A = self.robustness.brightness(imgs_A, 0.75)
@@ -821,7 +843,7 @@ class Defense(Base):
                 imgs_B,
                 dec_bright_imgs_A,
                 cloak_imgs,
-                data["dec_bright"],
+                metrics["dec_bright"],
             )
 
             torch.cuda.empty_cache()
@@ -829,51 +851,49 @@ class Defense(Base):
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
             noise
-            {metric.generate_summary_utility_log(data['noise'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data['noise'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data['noise'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data['noise'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data['noise'], 'tgt_pert_swap_effectiveness')}
-
+            {metric.generate_summary_utility_log(metrics['noise'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['noise'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['noise'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics['noise'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics['noise'], 'tgt_pert_swap_effectiveness')}
             compress
-            {metric.generate_summary_utility_log(data['compress'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data['compress'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data['compress'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data['compress'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data['compress'], 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics['compress'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['compress'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['compress'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics['compress'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics['compress'], 'tgt_pert_swap_effectiveness')}
 
             crop
-            {metric.generate_summary_utility_log(data['crop'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data['crop'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data['crop'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data['crop'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data['crop'], 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics['crop'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['crop'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['crop'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics['crop'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics['crop'], 'tgt_pert_swap_effectiveness')}
 
             logo
-            {metric.generate_summary_utility_log(data['logo'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data['logo'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data['logo'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data['logo'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data['logo'], 'tgt_pert_swap_effectiveness')}
-
+            {metric.generate_summary_utility_log(metrics['logo'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['logo'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['logo'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics['logo'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics['logo'], 'tgt_pert_swap_effectiveness')}
             inc_bright
-            {metric.generate_summary_utility_log(data['inc_bright'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data['inc_bright'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data['inc_bright'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data['inc_bright'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data['inc_bright'], 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics['inc_bright'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['inc_bright'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['inc_bright'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics['inc_bright'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics['inc_bright'], 'tgt_pert_swap_effectiveness')}
 
             dec_bright
-            {metric.generate_summary_utility_log(data['dec_bright'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data['dec_bright'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data['dec_bright'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data['dec_bright'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data['dec_bright'], 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics['dec_bright'], 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['dec_bright'], 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics['dec_bright'], 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics['dec_bright'], 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics['dec_bright'], 'tgt_pert_swap_effectiveness')}
             """
             )
 
     def adaptive_attack(self) -> None:
-        data = metric.get_metric_data_template(self.effectiveness)
+        metrics = metric.get_metric_data_template(self.effectiveness)
 
         dataset = AdaptiveMetricDataset(self.config)
         dataloader = DataLoader(
@@ -919,7 +939,7 @@ class Defense(Base):
 
             metric.merge_metric(
                 self.effectiveness,
-                data,
+                metrics,
                 pert_utilities,
                 pert_as_src_swap_utilities,
                 pert_as_tgt_swap_utilities,
@@ -974,16 +994,16 @@ class Defense(Base):
             self.logger.info(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(data, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
             """
             )
 
     def adaptive_attack_self(self) -> None:
-        data = metric.get_metric_data_template(self.effectiveness)
+        metrics = metric.get_metric_data_template(self.effectiveness)
 
         dataset = MetricDataset(self.config)
         dataloader = DataLoader(
@@ -1029,7 +1049,7 @@ class Defense(Base):
 
             metric.merge_metric(
                 self.effectiveness,
-                data,
+                metrics,
                 pert_utilities,
                 pert_as_src_swap_utilities,
                 pert_as_tgt_swap_utilities,
@@ -1086,11 +1106,11 @@ class Defense(Base):
             self.logger.info(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(data, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
             """
             )
 

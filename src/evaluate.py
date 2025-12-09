@@ -453,17 +453,33 @@ class Effectiveness:
         effectivenesses = {}
         for k, v in self.candi_funcs.items():
             effectivenesses[k] = {}
-            if source_imgs is not None and pert_imgs is not None:
+            if (
+                source_imgs is not None
+                and pert_imgs is not None
+                and self.config.evaluate.effectiveness.perturb
+            ):
                 effectivenesses[k]["pert"] = v(source_imgs, pert_imgs)
 
-            if source_imgs is not None and swap_imgs is not None:
+            if (
+                source_imgs is not None
+                and swap_imgs is not None
+                and self.config.evaluate.effectiveness.ASRo
+            ):
                 effectivenesses[k]["swap"] = v(source_imgs, swap_imgs)
 
-            if source_imgs is not None and pert_swap_imgs is not None:
+            if (
+                source_imgs is not None
+                and pert_swap_imgs is not None
+                and self.config.evaluate.effectiveness.ASRp
+            ):
                 effectivenesses[k]["pert_swap"] = v(source_imgs, pert_swap_imgs)
 
-            if pert_swap_imgs is not None and cloak_imgs is not None:
-                effectivenesses[k]["anchor"] = v(pert_swap_imgs, cloak_imgs)
+            if (
+                pert_swap_imgs is not None
+                and cloak_imgs is not None
+                and self.config.evaluate.effectiveness.TSR
+            ):
+                effectivenesses[k]["cloak"] = v(pert_swap_imgs, cloak_imgs)
 
         return effectivenesses
 
@@ -1548,7 +1564,7 @@ class ScoreCalculator:
         self.config = config
 
     def calculate_score(
-        self, iter_source_metric: dict, iter_context_metric: dict, metric: dict
+        self, iter_source_metric: dict, iter_context_metric: dict, metric: dict | None
     ) -> dict:
         scores = {key: {"iter": 0, "total": 0} for key in iter_source_metric.keys()}
         identity_weight = self.config.evaluate.score.identity
@@ -1560,25 +1576,12 @@ class ScoreCalculator:
                 / iter_source_metric[key]["pert_swap"][1]
             )
             iter_trace = (
-                iter_source_metric[key]["anchor"][0]
-                / iter_source_metric[key]["anchor"][1]
+                iter_source_metric[key]["cloak"][0]
+                / iter_source_metric[key]["cloak"][1]
             )
             iter_context_swap = (
                 iter_context_metric[key]["pert_swap"][0]
                 / iter_context_metric[key]["pert_swap"][1]
-            )
-
-            total_source_swap = (
-                metric["src_pert_swap_effectiveness"][key]["pert_swap"][0]
-                / metric["src_pert_swap_effectiveness"][key]["pert_swap"][1]
-            )
-            total_trace = (
-                metric["src_pert_swap_effectiveness"][key]["anchor"][0]
-                / metric["src_pert_swap_effectiveness"][key]["anchor"][1]
-            )
-            total_context_swap = (
-                metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][0]
-                / metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][1]
             )
 
             scores[key]["iter"] = (
@@ -1586,10 +1589,25 @@ class ScoreCalculator:
                 + context_weight * (1 - iter_context_swap)
                 + trace_weight * iter_trace
             )
-            scores[key]["total"] = (
-                identity_weight * (1 - total_source_swap)
-                + context_weight * (1 - total_context_swap)
-                + trace_weight * total_trace
-            )
+
+            if metric is not None:
+                total_source_swap = (
+                    metric["src_pert_swap_effectiveness"][key]["pert_swap"][0]
+                    / metric["src_pert_swap_effectiveness"][key]["pert_swap"][1]
+                )
+                total_trace = (
+                    metric["src_pert_swap_effectiveness"][key]["cloak"][0]
+                    / metric["src_pert_swap_effectiveness"][key]["cloak"][1]
+                )
+                total_context_swap = (
+                    metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][0]
+                    / metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][1]
+                )
+
+                scores[key]["total"] = (
+                    identity_weight * (1 - total_source_swap)
+                    + context_weight * (1 - total_context_swap)
+                    + trace_weight * total_trace
+                )
 
         return scores

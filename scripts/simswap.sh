@@ -20,7 +20,7 @@ then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 elif [[ $function == 'metric' || $function == 'adaptive_attack' || $function == 'adaptive_attack_self' ]]
 then
-    PYTHONPATH="$ROOT:$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" -m third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
+    PYTHONPATH="$ROOT:$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 elif [[ $function == 'ai_beauty' ]]
 then
     PYTHONPATH="$ROOT/src:$ROOT/third_party/SimSwap" python "$ROOT/src/simswap/main.py" third_party=simswap third_party.function=metric log.file_suffix=$suffix log.record_level=$log_level third_party.robustness.ai_beauty=true third_party.robustness.ai_beauty_tool=ai_lab_tools 
