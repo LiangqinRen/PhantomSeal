@@ -1,17 +1,16 @@
-from utils import cd
-from evaluate import Utility, Effectiveness, AIEditing, Cloak
-from face_modules.model import Backbone
-from face_modules.mtcnn import MTCNN
-from network.AEI_Net import AEI_Net
+from src.utils import cd, use_project
+from src.evaluate import Utility, Effectiveness, DistanceCloakSelector
+from third_party.FaceShifter.ModelC.face_modules.model import Backbone
 
 
 import cv2
 import torch
+import warnings
 import PIL.Image as Image
 import torch.nn.functional as F
 import numpy as np
 import torchvision.transforms as transforms
-from torch import tensor
+from torch import Tensor
 from pathlib import Path
 
 
@@ -21,10 +20,20 @@ class Base:
         self.logger = logger
         self.config = config
 
+        warnings.filterwarnings(
+            "ignore", category=FutureWarning, module=".*matlab_cp2tform.*"
+        )
+
+        face_modules_dir = (
+            Path(self.config.third_party.third_party_root_dir) / "face_modules"
+        )
+        with use_project([face_modules_dir]):
+            from third_party.FaceShifter.ModelC.face_modules.mtcnn import MTCNN
+            from third_party.FaceShifter.ModelC.network.AEI_Net import AEI_Net
+
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)
-        self.aiediting = AIEditing(logger, config)
-        self.cloak = Cloak(logger, config, self.effectiveness)
+        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
         self.device = torch.device("cuda")
 
@@ -38,7 +47,7 @@ class Base:
         )
         self.arcface = self.arcface.eval().cuda()
 
-        with cd(Path("third_party") / "FaceShifter" / "ModelC"):
+        with cd(Path(self.config.third_party.third_party_root_dir)):
             self.detector = MTCNN()
 
         self.G = AEI_Net(c_id=512)
@@ -59,7 +68,7 @@ class Base:
             ]
         )
 
-    def swapface(self, src_img: tensor, tgt_img: tensor) -> tensor:
+    def swapface(self, src_img: Tensor, tgt_img: Tensor) -> Tensor:
         with torch.no_grad():
             embeds = self.arcface(
                 F.interpolate(
@@ -107,7 +116,7 @@ class Base:
 
         return transforms.ToTensor()(Yt_trans_inv).unsqueeze(0)
 
-    def _to_ndarray(self, img: torch.tensor) -> np.ndarray:
+    def _to_ndarray(self, img: Tensor) -> np.ndarray:
         img = (img * 0.5 + 0.5) * 255
         img = img.squeeze(0)
         img = img.permute(1, 2, 0)
@@ -116,5 +125,5 @@ class Base:
 
         return img
 
-    def _denormalize(self, img: tensor) -> tensor:
+    def _denormalize(self, img: Tensor) -> Tensor:
         return img * 0.5 + 0.5

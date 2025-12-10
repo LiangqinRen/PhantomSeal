@@ -129,6 +129,19 @@ def save_tensor_imgs(
                 save_image(img, image_dir / f"{title_label}_{idx}_{i}.png")
 
 
+def check_tensor_info(logger, x: Tensor, name: str = "tensor") -> None:
+    logger.info(
+        f"{name}: "
+        f"shape={tuple(x.shape)}, "
+        f"dtype={x.dtype}, "
+        f"device={x.device}, "
+        f"requires_grad={x.requires_grad}, "
+        f"is_contiguous={x.is_contiguous()}, "
+        f"max={x.max().item()}, "
+        f"min={x.min().item()}"
+    )
+
+
 @contextmanager
 def cd(path):
     prev = os.getcwd()

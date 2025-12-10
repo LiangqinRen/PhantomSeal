@@ -1,30 +1,36 @@
 name: faceshifter
 function: metric
+third_party_root_dir: ${root_dir}/third_party/FaceShifter/ModelC
 
 origin:
   model_path: third_party/FaceShifter/ModelC/face_modules/model_ir_se50.pth
   G_path: third_party/FaceShifter/ModelC/saved_models/G_latest.pth
 
 dataset:
-  metric_512_dir: data/vggface2_512
+  metric_512_dir: data/vggface2_512_test
   use_224: false
   metric_pairs: 3000
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
-  cloak_count: 30
-  cloak_index: 0
+  cloak_count: full
   cloak_min_distance: 1.04
+  cloak_distance: 1.20
 
 defense:
-  batch_size: 10
-  epochs: 750
-  epsilon: 0.1
+  batch_size: 60
+  epochs: 1000
+  epsilon: 0.005
   limit:
     R: 0.075
     G: 0.03
     B: 0.075
+    identity: 30
     context: 30
   weight:
-    perturb: 7500
+    perturb: 1000
     identity: 10000
+    cloak: 10000
     context: 0
+  silent_perturb: false
+  only_save_summary: true
+  log_interval: 100

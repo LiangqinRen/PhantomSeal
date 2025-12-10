@@ -3,17 +3,19 @@ defaults:
   - third_party: simswap
   - _self_
 
-log:
-  file_suffix: ""
-  record_level: info # one of [debug, info, warning, error, critical]
-
-log_dir: ${hydra:runtime.output_dir}${log.file_suffix}
-image_dir: ${log_dir}/image
-random_seed: 0
-
 hydra:
   run:
     dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
   sweep:
     dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
   output_subdir: config
+
+log:
+  file_suffix: ""
+  record_level: info # one of [debug, info, warning, error, critical]
+
+root_dir: ${hydra:runtime.cwd}
+log_dir: ${hydra:runtime.output_dir}${log.file_suffix}
+image_dir: ${log_dir}/image
+notes_path: ${log_dir}/notes.txt
+random_seed: 0

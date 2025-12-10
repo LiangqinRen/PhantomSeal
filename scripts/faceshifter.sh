@@ -17,7 +17,7 @@ ROOT=$(dirname $(dirname $(realpath "$0")))
 
 if [[ $function == 'metric' ]]
 then
-    PYTHONPATH="$ROOT/src:$ROOT/third_party/FaceShifter/ModelC:$ROOT/third_party/FaceShifter/ModelC/face_modules" python "$ROOT/src/faceshifter/main.py" third_party=faceshifter third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
+    PYTHONPATH="$ROOT" python -m src.faceshifter.main third_party=faceshifter third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 else
-    echo "⚠️ Oops! That function doesn't exist"
+    echo "⚠️ Oops! That function doesn't exist."
 fi
