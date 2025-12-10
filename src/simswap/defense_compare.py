@@ -1,7 +1,7 @@
-import metric
-from simswap.base import Base
-from dataset import MetricDataset
-from utils import save_tensor_imgs
+from src import metric
+from src.simswap.base import Base
+from src.dataset import MetricDataset
+from src.utils import save_tensor_imgs
 
 
 import torch

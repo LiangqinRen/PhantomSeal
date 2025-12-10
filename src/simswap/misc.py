@@ -1,5 +1,5 @@
-from simswap.base import Base
-from dataset import MetricDataset, FFHQDataset
+from src.simswap.base import Base
+from src.dataset import MetricDataset, FFHQDataset
 
 import torch
 from torch.utils.data import DataLoader

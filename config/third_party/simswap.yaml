@@ -1,5 +1,6 @@
 name: simswap
 function: metric
+third_party_root_dir: ${root_dir}/third_party/SimSwap
 
 dataset:
   sample_dir: data/vggface2_samples_224

@@ -1,7 +1,7 @@
-import utils
-from simswap.defense import Defense
-from simswap.defense_compare import Lowkey
-from simswap.misc import Misc
+from src import utils
+from src.simswap.defense import Defense
+from src.simswap.defense_compare import Lowkey
+from src.simswap.misc import Misc
 
 import sys
 import hydra

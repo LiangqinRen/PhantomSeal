@@ -1,5 +1,5 @@
-from base import Base
-from utils import save_tensor_imgs
+from src.simswap.base import Base
+from src.utils import save_tensor_imgs
 
 import os
 import io

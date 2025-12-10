@@ -1,9 +1,9 @@
-import metric
-from simswap.base import Base
-from dataset import SampleDataset, MetricDataset, AdaptiveMetricDataset
-from robustness import Robustness
-from evaluate import ScoreCalculator
-from utils import save_tensor_imgs
+from src import metric
+from src.simswap.base import Base
+from src.dataset import SampleDataset, MetricDataset, AdaptiveMetricDataset
+from src.simswap.robustness import Robustness
+from src.evaluate import ScoreCalculator
+from src.utils import save_tensor_imgs
 
 
 import textwrap
