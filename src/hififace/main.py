@@ -1,5 +1,5 @@
-import utils
-from hififace.defense import Defense
+from src import utils
+from src.hififace.defense import Defense
 
 import inspect
 import hydra

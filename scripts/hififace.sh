@@ -17,7 +17,7 @@ ROOT=$(dirname $(dirname $(realpath "$0")))
 
 if [[ $function == 'metric' ]]
 then
-    PYTHONPATH="$ROOT/src:$ROOT/third_party/HifiFace" python "$ROOT/src/hififace/main.py" third_party=hififace third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
+    PYTHONPATH="$ROOT" python -m src.hififace.main third_party=hififace third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 else
-    echo "⚠️ Oops! That function doesn't exist"
+    echo "⚠️ Oops! That function doesn't exist."
 fi

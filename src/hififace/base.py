@@ -1,6 +1,5 @@
-from utils import cd
-from evaluate import Utility, Effectiveness, AIEditing, Cloak
-from hififace_pl import HifiFace
+from src.utils import cd, use_project
+from src.evaluate import Utility, Effectiveness, AIEditing, DistanceCloakSelector
 
 import torch
 from omegaconf import OmegaConf
@@ -16,10 +15,13 @@ class Base:
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)
         self.aiediting = AIEditing(logger, config)
-        self.cloak = Cloak(logger, config, self.effectiveness)
+        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
         self.device = torch.device("cuda")
-        with cd(Path("third_party") / "HifiFace"):
+        root_dir = Path(self.config.third_party.third_party_root_dir)
+        with cd(root_dir), use_project([root_dir]):
+            from hififace_pl import HifiFace
+
             origin_config = OmegaConf.load(config.third_party.origin.config_path)
 
             self.net = HifiFace(origin_config)

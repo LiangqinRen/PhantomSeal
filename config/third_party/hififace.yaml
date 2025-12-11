@@ -1,34 +1,42 @@
 name: hififace
 function: metric
+third_party_root_dir: ${root_dir}/third_party/HifiFace
 
 origin:
   config_path: config/model.yaml
   checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
 
 dataset:
-  metric_512_dir: data/vggface2_512
+  metric_512_dir: data/vggface2_512_test
   use_224: false
   metric_pairs: 3000
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
-  cloak_count: 30
-  cloak_index: 0
+  cloak_count: full
   cloak_min_distance: 1.04
+  cloak_distance: 1.20
 
 defense:
-  batch_size: 10
-  epochs: 750
+  batch_size: 30
+  epochs: 1000
   epsilon: 0.003
   limit:
     R: 0.075
     G: 0.025
     B: 0.075
+    identity_3d: 30
+    identity_id: 15
     context_final: 50
     context_3d: 100
   weight:
     perturb: 10000
     identity_3d: 10000
     identity_id: 5000
+    cloak_3d: 10000
+    cloak_id: 5000
     context_3d: 0
     context_middle: 0
     context_final: 0
+  silent_perturb: false
+  only_save_summary: true
+  log_interval: 100
