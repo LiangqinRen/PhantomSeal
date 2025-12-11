@@ -1,7 +1,6 @@
-import utils
-from unify.defense import Defense
+from src import utils
+from src.unify.defense import Defense
 
-import inspect
 import hydra
 import sys
 from omegaconf import DictConfig
@@ -13,7 +12,7 @@ def main(config: DictConfig):
 
     utils.check_cuda_availability(logger)
     utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer(inspect.currentframe().f_code.co_name, logger)
+    timer = utils.Timer("main", logger)
 
     defense = Defense(logger, config)
     defense_function_list = ["metric"]
@@ -22,7 +21,7 @@ def main(config: DictConfig):
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()
     else:
-        sys.exit(f"⚠️ Oops! That function doesn't exist")
+        sys.exit(f"⚠️ Oops! That function doesn't exist.")
 
 
 if __name__ == "__main__":

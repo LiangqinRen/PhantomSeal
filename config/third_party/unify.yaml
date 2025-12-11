@@ -1,39 +1,48 @@
 name: unify
 function: metric
+simswap_root_dir: ${root_dir}/third_party/SimSwap
+hififace_root_dir: ${root_dir}/third_party/HifiFace
+faceshifter_root_dir: ${root_dir}/third_party/FaceShifter/ModelC
 
 origin:
   config_path: config/model.yaml
   checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
-  model_path: third_party/FaceShifter/ModelC/face_modules/model_ir_se50.pth
-  G_path: third_party/FaceShifter/ModelC/saved_models/G_latest.pth
+  model_path: face_modules/model_ir_se50.pth
+  G_path: saved_models/G_latest.pth
 
 dataset:
-  metric_224_dir: data/vggface2_224
-  metric_512_dir: data/vggface2_512
+  metric_224_dir: data/vggface2_224_test
+  metric_512_dir: data/vggface2_512_test
   use_224: false
   metric_pairs: 3000
-  # cloak: real
-  # cloak_dir: "data/vggface2_cloak_224/${third_party.dataset.cloak}"
-  # cloak_mix: true
-  # cloak_index: 0
-  # cloak_min_distance: 1.04
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
-  cloak_count: 30
-  cloak_index: 0
+  cloak_count: full
   cloak_min_distance: 1.04
+  cloak_distance: 1.20
 
 defense:
-  batch_size: 5
+  batch_size: 20
   epochs: 1000
-  epsilon: 0.001
+  epsilon: 0.003
   limit:
     R: 0.075
     G: 0.03
     B: 0.075
+    simswap: 30
+    faceshifter: 30
+    hififace_3d: 30
+    hififace_id: 15
   weight:
     perturb: 1000
-    simswap: 1500
-    hififace_3d: 1000
-    hififace_id: 1000
-    faceshifter: 2000
+    simswap_id: 1500
+    simswap_cloak: 1500
+    hififace_self_3d: 1000
+    hififace_cloak_3d: 1000
+    hififace_self_id: 1000
+    hififace_cloak_id: 1000
+    faceshifter_id: 2000
+    faceshifter_cloak: 2000
+  silent_perturb: false
+  only_save_summary: true
+  log_interval: 100

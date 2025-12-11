@@ -1,12 +1,12 @@
-import metric
-from unify.base import Base
-from dataset import MetricDataset
-from utils import save_tensor_imgs
-
+from src import metric
+from src.unify.base import Base
+from src.dataset import MetricDataset
+from src.evaluate import ScoreCalculator
+from src.utils import save_tensor_imgs
 
 import torch
-import torch.nn.functional as F
-from torch import tensor, nn
+import textwrap
+from torch import tensor, Tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
 
@@ -18,10 +18,13 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
+        notes_path = Path(self.config.notes_path)
+        notes_path.touch(exist_ok=True)
+
     def metric(
         self,
     ) -> None:
-        metric_data = self._get_unify_metric_template()
+        metrics = self._get_unify_metric_template()
 
         dataset = MetricDataset(self.config)
         dataloader = DataLoader(
@@ -29,55 +32,31 @@ class Defense(Base):
         )
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=True)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            torch.set_grad_enabled(False)
 
-            (
-                simswap_swap,
-                simswap_cloak_swap,
-                simswap_pert_swap,
-                hififace_swap,
-                hififace_cloak_swap,
-                hififace_pert_swap,
-                faceshifter_swap,
-                faceshifter_cloak_swap,
-                faceshifter_pert_swap,
-            ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs, cloak_imgs)
-
-            (
-                faceshifter_swap,
-                faceshifter_cloak_swap,
-                faceshifter_pert_swap,
-                (
-                    imgs_A,
-                    imgs_B,
-                    x_imgs,
-                    cloak_imgs,
-                    simswap_swap,
-                    simswap_cloak_swap,
-                    simswap_pert_swap,
-                    hififace_swap,
-                    hififace_cloak_swap,
-                    hififace_pert_swap,
-                ),
-            ) = self._align_valid_imgs(
-                faceshifter_swap,
-                faceshifter_cloak_swap,
-                faceshifter_pert_swap,
-                [
-                    imgs_A,
-                    imgs_B,
-                    x_imgs,
-                    cloak_imgs,
-                    simswap_swap,
-                    simswap_cloak_swap,
-                    simswap_pert_swap,
-                    hififace_swap,
-                    hififace_cloak_swap,
-                    hififace_pert_swap,
-                ],
+            simswap_pert_swap, hififace_pert_swap, faceshifter_pert_swap = (
+                self._get_full_swap_results(x_imgs, imgs_B)
             )
+
+            # filter valid images
+            faceshifter_swap_mask = (
+                faceshifter_pert_swap.view(faceshifter_pert_swap.size(0), -1)
+                .abs()
+                .sum(dim=1)
+                > 0
+            )
+
+            imgs_A = imgs_A[faceshifter_swap_mask]
+            imgs_B = imgs_B[faceshifter_swap_mask]
+            cloak_imgs = cloak_imgs[faceshifter_swap_mask]
+            x_imgs = x_imgs[faceshifter_swap_mask]
+            simswap_pert_swap = simswap_pert_swap[faceshifter_swap_mask]
+            hififace_pert_swap = hififace_pert_swap[faceshifter_swap_mask]
+            faceshifter_pert_swap = faceshifter_pert_swap[faceshifter_swap_mask]
 
             save_tensor_imgs(
                 self.image_dir,
@@ -87,14 +66,8 @@ class Defense(Base):
                     "imgs_B",
                     "pert_imgs",
                     "cloak_imgs",
-                    "simswap\nswap",
-                    "simswap\ncloak_swap",
                     "simswap\npert_swap",
-                    "hififace\nswap",
-                    "hififace\ncloak_swap",
                     "hififace\npert_swap",
-                    "faceshifter\nswap",
-                    "faceshifter\ncloak_swap",
                     "faceshifter\npert_swap",
                 ],
                 [
@@ -102,20 +75,14 @@ class Defense(Base):
                     imgs_B,
                     x_imgs,
                     cloak_imgs,
-                    simswap_swap,
-                    simswap_cloak_swap,
                     simswap_pert_swap,
-                    hififace_swap,
-                    hififace_cloak_swap,
                     hififace_pert_swap,
-                    faceshifter_swap,
-                    faceshifter_cloak_swap,
                     faceshifter_pert_swap,
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
-            total_count += len(faceshifter_swap)
+            total_count += len(faceshifter_pert_swap)
 
             (
                 pert_utilities,
@@ -126,16 +93,13 @@ class Defense(Base):
                 imgs_A,
                 x_imgs,
                 cloak_imgs,
-                simswap_swap,
                 simswap_pert_swap,
-                hififace_swap,
                 hififace_pert_swap,
-                faceshifter_swap,
                 faceshifter_pert_swap,
             )
 
             self._merge_unify_metric(
-                metric_data,
+                metrics,
                 pert_utilities,
                 simswap_identity_effec,
                 faceshifter_identity_effec,
@@ -143,66 +107,60 @@ class Defense(Base):
             )
 
             del imgs_A, imgs_B, x_imgs, cloak_imgs
-            del (
-                simswap_swap,
-                simswap_cloak_swap,
-                simswap_pert_swap,
-                hififace_swap,
-                hififace_cloak_swap,
-                hififace_pert_swap,
-                faceshifter_swap,
-                faceshifter_cloak_swap,
-                faceshifter_pert_swap,
-            )
-            torch.cuda.empty_cache()
+            del simswap_pert_swap, hififace_pert_swap, faceshifter_pert_swap
+            self._free_gpu()
 
-            self.logger.info(
+            simswap_iter_scores = self._calculate_iter_score(simswap_identity_effec)
+            faceshifter_iter_scores = self._calculate_iter_score(
+                faceshifter_identity_effec
+            )
+            hififace_iter_scores = self._calculate_iter_score(hififace_identity_effec)
+            summary_scores = self._calculate_summary_score(metrics)
+
+            iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
-            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
-            simswap identity effectiveness: {metric.generate_iter_effectiveness_log(simswap_identity_effec)}
-            faceshifter identity effectiveness: {metric.generate_iter_effectiveness_log(faceshifter_identity_effec)}
-            hififace identity effectiveness: {metric.generate_iter_effectiveness_log(hififace_identity_effec)}
+            utility (mse, psnr, ssim, lpips), effectiveness {tuple(simswap_identity_effec.keys())} identity {tuple(next(iter(simswap_identity_effec.values())).keys())}
+            pert: {metric.generate_iter_utility_log(pert_utilities)}
+            simswap iter: {metric.generate_iter_effectiveness_log(simswap_identity_effec)}
+            faceshifter iter: {metric.generate_iter_effectiveness_log(faceshifter_identity_effec)}
+            hififace iter: {metric.generate_iter_effectiveness_log(hififace_identity_effec)}
+            scores: {metric.generate_iter_score_log(simswap_iter_scores)} {metric.generate_iter_score_log(faceshifter_iter_scores)} {metric.generate_iter_score_log(hififace_iter_scores)}
             """
             )
-
-            self.logger.info(
+            summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(metric_data, 'pert_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metric_data, 'simswap')}
-            {metric.generate_summary_effectiveness_log(metric_data, 'faceshifter')}
-            {metric.generate_summary_effectiveness_log(metric_data, 'hififace')}
+            pert: {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            simswap summary: {metric.generate_summary_effectiveness_log(metrics, 'simswap')}
+            faceshifter summary: {metric.generate_summary_effectiveness_log(metrics, 'faceshifter')}
+            hififace summary: {metric.generate_summary_effectiveness_log(metrics, 'hififace')}
+            scores: {self._generate_summary_score_log(summary_scores['simswap'])} {self._generate_summary_score_log(summary_scores['faceshifter'])} {self._generate_summary_score_log(summary_scores['hififace'])}
             """
             )
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
 
-    def _perturb_imgs(
-        self, imgs: tensor, cloak_imgs: tensor, silent: bool = False
-    ) -> tensor:
-        l2_loss = nn.MSELoss().cuda()
-        x_imgs = imgs.clone().detach()
+    def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor) -> Tensor:
+        def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
+            return ((x - y) ** 2).view(x.size(0), -1).mean(dim=1)
 
-        simswap_cloak_identity = self._get_imgs_identity(cloak_imgs)
-        faceshifter_cloak_identity = self.arcface(
-            F.interpolate(
-                cloak_imgs[:, :, 19:237, 19:237],
-                (112, 112),
-                mode="bilinear",
-                align_corners=True,
-            )
-        )
-        hififace_cloak_3d = self.net.generator.id_extractor.f_3d(cloak_imgs)[:, :80]
-        hififace_cloak_id = F.normalize(
-            self.net.generator.id_extractor.f_id(
-                F.interpolate((cloak_imgs - 0.5) / 0.5, size=112, mode="bilinear")
-            ),
-            dim=-1,
-            p=2,
-        )
+        x_imgs = imgs.clone().detach() + torch.randn_like(imgs) * 1e-5
+
+        with torch.no_grad():
+            simswap_self_identity = self.get_simswap_identity(imgs)
+            simswap_cloak_identity = self.get_simswap_identity(cloak_imgs)
+
+            faceshifter_self_identity = self.get_faceshifter_identity(imgs)
+            faceshifter_cloak_identity = self.get_faceshifter_identity(cloak_imgs)
+
+            hififace_self_3d = self.net.generator.id_extractor.f_3d(imgs)[:, :80]
+            hififace_self_id = self.get_hififace_identity(imgs)
+            hififace_cloak_3d = self.net.generator.id_extractor.f_3d(cloak_imgs)[:, :80]
+            hififace_cloak_id = self.get_hififace_identity(cloak_imgs)
 
         epsilon = (
             self.config.third_party.defense.epsilon
-            * (torch.max(x_imgs) - torch.min(x_imgs))
+            * (torch.max(imgs) - torch.min(imgs))
             / 2
         )
         limits = (
@@ -217,63 +175,106 @@ class Defense(Base):
             .cuda()
         )
 
-        best_imgs, best_loss = None, float("inf")
+        B = imgs.size(0)
+        best_imgs = imgs.clone()
+        best_loss = torch.full((B,), float("inf"), device=imgs.device)
+
         for epoch in range(self.config.third_party.defense.epochs):
-            x_imgs.requires_grad = True
+            x_imgs = x_imgs.clone().detach().requires_grad_(True)
 
-            pert_diff_loss = self.config.third_party.defense.weight.perturb * l2_loss(
-                x_imgs, imgs.detach()
+            pert_diff_loss = (
+                self.config.third_party.defense.weight.perturb
+                * l2_per_image(x_imgs, imgs.detach())
             )
 
-            x_simswap_identity = self._get_imgs_identity(x_imgs)
-            simswap_identity_loss = (
-                self.config.third_party.defense.weight.simswap
-                * l2_loss(x_simswap_identity, simswap_cloak_identity.detach())
+            # simswap loss
+            x_simswap_identity = self.get_simswap_identity(x_imgs)
+
+            simswap_identity_diff = (
+                self.config.third_party.defense.weight.simswap_id
+                * l2_per_image(x_simswap_identity, simswap_self_identity)
+            )
+            simswap_identity_diff_loss = -torch.clamp(
+                simswap_identity_diff,
+                0,
+                self.config.third_party.defense.limit.simswap,
             )
 
+            simswap_cloak_diff_loss = (
+                self.config.third_party.defense.weight.simswap_cloak
+                * l2_per_image(x_simswap_identity, simswap_cloak_identity)
+            )
+
+            # hififace loss
             x_hififace_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, :80]
-            x_hififace_id = F.normalize(
-                self.net.generator.id_extractor.f_id(
-                    F.interpolate((x_imgs - 0.5) / 0.5, size=112, mode="bilinear")
-                ),
-                dim=-1,
-                p=2,
+            x_hififace_id = self.get_hififace_identity(x_imgs)
+
+            hififace_3d_diff = (
+                self.config.third_party.defense.weight.hififace_self_3d
+                * l2_per_image(x_hififace_3d, hififace_self_3d)
             )
-            hififace_3d_loss = (
-                self.config.third_party.defense.weight.hififace_3d
-                * l2_loss(x_hififace_3d, hififace_cloak_3d.detach())
+            hififace_3d_diff_loss = -torch.clamp(
+                hififace_3d_diff,
+                0,
+                self.config.third_party.defense.limit.hififace_3d,
             )
-            hififace_id_loss = (
-                self.config.third_party.defense.weight.hififace_id
-                * l2_loss(x_hififace_id, hififace_cloak_id.detach())
+            hififace_3d_cloak_loss = (
+                self.config.third_party.defense.weight.hififace_cloak_3d
+                * l2_per_image(x_hififace_3d, hififace_cloak_3d)
             )
 
-            x_faceshifter_identity = self.arcface(
-                F.interpolate(
-                    x_imgs[:, :, 19:237, 19:237],
-                    (112, 112),
-                    mode="bilinear",
-                    align_corners=True,
-                )
+            hififace_id_diff = (
+                self.config.third_party.defense.weight.hififace_self_id
+                * l2_per_image(x_hififace_id, hififace_self_id)
             )
-            faceshifter_identity_loss = (
-                self.config.third_party.defense.weight.faceshifter
-                * l2_loss(x_faceshifter_identity, faceshifter_cloak_identity.detach())
+            hififace_id_diff_loss = -torch.clamp(
+                hififace_id_diff,
+                0,
+                self.config.third_party.defense.limit.hififace_id,
+            )
+            hififace_id_cloak_loss = (
+                self.config.third_party.defense.weight.hififace_cloak_id
+                * l2_per_image(x_hififace_id, hififace_cloak_id)
             )
 
-            loss = (
+            # faceshifter loss
+            x_faceshifter_identity = self.get_faceshifter_identity(x_imgs)
+
+            faceshifter_identity_diff = (
+                self.config.third_party.defense.weight.faceshifter_id
+                * l2_per_image(x_faceshifter_identity, faceshifter_self_identity)
+            )
+            faceshifter_identity_diff_loss = -torch.clamp(
+                faceshifter_identity_diff,
+                0,
+                self.config.third_party.defense.limit.faceshifter,
+            )
+
+            faceshifter_cloak_diff_loss = (
+                self.config.third_party.defense.weight.faceshifter_cloak
+                * l2_per_image(x_faceshifter_identity, faceshifter_cloak_identity)
+            )
+
+            loss_per_img = (
                 pert_diff_loss
-                + simswap_identity_loss
-                + hififace_3d_loss
-                + hififace_id_loss
-                + faceshifter_identity_loss
+                + simswap_identity_diff_loss
+                + simswap_cloak_diff_loss
+                + hififace_3d_diff_loss
+                + hififace_3d_cloak_loss
+                + hififace_id_diff_loss
+                + hififace_id_cloak_loss
+                + faceshifter_identity_diff_loss
+                + faceshifter_cloak_diff_loss
             )
+            loss = loss_per_img.mean()
             loss.backward()
 
-            x_imgs = (
-                x_imgs.clone().detach() - epsilon * x_imgs.grad.sign().clone().detach()
-            )
+            if x_imgs.grad is not None:
+                grad_sign = x_imgs.grad.sign().detach()
+            else:
+                grad_sign = torch.zeros_like(x_imgs)
 
+            x_imgs = x_imgs.detach() - epsilon * grad_sign
             x_imgs = torch.clamp(
                 x_imgs,
                 min=imgs - limits,
@@ -281,118 +282,69 @@ class Defense(Base):
             )
             x_imgs = torch.clamp(x_imgs, 0, 1)
 
-            if loss.item() < best_loss:
-                best_loss = loss.item()
-                best_imgs = x_imgs
+            loss_per_img_detached = loss_per_img.detach()
+            improved = loss_per_img_detached < best_loss
+            best_loss[improved] = loss_per_img_detached[improved]
+            best_imgs[improved] = x_imgs[improved].detach()
 
-            if not silent:
+            if (
+                not self.config.third_party.defense.silent_perturb
+                and (epoch + 1) % self.config.third_party.defense.log_interval == 0
+                or (epoch + 1) == self.config.third_party.defense.epochs
+            ):
                 self.logger.info(
-                    f"[Epoch {epoch+1:4}/{self.args.epochs:4}]loss: {loss:.5f}({pert_diff_loss.item():.5f}, {simswap_identity_loss.item():.5f}, {hififace_3d_loss.item():.5f},{hififace_id_loss.item():.5f}, {faceshifter_identity_loss.item():.5f})"
+                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}] "
+                    f"loss: {loss.item():.3f}("
+                    f"{pert_diff_loss.mean().item():.3f}, "
+                    f"{simswap_identity_diff_loss.mean().item():.3f}, "
+                    f"{simswap_cloak_diff_loss.mean().item():.3f}, "
+                    f"{hififace_3d_diff_loss.mean().item():.3f}, "
+                    f"{hififace_3d_cloak_loss.mean().item():.3f}, "
+                    f"{hififace_id_diff_loss.mean().item():.3f}, "
+                    f"{hififace_id_cloak_loss.mean().item():.3f}, "
+                    f"{faceshifter_identity_diff_loss.mean().item():.3f}, "
+                    f"{faceshifter_cloak_diff_loss.mean().item():.3f})"
                 )
 
         return best_imgs
 
     def _get_full_swap_results(
-        self, imgs_A: tensor, imgs_B: tensor, pert_imgs_A: tensor, cloak_imgs: tensor
-    ) -> tuple[tensor, tensor, tensor, tensor, tensor, tensor, tensor, tensor, tensor]:
-        simswap_swap = self._simswap_swapface(imgs_A, imgs_B)
+        self, pert_imgs_A: Tensor, imgs_B: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor]:
         simswap_pert_swap = self._simswap_swapface(pert_imgs_A, imgs_B)
-        simswap_cloak_swap = self._simswap_swapface(cloak_imgs, imgs_B)
-
-        hififace_swap = self._hififace_swapface(imgs_A, imgs_B)
         hififace_pert_swap = self._hififace_swapface(pert_imgs_A, imgs_B)
-        hififace_cloak_swap = self._hififace_swapface(cloak_imgs, imgs_B)
-
-        faceshifter_swap = self._faceshifter_swapface(imgs_A, imgs_B)
         faceshifter_pert_swap = self._faceshifter_swapface(pert_imgs_A, imgs_B)
-        faceshifter_cloak_swap = self._faceshifter_swapface(cloak_imgs, imgs_B)
 
-        return (
-            simswap_swap,
-            simswap_pert_swap,
-            simswap_cloak_swap,
-            hififace_swap,
-            hififace_pert_swap,
-            hififace_cloak_swap,
-            faceshifter_swap,
-            faceshifter_pert_swap,
-            faceshifter_cloak_swap,
-        )
-
-    def _align_valid_imgs(
-        self,
-        faceshifter_swap: tensor,
-        faceshifter_cloak_swap: tensor,
-        faceshifter_pert_swap: tensor,
-        others: list[tensor],
-    ) -> tuple[tensor, tensor, list[tensor]]:
-        faceshifter_swap_mask = (
-            faceshifter_swap.view(faceshifter_swap.size(0), -1).abs().sum(dim=1) > 0
-        )
-        faceshifter_cloak_swap_mask = (
-            faceshifter_cloak_swap.view(faceshifter_cloak_swap.size(0), -1)
-            .abs()
-            .sum(dim=1)
-            > 0
-        )
-        faceshifter_pert_swap_mask = (
-            faceshifter_pert_swap.view(faceshifter_pert_swap.size(0), -1)
-            .abs()
-            .sum(dim=1)
-            > 0
-        )
-
-        valid_mask = (
-            faceshifter_swap_mask
-            & faceshifter_cloak_swap_mask
-            & faceshifter_pert_swap_mask
-        )
-
-        filter_faceshifter_swap = faceshifter_swap[valid_mask]
-        filter_faceshifter_cloak_swap = faceshifter_cloak_swap[valid_mask]
-        filter_faceshifter_pert_swap = faceshifter_pert_swap[valid_mask]
-
-        for i in range(len(others)):
-            others[i] = others[i][valid_mask]
-
-        return (
-            filter_faceshifter_swap,
-            filter_faceshifter_cloak_swap,
-            filter_faceshifter_pert_swap,
-            others,
-        )
+        return simswap_pert_swap, hififace_pert_swap, faceshifter_pert_swap
 
     def _calculate_cross_model_metric(
         self,
-        imgs_A: tensor,
-        x_imgs: tensor,
-        cloak_imgs: tensor,
-        simswap_swap: tensor,
-        simswap_pert_swap: tensor,
-        faceshifter_swap: tensor,
-        faceshifter_pert_swap: tensor,
-        hififace_swap: tensor,
-        hififace_pert_swap: tensor,
-    ) -> tuple[dict, dict, dict, dict, dict]:
+        imgs_A: Tensor,
+        x_imgs: Tensor,
+        cloak_imgs: Tensor,
+        simswap_pert_swap: Tensor,
+        faceshifter_pert_swap: Tensor,
+        hififace_pert_swap: Tensor,
+    ) -> tuple[dict, dict, dict, dict]:
         pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
         simswap_identity_effec = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
-            simswap_swap,
+            None,
             simswap_pert_swap,
             cloak_imgs,
         )
         faceshifter_identity_effec = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
-            faceshifter_swap,
+            None,
             faceshifter_pert_swap,
             cloak_imgs,
         )
         hififace_identity_effec = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
-            hififace_swap,
+            None,
             hififace_pert_swap,
             cloak_imgs,
         )
@@ -456,23 +408,79 @@ class Defense(Base):
 
         for effec in self.effectiveness.candi_funcs.keys():
             data["simswap"][effec] = {
-                key1: (value1[0] + value2[0], value1[1] + value2[1])
+                key2: (value1[0] + value2[0], value1[1] + value2[1])
                 for (key1, value1), (key2, value2) in zip(
                     data["simswap"][effec].items(),
                     simswap_identity_effec[effec].items(),
                 )
             }
             data["faceshifter"][effec] = {
-                key1: (value1[0] + value2[0], value1[1] + value2[1])
+                key2: (value1[0] + value2[0], value1[1] + value2[1])
                 for (key1, value1), (key2, value2) in zip(
                     data["faceshifter"][effec].items(),
                     faceshifter_identity_effec[effec].items(),
                 )
             }
             data["hififace"][effec] = {
-                key1: (value1[0] + value2[0], value1[1] + value2[1])
+                key2: (value1[0] + value2[0], value1[1] + value2[1])
                 for (key1, value1), (key2, value2) in zip(
                     data["hififace"][effec].items(),
                     hififace_identity_effec[effec].items(),
                 )
             }
+
+    def _free_gpu(self) -> None:
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+
+    def _calculate_iter_score(
+        self,
+        iter_source_metric: dict,
+    ) -> dict:
+        scores = {key: {"iter": 0} for key in iter_source_metric.keys()}
+        identity_weight = self.config.evaluate.score.identity
+        trace_weight = self.config.evaluate.score.trace
+
+        for key in scores.keys():
+            iter_source_swap = (
+                iter_source_metric[key]["pert_swap"][0]
+                / iter_source_metric[key]["pert_swap"][1]
+            )
+            iter_trace = (
+                iter_source_metric[key]["cloak"][0]
+                / iter_source_metric[key]["cloak"][1]
+            )
+
+            scores[key]["iter"] = (
+                identity_weight * (1 - iter_source_swap) + trace_weight * iter_trace
+            )
+
+        return scores
+
+    def _calculate_summary_score(
+        self, metric: dict, models: list[str] = ["simswap", "faceshifter", "hififace"]
+    ) -> dict:
+        scores = {key: {k: 0 for k in metric[key].keys()} for key in models}
+        identity_weight = self.config.evaluate.score.identity
+        trace_weight = self.config.evaluate.score.trace
+
+        for model in models:
+            for key in scores[model].keys():
+                source_swap = (
+                    metric[model][key]["pert_swap"][0]
+                    / metric[model][key]["pert_swap"][1]
+                )
+                trace = metric[model][key]["cloak"][0] / metric[model][key]["cloak"][1]
+
+                scores[model][key] = (
+                    identity_weight * (1 - source_swap) + trace_weight * trace
+                )
+
+        return scores
+
+    def _generate_summary_score_log(self, scores: dict) -> str:
+        total_scores = []
+        for effec in scores:
+            total_scores.append(f"{scores[effec]:.3f}")
+
+        return str(tuple(total_scores))

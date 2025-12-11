@@ -17,7 +17,9 @@ ROOT=$(dirname $(dirname $(realpath "$0")))
 
 if [[ $function == 'metric' ]]
 then
-    PYTHONPATH="$ROOT/src:$ROOT/third_party" python "$ROOT/src/unify/main.py" third_party=unify third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
+    PYTHONPATH="$ROOT" python -m src.unify.main \
+    third_party=unify third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level \
+    evaluate.effectiveness.perturb=false evaluate.effectiveness.ASRo=false
 else
-    echo "⚠️ Oops! That function doesn't exist"
+    echo "⚠️ Oops! That function doesn't exist."
 fi
