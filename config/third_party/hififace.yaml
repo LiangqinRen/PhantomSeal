@@ -1,6 +1,6 @@
 name: hififace
 function: metric
-third_party_root_dir: ${root_dir}/third_party/HifiFace
+project_root: ${root_dir}/third_party/HifiFace
 
 origin:
   config_path: config/model.yaml
@@ -22,18 +22,18 @@ defense:
   epsilon: 0.003
   limit:
     R: 0.075
-    G: 0.025
+    G: 0.030
     B: 0.075
-    identity_3d: 30
-    identity_id: 15
+    identity_3d: 15
+    identity_id: 5
     context_final: 50
     context_3d: 100
   weight:
-    perturb: 10000
-    identity_3d: 10000
-    identity_id: 5000
-    cloak_3d: 10000
-    cloak_id: 5000
+    perturb: 1000
+    identity_3d: 500
+    identity_id: 1500
+    cloak_3d: 5000
+    cloak_id: 15000
     context_3d: 0
     context_middle: 0
     context_final: 0

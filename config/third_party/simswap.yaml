@@ -1,6 +1,6 @@
 name: simswap
 function: metric
-third_party_root_dir: ${root_dir}/third_party/SimSwap
+project_root: ${root_dir}/third_party/SimSwap
 
 dataset:
   sample_dir: data/vggface2_samples_224
@@ -23,7 +23,7 @@ defense:
   epsilon: 0.005
   limit:
     R: 0.075
-    G: 0.03
+    G: 0.030
     B: 0.075
     context: 2.5
     identity: 30

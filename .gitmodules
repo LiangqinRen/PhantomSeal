@@ -18,7 +18,7 @@
 	url = https://github.com/wl-zhao/DiffSwap.git
 [submodule "third_party/DiffFace"]
 	path = third_party/DiffFace
-	url = https://github.com/hxngiee/DiffFace.git
+	url = https://github.com/LiangqinRen/DiffFace.git
 [submodule "third_party/insightface"]
 	path = third_party/insightface
 	url = https://github.com/deepinsight/insightface.git

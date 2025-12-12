@@ -1,10 +1,11 @@
 from src.diffface.base import Base
 from src.dataset import FFHQDataset
 from src.utils import save_tensor_imgs
-from src.evaluate import Utility, Effectiveness, Cloak
+from src.evaluate import ScoreCalculator
 import src.metric as metric
 
 import torch
+import textwrap
 import torch.nn.functional as F
 from pathlib import Path
 from torch.utils.data import DataLoader
@@ -19,32 +20,61 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
-        self.utility = Utility(logger, config)
-        self.effectiveness = Effectiveness(logger, config)
-        self.cloak = Cloak(logger, config, self.effectiveness)
+        self.score_calculator = ScoreCalculator(logger, config)
 
         self.face_ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
         self.target_nonface_id = 10
 
     def metric(self) -> None:
-        data = metric.get_metric_data_template(self.effectiveness)
+        metrics = metric.get_metric_data_template(self.effectiveness)
 
         dataset = FFHQDataset(self.config)
         dataloader = DataLoader(
-            dataset, batch_size=self.config.third_party.defense.batch_size
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
         )
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
             x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            torch.set_grad_enabled(False)
 
             results = self._face_swap_per_image(imgs_A, imgs_B)
             rev_results = self._face_swap_per_image(imgs_B, imgs_A)
             # cloak_results = self._face_swap_per_image(cloak_imgs, imgs_B)
             pert_src_results = self._face_swap_per_image(x_imgs, imgs_B)
             pert_tgt_results = self._face_swap_per_image(imgs_B, x_imgs)
+
+            (
+                pert_utilities,
+                pert_as_src_swap_utilities,
+                pert_as_tgt_swap_utilities,
+                source_effectivenesses,
+                target_effectivenesses,
+            ) = metric.get_defense_metric(
+                self.utility,
+                self.effectiveness,
+                imgs_A,
+                imgs_B,
+                x_imgs,
+                cloak_imgs,
+                results,
+                pert_src_results,
+                rev_results,
+                pert_tgt_results,
+            )
+
+            metric.merge_metric(
+                self.effectiveness,
+                metrics,
+                pert_utilities,
+                pert_as_src_swap_utilities,
+                pert_as_tgt_swap_utilities,
+                source_effectivenesses,
+                target_effectivenesses,
+            )
             save_tensor_imgs(
                 self.image_dir,
                 idx,
@@ -70,38 +100,8 @@ class Defense(Base):
                     pert_src_results,
                     pert_tgt_results,
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
-
-            (
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
-            ) = metric.get_defense_metric(
-                self.utility,
-                self.effectiveness,
-                imgs_A,
-                imgs_B,
-                x_imgs,
-                cloak_imgs,
-                results,
-                pert_src_results,
-                rev_results,
-                pert_tgt_results,
-            )
-
-            metric.merge_metric(
-                self.effectiveness,
-                data,
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
-            )
-
             del imgs_A, imgs_B, x_imgs, cloak_imgs
             del (
                 results,
@@ -112,30 +112,35 @@ class Defense(Base):
             )
             self._free_gpu()
 
-            self.logger.info(
+            scores = self.score_calculator.calculate_score(
+                source_effectivenesses, target_effectivenesses, metrics
+            )
+
+            iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
+            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
             pert utility: {metric.generate_iter_utility_log(pert_utilities)}
             pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
             pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
             pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
             pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            scores: {metric.generate_iter_score_log(scores)}
             """
             )
-
-            self.logger.info(
+            summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(data, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(data, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(data, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(data, 'tgt_pert_swap_effectiveness')}
+            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
+            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
+            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
+            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
+            scores: {metric.generate_summary_score_log(scores)}
             """
             )
 
-    def validate(self) -> None:
-        pass
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
 
     def _face_swap_per_image(self, imgs_A: Tensor, imgs_B: Tensor) -> Tensor:
         assert imgs_A.shape[0] == imgs_B.shape[0]
@@ -159,12 +164,28 @@ class Defense(Base):
         return torch.cat(results, dim=0).cuda()
 
     def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor, silent=True) -> Tensor:
-        l2_loss = nn.MSELoss()
-        cloak_identity = self._get_imgs_identity(
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                cloak_imgs
+        def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
+            return ((x - y) ** 2).view(x.size(0), -1).mean(dim=1)
+
+        x_imgs = imgs.clone().detach() + torch.randn_like(imgs) * 1e-5
+
+        with torch.no_grad():
+            self_identity = self._get_imgs_identity(
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                    x_imgs
+                )
             )
-        ).detach()
+            cloak_identity = self._get_imgs_identity(
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
+                    cloak_imgs
+                )
+            )
+
+        epsilon = (
+            self.config.third_party.defense.epsilon
+            * (torch.max(x_imgs) - torch.min(x_imgs))
+            / 2
+        )
         limits = torch.tensor(
             [
                 self.config.third_party.defense.limit.R,
@@ -175,19 +196,16 @@ class Defense(Base):
             device=self.device,
         ).view(1, 3, 1, 1)
 
-        x0 = imgs.detach()
-        steps = int(self.config.third_party.defense.epochs)
-        alpha = limits / steps
-        delta = torch.empty_like(x0).uniform_(-1.0, 1.0) * limits
-        delta = torch.max(torch.min(delta, 1 - x0), -x0)
-        m = torch.zeros_like(x0)
+        B = imgs.size(0)
+        best_imgs = imgs.clone()
+        best_loss = torch.full((B,), float("inf"), device=imgs.device)
 
-        best_imgs, best_loss = x0.clone(), float("inf")
-        for epoch in range(steps):
-            x_imgs = (x0 + delta).clamp(0, 1).detach().requires_grad_(True)
+        for epoch in range(self.config.third_party.defense.epochs):
+            x_imgs = x_imgs.clone().detach().requires_grad_(True)
 
-            pert_diff_loss = self.config.third_party.defense.weight.perturb * l2_loss(
-                x_imgs, imgs.detach()
+            pert_diff_loss = (
+                self.config.third_party.defense.weight.perturb
+                * l2_per_image(x_imgs, imgs.detach())
             )
 
             x_identity = self._get_imgs_identity(
@@ -195,9 +213,19 @@ class Defense(Base):
                     x_imgs
                 )
             )
-            identity_diff_loss = (
+            identity_diff = (
                 self.config.third_party.defense.weight.identity
-                * l2_loss(x_identity, cloak_identity)
+                * l2_per_image(x_identity, self_identity)
+            )
+            identity_diff_loss = -torch.clamp(
+                identity_diff,
+                0,
+                self.config.third_party.defense.limit.identity,
+            )
+
+            cloak_diff_loss = (
+                self.config.third_party.defense.weight.cloak
+                * l2_per_image(x_identity, cloak_identity)
             )
 
             src_logits = self.netSeg(
@@ -216,27 +244,41 @@ class Defense(Base):
                 seg_margin_loss + 0.5 * face_prob_mean
             )
 
-            loss = pert_diff_loss + identity_diff_loss + context_loss
+            loss_per_img = (
+                pert_diff_loss + identity_diff_loss + cloak_diff_loss + context_loss
+            )
+            loss = loss_per_img.mean()
             loss.backward()
 
-            g = x_imgs.grad
-            m = 0.9 * m + g / (g.abs().mean(dim=(1, 2, 3), keepdim=True) + 1e-8)
-            grad_sign = m.sign()
+            if x_imgs.grad is not None:
+                grad_sign = x_imgs.grad.sign().detach()
+            else:
+                grad_sign = torch.zeros_like(x_imgs)
 
-            delta = delta - alpha * grad_sign
-            delta = torch.clamp(delta, -limits, limits)
-            delta = torch.max(torch.min(delta, 1 - x0), -x0)
+            x_imgs = x_imgs.detach() - epsilon * grad_sign
+            x_imgs = torch.clamp(
+                x_imgs,
+                min=imgs - limits,
+                max=imgs + limits,
+            )
+            x_imgs = torch.clamp(x_imgs, 0, 1)
 
-            x_curr = (x0 + delta).clamp(0, 1).detach()
+            loss_per_img_detached = loss_per_img.detach()
+            improved = loss_per_img_detached < best_loss
+            best_loss[improved] = loss_per_img_detached[improved]
+            best_imgs[improved] = x_imgs[improved].detach()
 
-            with torch.no_grad():
-                if loss.item() < best_loss:
-                    best_loss = loss.item()
-                    best_imgs = x_curr.clone()
-
-            if not silent:
+            if (
+                not self.config.third_party.defense.silent_perturb
+                and (epoch + 1) % self.config.third_party.defense.log_interval == 0
+            ):
                 self.logger.info(
-                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs}]loss: {loss:.5f}({pert_diff_loss.item():.5f}, {identity_diff_loss.item():.5f}, {context_loss.item():.5f})"
+                    f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}] "
+                    f"loss: {loss.item():.5f}("
+                    f"{pert_diff_loss.mean().item():.5f}, "
+                    f"{identity_diff_loss.mean().item():.5f}, "
+                    f"{cloak_diff_loss.mean().item():.5f}, "
+                    f"{context_loss.mean().item():.5f})"
                 )
 
         return best_imgs

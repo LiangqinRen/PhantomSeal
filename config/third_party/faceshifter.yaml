@@ -1,6 +1,6 @@
 name: faceshifter
 function: metric
-third_party_root_dir: ${root_dir}/third_party/FaceShifter/ModelC
+project_root: ${root_dir}/third_party/FaceShifter/ModelC
 
 origin:
   model_path: third_party/FaceShifter/ModelC/face_modules/model_ir_se50.pth
@@ -22,14 +22,14 @@ defense:
   epsilon: 0.005
   limit:
     R: 0.075
-    G: 0.03
+    G: 0.030
     B: 0.075
-    identity: 30
+    identity: 100
     context: 30
   weight:
     perturb: 1000
-    identity: 10000
-    cloak: 10000
+    identity: 35000
+    cloak: 1000000
     context: 0
   silent_perturb: false
   only_save_summary: true

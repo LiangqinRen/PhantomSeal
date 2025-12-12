@@ -191,7 +191,6 @@ class FFHQDataset(Dataset):
         self.root_dir = Path(config.third_party.dataset.metric_dir)
 
         self.metric_pairs = config.third_party.dataset.metric_pairs
-        self.A, self.B = self._get_double_imgs_list()
 
         image_size = config.third_party.dataset.input_size
         self.transform = transforms.Compose(
@@ -201,31 +200,32 @@ class FFHQDataset(Dataset):
             ]
         )
 
-    def _get_double_imgs_list(self):
-        images_path = [f for f in self.root_dir.iterdir() if f.is_file()]
-        images_path = sorted(images_path)
-        random.shuffle(images_path)
+        self.images = self._get_images_list()
+        self.index_pairs = self._get_random_pairs()
 
-        A, B = [], []
-        for idx, img_path in enumerate(images_path):
-            if idx % 2 == 0:
-                A.append(img_path)
-            else:
-                B.append(img_path)
+    def _get_images_list(self) -> list[Path]:
+        images = sorted([f for f in self.root_dir.iterdir() if f.is_file()])
+        return images
 
-        A, B = sorted(A), sorted(B)
-        random.shuffle(A)
-        random.shuffle(B)
+    def _get_random_pairs(self) -> list[tuple[int, int]]:
+        metric_pairs = self.config.third_party.dataset.metric_pairs
+        image_count = len(self.images)
+        index_pairs = []
+        for _ in range(metric_pairs):
+            i = random.randrange(image_count)
+            j = random.randrange(image_count)
+            while j == i:
+                j = random.randrange(image_count)
+            index_pairs.append((i, j))
 
-        min_count = min(len(A), len(B), self.metric_pairs)
-
-        return A[:min_count], B[:min_count]
+        return index_pairs
 
     def __len__(self):
-        return len(self.A)
+        return self.config.third_party.dataset.metric_pairs
 
     def __getitem__(self, idx):
-        img_A_path, img_B_path = self.A[idx], self.B[idx]
+        idx_a, idx_b = self.index_pairs[idx]
+        img_A_path, img_B_path = self.images[idx_a], self.images[idx_b]
 
         img_A = self.transform(Image.open(img_A_path).convert("RGB"))
         img_B = self.transform(Image.open(img_B_path).convert("RGB"))

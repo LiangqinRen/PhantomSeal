@@ -24,9 +24,7 @@ class Base:
             "ignore", category=FutureWarning, module=".*matlab_cp2tform.*"
         )
 
-        face_modules_dir = (
-            Path(self.config.third_party.third_party_root_dir) / "face_modules"
-        )
+        face_modules_dir = Path(self.config.third_party.project_root) / "face_modules"
         with use_project([face_modules_dir]):
             from third_party.FaceShifter.ModelC.face_modules.mtcnn import MTCNN
             from third_party.FaceShifter.ModelC.network.AEI_Net import AEI_Net
@@ -47,7 +45,7 @@ class Base:
         )
         self.arcface = self.arcface.eval().cuda()
 
-        with cd(Path(self.config.third_party.third_party_root_dir)):
+        with cd(Path(self.config.third_party.project_root)):
             self.detector = MTCNN()
 
         self.G = AEI_Net(c_id=512)

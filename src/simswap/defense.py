@@ -1155,12 +1155,12 @@ class Defense(Base):
             )
 
             x_identity = self._get_imgs_identity(x_imgs)
-            identity_raw = (
+            identity_diff = (
                 self.config.third_party.defense.weight.identity
                 * l2_per_image(x_identity, self_identity)
             )
             identity_diff_loss = -torch.clamp(
-                identity_raw,
+                identity_diff,
                 0,
                 self.config.third_party.defense.limit.identity,
             )

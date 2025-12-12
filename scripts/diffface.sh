@@ -11,5 +11,5 @@ if [[ $function == 'metric' || $function == 'validate' ]]
 then
     PYTHONPATH="$ROOT" python -m src.diffface.main third_party=diffface third_party.function=$function
 else
-    echo "⚠️ Oops! That function doesn't exist"
+    echo "⚠️ Oops! That function doesn't exist."
 fi

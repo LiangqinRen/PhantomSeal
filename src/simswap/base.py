@@ -26,7 +26,7 @@ class Base:
         self.logger = logger
         self.config = config
 
-        root_dir = Path(config.third_party.third_party_root_dir)
+        root_dir = Path(config.third_party.project_root)
         with use_project([root_dir]), cd(root_dir):
             from models.models import create_model
             from models import arcface_models

@@ -18,7 +18,7 @@ class Base:
         self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
         self.device = torch.device("cuda")
-        root_dir = Path(self.config.third_party.third_party_root_dir)
+        root_dir = Path(self.config.third_party.project_root)
         with cd(root_dir), use_project([root_dir]):
             from hififace_pl import HifiFace
 

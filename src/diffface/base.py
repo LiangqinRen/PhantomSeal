@@ -1,17 +1,6 @@
-from third_party.DiffFace.models.guided_diffusion.script_util import (
-    create_model_and_diffusion,
-    model_and_diffusion_defaults,
-)
-from third_party.DiffFace.optimization.augmentations import ImageAugmentations
-from third_party.DiffFace.utils.module import SpecificNorm
-from third_party.DiffFace.models.parsing import BiSeNet
-from third_party.DiffFace.models.gaze_estimation.gaze_estimator import (
-    Gaze_estimator,
-)
-from third_party.DiffFace.utils.module import SpecificNorm, cosin_metric
-from third_party.DiffFace.utils.eye_crop import get_eye_coords
-from third_party.DiffFace.models.gaze_estimation.gaze_estimator import Gaze_estimator
-from src.utils import cd
+from src.utils import cd, use_project
+from src.evaluate import Utility, Effectiveness, Cloak, DistanceCloakSelector
+
 
 import torch
 import lpips
@@ -29,29 +18,27 @@ from torch.nn.parallel.data_parallel import DataParallel
 from torchvision import transforms
 from torch.nn.functional import mse_loss, l1_loss
 
-warnings.filterwarnings("ignore", category=SourceChangeWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
 
-ROOT = Path(__file__).resolve().parents[1]
-DIFFFACE_ROOT = ROOT.parent / "third_party" / "DiffFace"
-sys.path.insert(0, str(DIFFFACE_ROOT))
-ResNet = import_module("models.models").ResNet
-add_safe_globals([DataParallel, ResNet])
-_ORIG_TORCH_LOAD = torch.load
+# ROOT = Path(__file__).resolve().parents[1]
+# DIFFFACE_ROOT = ROOT.parent / "third_party" / "DiffFace"
+# sys.path.insert(0, str(DIFFFACE_ROOT))
+# ResNet = import_module("models.models").ResNet
+# add_safe_globals([DataParallel, ResNet])
+# _ORIG_TORCH_LOAD = torch.load
 
 
-def _load_patch(*args, **kwargs):
-    if (
-        args
-        and isinstance(args[0], str)
-        and os.path.basename(args[0]) in ("Arcface_model_only.tar", "GazeEstimator.pt")
-    ):
-        kwargs.setdefault("weights_only", False)
-        kwargs.setdefault("map_location", "cpu")
-    return _ORIG_TORCH_LOAD(*args, **kwargs)
+# def _load_patch(*args, **kwargs):
+#     if (
+#         args
+#         and isinstance(args[0], str)
+#         and os.path.basename(args[0]) in ("Arcface_model_only.tar", "GazeEstimator.pt")
+#     ):
+#         kwargs.setdefault("weights_only", False)
+#         kwargs.setdefault("map_location", "cpu")
+#     return _ORIG_TORCH_LOAD(*args, **kwargs)
 
 
-torch.load = _load_patch
+# torch.load = _load_patch
 
 
 class Base:
@@ -60,73 +47,97 @@ class Base:
         self.logger = logger
         self.config = config
 
-        self.project_root = Path(config.third_party.project_root)
-
-        self.model_config = model_and_diffusion_defaults()
-        self.model_config.update(
-            {
-                "attention_resolutions": "32, 16, 8",
-                "class_cond": False,
-                "diffusion_steps": 1000,
-                "rescale_timesteps": True,
-                "timestep_respacing": str(config.third_party.origin.timestep_respacing),
-                "image_size": 256,
-                "learn_sigma": True,
-                "noise_schedule": "linear",
-                "num_channels": 256,
-                "num_head_channels": 64,
-                "num_res_blocks": 2,
-                "resblock_updown": True,
-                "use_fp16": True,
-                "use_scale_shift_norm": True,
-            }
-        )
+        warnings.filterwarnings("ignore", category=SourceChangeWarning)
+        warnings.filterwarnings("ignore", category=UserWarning)
 
         self.device = "cuda:0"
 
-        with cd(Path("third_party") / "DiffFace"):
+        root_dir = Path(self.config.third_party.project_root)
+        with cd(root_dir), use_project([root_dir]):
+            from models.guided_diffusion.script_util import (
+                create_model_and_diffusion,
+                model_and_diffusion_defaults,
+            )
+            from optimization.augmentations import (
+                ImageAugmentations,
+            )
+            from utils.module import SpecificNorm
+            from models.parsing import BiSeNet
+            from models.gaze_estimation.gaze_estimator import (
+                Gaze_estimator,
+            )
+            from utils.module import SpecificNorm, cosin_metric
+            from utils.eye_crop import get_eye_coords
+            from models.gaze_estimation.gaze_estimator import (
+                Gaze_estimator,
+            )
+
+            self.cosin_metric = cosin_metric
+            self.get_eye_coords = get_eye_coords
+
+            self.model_config = model_and_diffusion_defaults()
+            self.model_config.update(
+                {
+                    "attention_resolutions": "32, 16, 8",
+                    "class_cond": False,
+                    "diffusion_steps": 1000,
+                    "rescale_timesteps": True,
+                    "timestep_respacing": str(
+                        config.third_party.origin.timestep_respacing
+                    ),
+                    "image_size": 256,
+                    "learn_sigma": True,
+                    "noise_schedule": "linear",
+                    "num_channels": 256,
+                    "num_head_channels": 64,
+                    "num_res_blocks": 2,
+                    "resblock_updown": True,
+                    "use_fp16": True,
+                    "use_scale_shift_norm": True,
+                }
+            )
+
             self.model, self.diffusion = create_model_and_diffusion(**self.model_config)
-        self.model.load_state_dict(
-            torch.load(
-                f"{self.project_root}/checkpoints/Model.pt",
-                map_location="cpu",
+
+            self.model.load_state_dict(
+                torch.load(f"{root_dir}/checkpoints/Model.pt", map_location=self.device)
             )
-        )
-        self.model.requires_grad_(False).eval().to(self.device)
-        for name, param in self.model.named_parameters():
-            if "qkv" in name or "norm" in name or "proj" in name:
-                param.requires_grad_()
-        if self.model_config["use_fp16"]:
-            self.model.convert_to_fp16()
+            self.model.requires_grad_(False).eval().to(self.device)
+            for name, param in self.model.named_parameters():
+                if "qkv" in name or "norm" in name or "proj" in name:
+                    param.requires_grad_()
+            if self.model_config["use_fp16"]:
+                self.model.convert_to_fp16()
 
-        self.lpips_model = lpips.LPIPS(net="vgg").to(self.device)
+            # self.lpips_model = lpips.LPIPS(net="vgg").to(self.device)
 
-        self.image_augmentations = ImageAugmentations(
-            112, config.third_party.origin.aug_num
-        )
-
-        netArc_checkpoint = torch.load(
-            f"{self.project_root}/checkpoints/Arcface_model_only.tar"
-        )
-        netArc = netArc_checkpoint["model"].module
-        self.netArc = netArc.to(self.device).eval()
-
-        self.spNorm = SpecificNorm()
-        self.netSeg = BiSeNet(n_classes=19).to(self.device)
-        self.netSeg.load_state_dict(
-            torch.load(
-                f"{self.project_root}/checkpoints/FaceParser.pth",
-                map_location="cpu",
-                weights_only=False,
+            self.image_augmentations = ImageAugmentations(
+                112, config.third_party.origin.aug_num
             )
-        )
-        self.netSeg.eval()
 
-        with cd(Path("third_party") / "DiffFace"):
+            netArc_checkpoint = torch.load(f"checkpoints/Arcface_model_only.tar")
+            netArc = netArc_checkpoint["model"].module
+            self.netArc = netArc.to(self.device).eval()
+
+            self.spNorm = SpecificNorm()
+            self.netSeg = BiSeNet(n_classes=19).to(self.device)
+            self.netSeg.load_state_dict(
+                torch.load(
+                    f"checkpoints/FaceParser.pth",
+                    map_location="cpu",
+                    weights_only=False,
+                )
+            )
+            self.netSeg.eval()
+
             self.netGaze = Gaze_estimator().to(self.device)
             self.fa = face_alignment.FaceAlignment(
                 face_alignment.LandmarksType.TWO_D, flip_input=False
             )
+
+        self.utility = Utility(logger, config)
+        self.effectiveness = Effectiveness(logger, config)
+        self.cloak = Cloak(logger, config, self.effectiveness)
 
     def id_loss(self, x_in, targ, embedder):
         id_loss = torch.tensor(0)
@@ -143,7 +154,7 @@ class Base:
         targ_id = embedder(targ)
         targ_id = F.normalize(targ_id, p=2, dim=1)
 
-        dists = 1 - cosin_metric(src_id, targ_id)
+        dists = 1 - self.cosin_metric(src_id, targ_id)
 
         # We want to sum over the averages
         for i in range(1):
@@ -212,7 +223,7 @@ class Base:
                         src_eye = x_in * 0.5 + 0.5
                         targ_eye = tgt_img
                         targ_eye = targ_eye * 0.5 + 0.5
-                        llx, lly, lrx, lry, rlx, rly, rrx, rry = get_eye_coords(
+                        llx, lly, lrx, lry, rlx, rly, rrx, rry = self.get_eye_coords(
                             self.fa, targ_eye
                         )
 
