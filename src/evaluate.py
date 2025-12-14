@@ -18,9 +18,11 @@ import hashlib
 import json
 import boto3
 import face_recognition
+import threading
 import numpy as np
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+from collections import deque
 from omegaconf import OmegaConf
 from http.client import HTTPSConnection
 from datetime import datetime, timedelta, timezone
@@ -52,6 +54,33 @@ def _load_patch(*args, **kwargs):
 
 
 torch.load = _load_patch
+
+
+class RateLimiter:
+    def __init__(self, rps: float):
+        if rps <= 0:
+            raise ValueError("RateLimiter rps must be positive!")
+
+        self.rps = rps
+
+        self._call_history = deque()
+        self._lock = threading.Lock()
+
+    def wait_if_needed(self) -> None:
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                while self._call_history and now - self._call_history[0] >= 1.0:
+                    self._call_history.popleft()
+
+                if len(self._call_history) < self.rps:
+                    self._call_history.append(now)
+                    return
+
+                wait_time = 1.0 - (now - self._call_history[0])
+
+            if wait_time > 0:
+                time.sleep(min(wait_time, 0.1))
 
 
 class Utility:
@@ -134,6 +163,8 @@ class Effectiveness:
         arcface_diffface_checkpoint = torch.load(f"checkpoints/Arcface_model_only.tar")
         self.arcface_diffface = arcface_diffface_checkpoint["model"].module
         self.arcface_diffface = self.arcface_diffface.cuda().eval()
+
+        self.facepp_limiter = RateLimiter(config.evaluate.facepp.qps)
 
     def _init_functions(self) -> dict:
         candidate_functions = {}
@@ -293,6 +324,7 @@ class Effectiveness:
         fail_count = 0
         while fail_count < 5:
             try:
+                self.facepp_limiter.wait_if_needed()
                 response = requests.post(url, data=payload)
                 if response.status_code == 200:
                     response = response.json()
@@ -312,11 +344,11 @@ class Effectiveness:
                 elif response.status_code == 400:
                     return (0, 1)
                 elif response.status_code == 403:
-                    time.sleep(10)
                     fail_count += 1
                     self.logger.debug(
                         f"Face++ API rate limit reached, retrying... {response.status_code}, {response.text}"
                     )
+                    time.sleep(1)
                 else:
                     self.logger.error(response)
                     return (0, 1e-10)
@@ -326,17 +358,18 @@ class Effectiveness:
 
         return (0, 1e-10)
 
-    def _get_facepp_matching(self, imgs1: Tensor, imgs2: Tensor):
-        api_keys = self.config.evaluate.facepp.api_key
-        api_secrets = self.config.evaluate.facepp.api_secret
-        key_secret_pairs = list(zip(api_keys, api_secrets))
-        with ThreadPoolExecutor() as executor:
+    def _get_facepp_matching(self, imgs1: Tensor, imgs2: Tensor) -> tuple[float, float]:
+        api_key = self.config.evaluate.facepp.api_key
+        api_secret = self.config.evaluate.facepp.api_secret
+        thread_limit = self.config.evaluate.facepp.thread_limit
+        with ThreadPoolExecutor(max_workers=thread_limit) as executor:
             futures = [
                 executor.submit(
                     self._get_facepp_matching_single,
                     imgs1[i],
                     imgs2[i],
-                    *random.choice(key_secret_pairs),
+                    api_key,
+                    api_secret,
                 )
                 for i in range(imgs1.shape[0])
             ]

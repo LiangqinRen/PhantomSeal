@@ -7,6 +7,8 @@ face_recognition:
 
 facepp:
   use: true
+  qps: 10
+  thread_limit: 5
   compare_url: "https://api-us.faceplusplus.com/facepp/v3/compare"
   api_key:
     - ""
