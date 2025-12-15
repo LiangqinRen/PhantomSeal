@@ -252,29 +252,28 @@ class Defense(Base):
             )
 
             x_identity = get_imgs_identity(x_imgs)
-            identity_diff = (
-                self.config.third_party.defense.weight.identity
-                * l2_per_image(x_identity, self_identity)
-            )
-            identity_diff_loss = -torch.clamp(
-                identity_diff,
+            identity_diff = torch.clamp(
+                l2_per_image(x_identity, self_identity),
                 0,
                 self.config.third_party.defense.limit.identity,
             )
+            identity_diff_loss = (
+                -self.config.third_party.defense.weight.identity * identity_diff
+            )
+
             cloak_diff_loss = (
                 self.config.third_party.defense.weight.cloak
                 * l2_per_image(x_identity, cloak_identity)
             )
 
             x_latent_code = self.G.encoder(x_imgs)
-            latent_diff = self.config.third_party.defense.weight.context * sum(
-                l2_per_image(x1, x2.detach())
-                for x1, x2 in zip(x_latent_code[6:7], imgs_latent_code[6:7])
-            )
-            context_diff_loss = -torch.clamp(
-                latent_diff,
+            context_diff = torch.clamp(
+                l2_per_image(x_latent_code, imgs_latent_code),
                 0,
                 self.config.third_party.defense.limit.context,
+            )
+            context_diff_loss = (
+                -self.config.third_party.defense.weight.context * context_diff
             )
 
             loss_per_img = (

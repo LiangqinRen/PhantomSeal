@@ -25,8 +25,8 @@ defense:
     R: 0.075
     G: 0.030
     B: 0.075
-    context: 2.5
-    identity: 30
+    context: 25
+    identity: 0.003
   weight:
     perturb: 1000
     identity: 10000
@@ -50,7 +50,7 @@ lowkey:
 robustness:
   ai_beauty: false
   ai_beauty_tool: null
-  logo_img_path: data/samples_224/ccs.png
+  logo_img_path: data/vggface2_samples_224/ccs.png
 
 misc:
   dataset: vggface2

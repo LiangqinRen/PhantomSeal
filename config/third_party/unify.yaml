@@ -29,10 +29,10 @@ defense:
     R: 0.075
     G: 0.030
     B: 0.075
-    simswap: 30
-    faceshifter: 100
-    hififace_3d: 15
-    hififace_id: 5
+    simswap: 0.003
+    faceshifter: 0.003
+    hififace_3d: 0.03
+    hififace_id: 0.0003
   weight:
     perturb: 1000
     simswap_id: 10000

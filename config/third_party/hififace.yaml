@@ -24,10 +24,10 @@ defense:
     R: 0.075
     G: 0.030
     B: 0.075
-    identity_3d: 15
-    identity_id: 5
+    identity_3d: 0.03
+    identity_id: 0.0003
     context_final: 50
-    context_3d: 100
+    context_3d: 0
   weight:
     perturb: 1000
     identity_3d: 500

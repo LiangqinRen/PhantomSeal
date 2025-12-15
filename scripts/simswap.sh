@@ -5,12 +5,10 @@ set -e
 function=$1
 function=`echo $function | tr '[:upper:]' '[:lower:]'`
 
+log_level="info"
+suffix=""
 if [ $# == 2 ] && [ "$2" == "debug" ]; then
     suffix="-debug"
-    log_level="debug"
-else
-    suffix=""
-    log_level="info"
 fi
 
 ROOT=$(dirname $(dirname $(realpath "$0")))
@@ -20,7 +18,11 @@ then
     PYTHONPATH="$ROOT" python -m src.simswap.main third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
 elif [[ $function == 'metric' || $function == 'adaptive_attack' || $function == 'adaptive_attack_self' ]]
 then
-    PYTHONPATH="$ROOT" python -m src.simswap.main third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level
+    PYTHONPATH="$ROOT" python -m src.simswap.main \
+    third_party=simswap \
+    third_party.function=$function \
+    log.file_suffix=$suffix \
+    log.record_level=$log_level
 elif [[ $function == 'ai_beauty' ]]
 then
     PYTHONPATH="$ROOT" python -m src.simswap.main third_party=simswap third_party.function=metric log.file_suffix=$suffix log.record_level=$log_level third_party.robustness.ai_beauty=true third_party.robustness.ai_beauty_tool=ai_lab_tools 

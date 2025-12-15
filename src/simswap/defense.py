@@ -23,6 +23,9 @@ class Defense(Base):
         self.robustness = Robustness(logger, config)
         self.score_calculator = ScoreCalculator(logger, config)
 
+        notes_path = Path(self.config.notes_path)
+        notes_path.touch(exist_ok=True)
+
         if self.config.third_party.robustness.ai_beauty:
             logger.info(
                 f"AI Beauty enabled with {self.config.third_party.robustness.ai_beauty_tool}"
@@ -1155,14 +1158,13 @@ class Defense(Base):
             )
 
             x_identity = self._get_imgs_identity(x_imgs)
-            identity_diff = (
-                self.config.third_party.defense.weight.identity
-                * l2_per_image(x_identity, self_identity)
-            )
-            identity_diff_loss = -torch.clamp(
-                identity_diff,
+            identity_diff = torch.clamp(
+                l2_per_image(x_identity, self_identity),
                 0,
                 self.config.third_party.defense.limit.identity,
+            )
+            identity_diff_loss = (
+                -self.config.third_party.defense.weight.identity * identity_diff
             )
 
             cloak_diff_loss = (
@@ -1171,13 +1173,13 @@ class Defense(Base):
             )
 
             x_latent_code = self.target.netG.encoder(x_imgs)
-            context_raw = self.config.third_party.defense.weight.context * l2_per_image(
-                x_latent_code, imgs_latent_code
-            )
-            context_diff_loss = -torch.clamp(
-                context_raw,
+            context_diff = torch.clamp(
+                l2_per_image(x_latent_code, imgs_latent_code),
                 0,
                 self.config.third_party.defense.limit.context,
+            )
+            context_diff_loss = (
+                -self.config.third_party.defense.weight.context * context_diff
             )
 
             loss_per_img = (

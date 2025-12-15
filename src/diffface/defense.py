@@ -207,15 +207,15 @@ class Defense(Base):
 
             # identity
             x_identity = self._get_imgs_identity(self._normalize(x_imgs))
-            identity_diff = (
-                self.config.third_party.defense.weight.identity
-                * l2_per_image(x_identity, self_identity)
-            )
-            identity_diff_loss = -torch.clamp(
-                identity_diff,
+            identity_diff = torch.clamp(
+                l2_per_image(x_identity, self_identity),
                 0,
                 self.config.third_party.defense.limit.identity,
             )
+            identity_diff_loss = (
+                -self.config.third_party.defense.weight.identity * identity_diff
+            )
+
             # cloak
             cloak_diff_loss = (
                 self.config.third_party.defense.weight.cloak

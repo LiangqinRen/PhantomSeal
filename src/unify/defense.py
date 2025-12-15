@@ -190,14 +190,14 @@ class Defense(Base):
             # simswap loss
             x_simswap_identity = self.get_simswap_identity(x_imgs)
 
-            simswap_identity_diff = (
-                self.config.third_party.defense.weight.simswap_id
-                * l2_per_image(x_simswap_identity, simswap_self_identity)
-            )
-            simswap_identity_diff_loss = -torch.clamp(
-                simswap_identity_diff,
+            simswap_identity_diff = torch.clamp(
+                l2_per_image(x_simswap_identity, simswap_self_identity),
                 0,
                 self.config.third_party.defense.limit.simswap,
+            )
+            simswap_identity_diff_loss = (
+                -self.config.third_party.defense.weight.simswap_id
+                * simswap_identity_diff
             )
 
             simswap_cloak_diff_loss = (
@@ -209,28 +209,28 @@ class Defense(Base):
             x_hififace_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, :80]
             x_hififace_id = self.get_hififace_identity(x_imgs)
 
-            hififace_3d_diff = (
-                self.config.third_party.defense.weight.hififace_self_3d
-                * l2_per_image(x_hififace_3d, hififace_self_3d)
-            )
-            hififace_3d_diff_loss = -torch.clamp(
-                hififace_3d_diff,
+            hififace_3d_diff = torch.clamp(
+                l2_per_image(x_hififace_3d, hififace_self_3d),
                 0,
                 self.config.third_party.defense.limit.hififace_3d,
+            )
+            hififace_3d_diff_loss = (
+                -self.config.third_party.defense.weight.hififace_self_3d
+                * hififace_3d_diff
             )
             hififace_3d_cloak_loss = (
                 self.config.third_party.defense.weight.hififace_cloak_3d
                 * l2_per_image(x_hififace_3d, hififace_cloak_3d)
             )
 
-            hififace_id_diff = (
-                self.config.third_party.defense.weight.hififace_self_id
-                * l2_per_image(x_hififace_id, hififace_self_id)
-            )
-            hififace_id_diff_loss = -torch.clamp(
-                hififace_id_diff,
+            hififace_id_diff = torch.clamp(
+                l2_per_image(x_hififace_id, hififace_self_id),
                 0,
                 self.config.third_party.defense.limit.hififace_id,
+            )
+            hififace_id_diff_loss = (
+                -self.config.third_party.defense.weight.hififace_self_id
+                * hififace_id_diff
             )
             hififace_id_cloak_loss = (
                 self.config.third_party.defense.weight.hififace_cloak_id
@@ -240,14 +240,14 @@ class Defense(Base):
             # faceshifter loss
             x_faceshifter_identity = self.get_faceshifter_identity(x_imgs)
 
-            faceshifter_identity_diff = (
-                self.config.third_party.defense.weight.faceshifter_id
-                * l2_per_image(x_faceshifter_identity, faceshifter_self_identity)
-            )
-            faceshifter_identity_diff_loss = -torch.clamp(
-                faceshifter_identity_diff,
+            faceshifter_identity_diff = torch.clamp(
+                l2_per_image(x_faceshifter_identity, faceshifter_self_identity),
                 0,
                 self.config.third_party.defense.limit.faceshifter,
+            )
+            faceshifter_identity_diff_loss = (
+                -self.config.third_party.defense.weight.faceshifter_id
+                * faceshifter_identity_diff
             )
 
             faceshifter_cloak_diff_loss = (

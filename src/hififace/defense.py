@@ -200,12 +200,13 @@ class Defense(Base):
 
             # identity 3d loss
             x_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, :80]
-            x_3d_diff = (
-                self.config.third_party.defense.weight.identity_3d
-                * l2_per_image(x_3d, self_3d.detach())
+            identity_3d_diff = torch.clamp(
+                l2_per_image(x_3d, self_3d),
+                0,
+                self.config.third_party.defense.limit.identity_3d,
             )
-            x_3d_diff_loss = -torch.clamp(
-                x_3d_diff, 0, self.config.third_party.defense.limit.identity_3d
+            x_3d_diff_loss = (
+                -self.config.third_party.defense.weight.identity_3d * identity_3d_diff
             )
 
             cloak_3d_diff_loss = (
@@ -215,14 +216,15 @@ class Defense(Base):
 
             # identity id loss
             x_identity = get_identity(x_imgs)
-            x_identity_diff = (
-                self.config.third_party.defense.weight.identity_id
-                * l2_per_image(x_identity, self_identity.detach())
+            identity_id_diff = torch.clamp(
+                l2_per_image(x_identity, self_identity),
+                0,
+                self.config.third_party.defense.limit.identity,
+            )
+            x_id_diff_loss = (
+                -self.config.third_party.defense.weight.identity_id * identity_id_diff
             )
 
-            x_id_diff_loss = -torch.clamp(
-                x_identity_diff, 0, self.config.third_party.defense.limit.identity_id
-            )
             cloak_id_diff_loss = (
                 self.config.third_party.defense.weight.cloak_id
                 * l2_per_image(x_identity, cloak_identity.detach())

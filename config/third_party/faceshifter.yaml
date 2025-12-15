@@ -24,8 +24,8 @@ defense:
     R: 0.075
     G: 0.030
     B: 0.075
-    identity: 100
-    context: 30
+    identity: 0.003
+    context: 0
   weight:
     perturb: 1000
     identity: 35000
