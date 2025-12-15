@@ -3,42 +3,15 @@ from src.evaluate import Utility, Effectiveness, Cloak, DistanceCloakSelector
 
 
 import torch
-import lpips
 import warnings
 import face_alignment
-import os
-import sys
 import torch.nn.functional as F
 import numpy as np
 from torch import Tensor
-from importlib import import_module
 from pathlib import Path
-from torch.serialization import SourceChangeWarning, add_safe_globals
-from torch.nn.parallel.data_parallel import DataParallel
+from torch.serialization import SourceChangeWarning
 from torchvision import transforms
 from torch.nn.functional import mse_loss, l1_loss
-
-
-# ROOT = Path(__file__).resolve().parents[1]
-# DIFFFACE_ROOT = ROOT.parent / "third_party" / "DiffFace"
-# sys.path.insert(0, str(DIFFFACE_ROOT))
-# ResNet = import_module("models.models").ResNet
-# add_safe_globals([DataParallel, ResNet])
-# _ORIG_TORCH_LOAD = torch.load
-
-
-# def _load_patch(*args, **kwargs):
-#     if (
-#         args
-#         and isinstance(args[0], str)
-#         and os.path.basename(args[0]) in ("Arcface_model_only.tar", "GazeEstimator.pt")
-#     ):
-#         kwargs.setdefault("weights_only", False)
-#         kwargs.setdefault("map_location", "cpu")
-#     return _ORIG_TORCH_LOAD(*args, **kwargs)
-
-
-# torch.load = _load_patch
 
 
 class Base:
@@ -109,8 +82,6 @@ class Base:
             if self.model_config["use_fp16"]:
                 self.model.convert_to_fp16()
 
-            # self.lpips_model = lpips.LPIPS(net="vgg").to(self.device)
-
             self.image_augmentations = ImageAugmentations(
                 112, config.third_party.origin.aug_num
             )
@@ -137,11 +108,9 @@ class Base:
 
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)
-        self.cloak = Cloak(logger, config, self.effectiveness)
+        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
     def id_loss(self, x_in, targ, embedder):
-        id_loss = torch.tensor(0)
-
         masked_input = x_in * self.mask
         masked_input = F.interpolate(masked_input, (112, 112))
         targ = F.interpolate(targ, (112, 112))
@@ -156,9 +125,7 @@ class Base:
 
         dists = 1 - self.cosin_metric(src_id, targ_id)
 
-        # We want to sum over the averages
-        for i in range(1):
-            id_loss = id_loss + dists[i::1].mean()
+        id_loss = dists.mean()
 
         return id_loss
 

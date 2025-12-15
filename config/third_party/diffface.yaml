@@ -14,7 +14,7 @@ dataset:
   metric_dir: data/FFHQ_test
   metric_pairs: 3000
   input_size: 256
-  cloak_dir: data/stylegan3_cloak
+  cloak_dir: data/FFHQ_cloak
   cloak_mix: true
   cloak_count: full
   cloak_index: 0
@@ -29,12 +29,12 @@ defense:
     R: 0.10
     G: 0.09
     B: 0.10
-    identity: 30
+    identity: 500
   weight:
     perturb: 30
-    identity: 500000
-    cloak: 500000
-    context: 100
+    identity: 1000000
+    cloak: 3000000
+    context: 100000
   silent_perturb: false
   only_save_summary: true
   log_interval: 100

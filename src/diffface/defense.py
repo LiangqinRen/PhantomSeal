@@ -3,14 +3,14 @@ from src.dataset import FFHQDataset
 from src.utils import save_tensor_imgs
 from src.evaluate import ScoreCalculator
 import src.metric as metric
+from src.utils import check_tensor_info
 
 import torch
 import textwrap
 import torch.nn.functional as F
 from pathlib import Path
 from torch.utils.data import DataLoader
-from torch import nn, Tensor
-from torchvision import transforms
+from torch import Tensor
 
 
 class Defense(Base):
@@ -20,10 +20,13 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
+        notes_path = Path(self.config.notes_path)
+        notes_path.touch(exist_ok=True)
+
         self.score_calculator = ScoreCalculator(logger, config)
 
         self.face_ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
-        self.target_nonface_id = 10
+        self.target_nonface_id = 0
 
     def metric(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
@@ -34,18 +37,25 @@ class Defense(Base):
         )
         total_count = 0
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            total_count += len(imgs_A)
             torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs, silent=False)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
             torch.set_grad_enabled(False)
 
-            results = self._face_swap_per_image(imgs_A, imgs_B)
-            rev_results = self._face_swap_per_image(imgs_B, imgs_A)
-            # cloak_results = self._face_swap_per_image(cloak_imgs, imgs_B)
-            pert_src_results = self._face_swap_per_image(x_imgs, imgs_B)
-            pert_tgt_results = self._face_swap_per_image(imgs_B, x_imgs)
+            results = rev_results = pert_src_results = pert_tgt_results = (
+                torch.ones_like(x_imgs)
+            )
+
+            if self.config.evaluate.effectiveness.ASRo:
+                results = self._face_swap_per_image(imgs_A, imgs_B)
+                rev_results = self._face_swap_per_image(imgs_B, imgs_A)
+
+            if self.config.evaluate.effectiveness.ASRp:
+                pert_src_results = self._face_swap_per_image(x_imgs, imgs_B)
+                pert_tgt_results = self._face_swap_per_image(imgs_B, x_imgs)
 
             (
                 pert_utilities,
@@ -84,7 +94,6 @@ class Defense(Base):
                     "swap",
                     "rev_swap",
                     "cloak_imgs",
-                    # "cloak_swap",
                     "pert",
                     "pert_src\nswap",
                     "pert_tgt\nswap",
@@ -95,7 +104,6 @@ class Defense(Base):
                     results,
                     rev_results,
                     cloak_imgs,
-                    # cloak_results,
                     x_imgs,
                     pert_src_results,
                     pert_tgt_results,
@@ -106,7 +114,6 @@ class Defense(Base):
             del (
                 results,
                 rev_results,
-                # cloak_results,
                 pert_src_results,
                 pert_tgt_results,
             )
@@ -148,7 +155,6 @@ class Defense(Base):
         results = []
         imgs_A = imgs_A.cpu()
         imgs_B = imgs_B.cpu()
-        torch.cuda.empty_cache()
 
         for i in range(imgs_A.size(0)):
             a = imgs_A[i : i + 1].contiguous().to(self.device, non_blocking=True)
@@ -159,27 +165,18 @@ class Defense(Base):
             results.append(out.detach().cpu())
 
             del a, b, out
-            torch.cuda.empty_cache()
 
         return torch.cat(results, dim=0).cuda()
 
-    def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor, silent=True) -> Tensor:
+    def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor) -> Tensor:
         def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
             return ((x - y) ** 2).view(x.size(0), -1).mean(dim=1)
 
         x_imgs = imgs.clone().detach() + torch.randn_like(imgs) * 1e-5
 
         with torch.no_grad():
-            self_identity = self._get_imgs_identity(
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                    x_imgs
-                )
-            )
-            cloak_identity = self._get_imgs_identity(
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                    cloak_imgs
-                )
-            )
+            self_identity = self._get_imgs_identity(self._normalize(x_imgs))
+            cloak_identity = self._get_imgs_identity(self._normalize(cloak_imgs))
 
         epsilon = (
             self.config.third_party.defense.epsilon
@@ -202,17 +199,14 @@ class Defense(Base):
 
         for epoch in range(self.config.third_party.defense.epochs):
             x_imgs = x_imgs.clone().detach().requires_grad_(True)
-
+            # perturb
             pert_diff_loss = (
                 self.config.third_party.defense.weight.perturb
                 * l2_per_image(x_imgs, imgs.detach())
             )
 
-            x_identity = self._get_imgs_identity(
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                    x_imgs
-                )
-            )
+            # identity
+            x_identity = self._get_imgs_identity(self._normalize(x_imgs))
             identity_diff = (
                 self.config.third_party.defense.weight.identity
                 * l2_per_image(x_identity, self_identity)
@@ -222,26 +216,24 @@ class Defense(Base):
                 0,
                 self.config.third_party.defense.limit.identity,
             )
-
+            # cloak
             cloak_diff_loss = (
                 self.config.third_party.defense.weight.cloak
                 * l2_per_image(x_identity, cloak_identity)
             )
 
-            src_logits = self.netSeg(
-                self.spNorm(
-                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                        x_imgs
-                    )
-                )
-            )[0]
+            # context
+            src_logits = self.netSeg(self.spNorm(self._normalize(x_imgs)))[0]
             probs = torch.softmax(src_logits, dim=1)
             face_logits_mean = src_logits[:, self.face_ids].mean(dim=(1, 2, 3))
             tgt_logits_mean = src_logits[:, self.target_nonface_id].mean(dim=(1, 2))
-            seg_margin_loss = F.relu(face_logits_mean - tgt_logits_mean + 0.1).mean()
-            face_prob_mean = probs[:, self.face_ids].mean()
+
+            seg_margin_loss_per_img = F.relu(face_logits_mean - tgt_logits_mean + 0.1)
+
+            face_prob_mean_per_img = probs[:, self.face_ids].mean(dim=(1, 2, 3))
+
             context_loss = self.config.third_party.defense.weight.context * (
-                seg_margin_loss + 0.5 * face_prob_mean
+                seg_margin_loss_per_img + 0.5 * face_prob_mean_per_img
             )
 
             loss_per_img = (
