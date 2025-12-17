@@ -53,7 +53,11 @@ then
     third_party.defense.epochs=335
 elif [[ $function == 'image_robustness_metric' ]]
 then
-    PYTHONPATH="$ROOT" python -m src.simswap.main third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level third_party.defense.epochs=1000
+    PYTHONPATH="$ROOT" python -m src.simswap.main \
+    third_party=simswap \
+    third_party.function=$function \
+    log.file_suffix=$suffix \
+    log.record_level=$log_level
 elif [[ $function == 'lowkey' ]]
 then
     PYTHONPATH="$ROOT" python -m src.simswap.main -m third_party=simswap third_party.function=$function log.file_suffix=$suffix log.record_level=$log_level third_party.lowkey.weight.identity='range(31000,35000,1000)'

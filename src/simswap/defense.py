@@ -872,14 +872,12 @@ class Defense(Base):
             {metric.generate_summary_utility_log(metrics['compress'], 'tgt_pert_swap_utility', idx)}
             {metric.generate_summary_effectiveness_log(metrics['compress'], 'src_pert_swap_effectiveness')}
             {metric.generate_summary_effectiveness_log(metrics['compress'], 'tgt_pert_swap_effectiveness')}
-
             crop
             {metric.generate_summary_utility_log(metrics['crop'], 'pert_utility', idx)}
             {metric.generate_summary_utility_log(metrics['crop'], 'src_pert_swap_utility', idx)}
             {metric.generate_summary_utility_log(metrics['crop'], 'tgt_pert_swap_utility', idx)}
             {metric.generate_summary_effectiveness_log(metrics['crop'], 'src_pert_swap_effectiveness')}
             {metric.generate_summary_effectiveness_log(metrics['crop'], 'tgt_pert_swap_effectiveness')}
-
             logo
             {metric.generate_summary_utility_log(metrics['logo'], 'pert_utility', idx)}
             {metric.generate_summary_utility_log(metrics['logo'], 'src_pert_swap_utility', idx)}
@@ -892,7 +890,6 @@ class Defense(Base):
             {metric.generate_summary_utility_log(metrics['inc_bright'], 'tgt_pert_swap_utility', idx)}
             {metric.generate_summary_effectiveness_log(metrics['inc_bright'], 'src_pert_swap_effectiveness')}
             {metric.generate_summary_effectiveness_log(metrics['inc_bright'], 'tgt_pert_swap_effectiveness')}
-
             dec_bright
             {metric.generate_summary_utility_log(metrics['dec_bright'], 'pert_utility', idx)}
             {metric.generate_summary_utility_log(metrics['dec_bright'], 'src_pert_swap_utility', idx)}
