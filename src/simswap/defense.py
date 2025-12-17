@@ -351,7 +351,7 @@ class Defense(Base):
             (
                 noise_source_effectivenesses,
                 noise_target_effectivenesses,
-            ) = self.robustness.getgauss_noise_metrics(
+            ) = self.robustness.get_gauss_noise_metrics(
                 idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
             )
 
@@ -409,7 +409,9 @@ class Defense(Base):
             )
 
     def robustness_metric(self) -> None:
-        metrics = metric.get_robustness_metric_data_template(self.effectiveness)
+        metrics = metric.get_robustness_metric_data_template(
+            self.config, self.effectiveness
+        )
 
         logo = self.robustness.load_logo()
         dataset = MetricDataset(self.config)
@@ -428,15 +430,15 @@ class Defense(Base):
             x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
             x_imgs = self.robustness.webp_compress(x_imgs, 80)
             x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
-
             torch.set_grad_enabled(False)
+
             pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
             metric.merge_single_dict(metrics["utility"], pert_utilities)
 
             (
                 noise_source_effectivenesses,
                 noise_target_effectivenesses,
-            ) = self.robustness.getgauss_noise_metrics(
+            ) = self.robustness.get_gauss_noise_metrics(
                 idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
@@ -512,11 +514,12 @@ class Defense(Base):
             )
 
             self._free_gpu()
-            self.logger.info(
+
+            iter_log_str = textwrap.dedent(
                 f"""
-            utility: {metric.generate_iter_utility_log(pert_utilities)}
-            noise, compress, crop, overlay, increase and decrease the brightness {self.effectiveness.candi_funcs.keys()}
-            source(robust swap, robust pert swap, cloak), target(robust swap, robust pert swap)
+            utility(mse, psnr, ssim, lpips), effectiveness {tuple(self.effectiveness.candi_funcs.keys())} identity {tuple(next(iter(noise_source_effectivenesses.values())).keys())} context {tuple(next(iter(noise_target_effectivenesses.values())).keys())}
+            noise, compress, crop, overlay, increase and decrease the brightness
+            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
             {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
             {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
             {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
@@ -526,9 +529,10 @@ class Defense(Base):
             """
             )
 
-            self.logger.info(
-                f"""[{idx}/{len(dataloader)}]Average of {total_count} pictures
-            utility: {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
+            summary_log_str = textwrap.dedent(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
             {metric.generate_summary_robustness_log(metrics['noise'])}
             {metric.generate_summary_robustness_log(metrics['compress'])}
             {metric.generate_summary_robustness_log(metrics['crop'])}
@@ -537,6 +541,9 @@ class Defense(Base):
             {metric.generate_summary_robustness_log(metrics['dec_bright'])}
             """
             )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
 
     def robustness_forensics_sample(self):
         dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
@@ -1212,6 +1219,7 @@ class Defense(Base):
             if (
                 not self.config.third_party.defense.silent_perturb
                 and (epoch + 1) % self.config.third_party.defense.log_interval == 0
+                or (epoch + 1) == self.config.third_party.defense.epochs
             ):
                 self.logger.info(
                     f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}] "

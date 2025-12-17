@@ -26,22 +26,26 @@ def get_metric_data_template(effectiveness) -> dict:
     return data
 
 
-def get_robustness_metric_data_template(effectiveness) -> dict:
+def get_robustness_metric_data_template(config, effectiveness) -> dict:
     data = {
         "pert_as_src_effectiveness": {},
         "pert_as_tgt_effectiveness": {},
     }
 
     for effec in effectiveness.candi_funcs.keys():
-        data["pert_as_src_effectiveness"][effec] = {
-            "swap": (0, 0),
-            "pert_swap": (0, 0),
-            "cloak": (0, 0),
-        }
-        data["pert_as_tgt_effectiveness"][effec] = {
-            "swap": (0, 0),
-            "pert_swap": (0, 0),
-        }
+        data["pert_as_src_effectiveness"][effec] = {}
+        data["pert_as_tgt_effectiveness"][effec] = {}
+
+        if config.evaluate.effectiveness.ASRo:
+            data["pert_as_src_effectiveness"][effec]["swap"] = (0, 0)
+            data["pert_as_tgt_effectiveness"][effec]["swap"] = (0, 0)
+
+        if config.evaluate.effectiveness.ASRp:
+            data["pert_as_src_effectiveness"][effec]["pert_swap"] = (0, 0)
+            data["pert_as_tgt_effectiveness"][effec]["pert_swap"] = (0, 0)
+
+        if config.evaluate.effectiveness.TSR:
+            data["pert_as_src_effectiveness"][effec]["cloak"] = (0, 0)
 
     data = {
         "utility": {"mse": 0, "psnr": 0, "ssim": 0, "lpips": 0},
@@ -140,7 +144,7 @@ def get_robustness_forensics_metric(
 
 def merge_single_dict(sum: dict, item: dict):
     # sum and item must have identical structure
-    for key in sum:
+    for key in item:
         if isinstance(sum[key], dict) and isinstance(item[key], dict):
             merge_single_dict(sum[key], item[key])
         elif isinstance(sum[key], tuple) and isinstance(item[key], tuple):

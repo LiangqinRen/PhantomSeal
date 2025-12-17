@@ -91,7 +91,7 @@ class Robustness(Base):
 
         return adjusted_tensor
 
-    def getgauss_noise_metrics(
+    def get_gauss_noise_metrics(
         self,
         idx: int,
         imgs_A: Tensor,
@@ -156,7 +156,7 @@ class Robustness(Base):
                 reverse_noise_pert_swap_imgs,
             ],
             image_name="noise",
-            only_save_summary=False,
+            only_save_summary=self.config.third_party.defense.only_save_summary,
         )
 
         return (
@@ -232,7 +232,7 @@ class Robustness(Base):
                 reverse_compress_pert_swap_imgs,
             ],
             image_name="compress",
-            only_save_summary=False,
+            only_save_summary=self.config.third_party.defense.only_save_summary,
         )
 
         return (
@@ -303,7 +303,7 @@ class Robustness(Base):
                 reverse_crop_pert_swap_imgs,
             ],
             image_name="crop",
-            only_save_summary=False,
+            only_save_summary=self.config.third_party.defense.only_save_summary,
         )
 
         return (
@@ -373,7 +373,7 @@ class Robustness(Base):
                 reverse_logo_pert_swap_imgs,
             ],
             image_name="logo",
-            only_save_summary=False,
+            only_save_summary=self.config.third_party.defense.only_save_summary,
         )
 
         return (
@@ -451,7 +451,7 @@ class Robustness(Base):
                 reverse_brightness_pert_swap_imgs,
             ],
             image_name=f"brightness_{factor}",
-            only_save_summary=False,
+            only_save_summary=self.config.third_party.defense.only_save_summary,
         )
 
         return (
