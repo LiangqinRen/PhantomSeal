@@ -987,18 +987,22 @@ class Defense(Base):
             )
             self._free_gpu()
 
-            self.logger.info(
+            scores = self.score_calculator.calculate_score(
+                source_effectivenesses, target_effectivenesses, metrics
+            )
+
+            iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
+            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
             pert utility: {metric.generate_iter_utility_log(pert_utilities)}
             pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
             pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
             pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
             pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            scores: {metric.generate_iter_score_log(scores)}
             """
             )
-
-            self.logger.info(
+            summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
             {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
@@ -1006,8 +1010,12 @@ class Defense(Base):
             {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
             {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
             {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
+            scores: {metric.generate_summary_score_log(scores)}
             """
             )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
 
     def adaptive_attack_self(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
@@ -1099,18 +1107,22 @@ class Defense(Base):
             )
             self._free_gpu()
 
-            self.logger.info(
+            scores = self.score_calculator.calculate_score(
+                source_effectivenesses, target_effectivenesses, metrics
+            )
+
+            iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
+            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
             pert utility: {metric.generate_iter_utility_log(pert_utilities)}
             pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
             pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
             pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
             pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            scores: {metric.generate_iter_score_log(scores)}
             """
             )
-
-            self.logger.info(
+            summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
             {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
@@ -1118,8 +1130,12 @@ class Defense(Base):
             {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
             {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
             {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
+            scores: {metric.generate_summary_score_log(scores)}
             """
             )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
 
     def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor) -> Tensor:
         def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
