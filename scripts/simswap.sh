@@ -25,8 +25,13 @@ then
     log.record_level=$log_level
 elif [[ $function == 'ai_beauty' ]]
 then
-    PYTHONPATH="$ROOT" python -m src.simswap.main third_party=simswap third_party.function=metric log.file_suffix=$suffix log.record_level=$log_level third_party.robustness.ai_beauty=true third_party.robustness.ai_beauty_tool=ai_lab_tools 
-    # third_party.robustness.ai_beauty_tool=ai_lab_tools or tencent_cloud
+    PYTHONPATH="$ROOT" python -m src.simswap.main \
+    third_party=simswap \
+    third_party.function=metric \
+    log.file_suffix=$suffix \
+    log.record_level=$log_level \
+    third_party.robustness.ai_beauty=true \
+    third_party.robustness.ai_beauty_tool=ai_lab_tools # ai_lab_tools or tencent_cloud
 elif [[ $function == 'failure_tracing' ]]
 then
     PYTHONPATH="$ROOT" python -m src.simswap.main -m third_party=simswap third_party.function=metric log.file_suffix=$suffix log.record_level=$log_level third_party.defense.failure_defense_tracing=true evaluate.facepp.use=false third_party.dataset.cloak_index=0,10,20,30

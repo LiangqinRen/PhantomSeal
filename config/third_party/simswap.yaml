@@ -49,7 +49,7 @@ lowkey:
 
 robustness:
   ai_beauty: false
-  ai_beauty_tool: null
+  ai_beauty_tool: null # ai_lab_tools or tencent_cloud
   logo_img_path: data/vggface2_samples_224/ccs.png
 
 misc:

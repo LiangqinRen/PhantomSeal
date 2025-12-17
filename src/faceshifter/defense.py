@@ -220,7 +220,7 @@ class Defense(Base):
         with torch.no_grad():
             self_identity = get_imgs_identity(imgs)
             cloak_identity = get_imgs_identity(cloak_imgs)
-            imgs_latent_code = self.G.encoder(imgs)
+            # imgs_latent_code = self.G.encoder(imgs)
 
         epsilon = (
             self.config.third_party.defense.epsilon
@@ -266,21 +266,21 @@ class Defense(Base):
                 * l2_per_image(x_identity, cloak_identity)
             )
 
-            x_latent_code = self.G.encoder(x_imgs)
-            context_diff = torch.clamp(
-                l2_per_image(x_latent_code, imgs_latent_code),
-                0,
-                self.config.third_party.defense.limit.context,
-            )
-            context_diff_loss = (
-                -self.config.third_party.defense.weight.context * context_diff
-            )
+            # x_latent_code = self.G.encoder(x_imgs)
+            # context_diff = torch.clamp(
+            #     l2_per_image(x_latent_code, imgs_latent_code),
+            #     0,
+            #     self.config.third_party.defense.limit.context,
+            # )
+            # context_diff_loss = (
+            #     -self.config.third_party.defense.weight.context * context_diff
+            # )
 
             loss_per_img = (
                 pert_diff_loss
                 + identity_diff_loss
                 + cloak_diff_loss
-                + context_diff_loss
+                # + context_diff_loss
             )
             loss = loss_per_img.mean()
             loss.backward()
@@ -314,7 +314,7 @@ class Defense(Base):
                     f"{pert_diff_loss.mean().item():.5f}, "
                     f"{identity_diff_loss.mean().item():.5f}, "
                     f"{cloak_diff_loss.mean().item():.5f}, "
-                    f"{context_diff_loss.mean().item():.5f})"
+                    # f"{context_diff_loss.mean().item():.5f})"
                 )
 
         return best_imgs

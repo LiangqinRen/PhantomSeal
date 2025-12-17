@@ -743,7 +743,13 @@ class AIEditing:
                         break
                     else:
                         fail_count += 1
-                        self.logger.error(response)
+                        self.logger.error(
+                            "ailabtools status=%s reason=%s url=%s body=%s",
+                            response.status_code,
+                            response.reason,
+                            response.url,
+                            response.text[:1000],
+                        )
                 except Exception as e:
                     fail_count += 1
                     self.logger.error(response)

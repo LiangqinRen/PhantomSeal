@@ -164,10 +164,10 @@ class Defense(Base):
         with torch.no_grad():
             self_3d = self.net.generator.id_extractor.f_3d(imgs)[:, :80]
             cloak_3d = self.net.generator.id_extractor.f_3d(cloak_imgs)[:, :80]
-            context_3d = self.net.generator.id_extractor.f_3d(imgs)[:, 80:]
+            # context_3d = self.net.generator.id_extractor.f_3d(imgs)[:, 80:]
             self_identity = get_identity(imgs)
             cloak_identity = get_identity(cloak_imgs)
-            middle_feat, final_feat = self.net.generator.encoder(imgs)
+            # middle_feat, final_feat = self.net.generator.encoder(imgs)
 
         epsilon = (
             self.config.third_party.defense.epsilon
@@ -231,33 +231,33 @@ class Defense(Base):
             )
 
             # context loss
-            context_middle_loss = torch.tensor(0.0, device=x_imgs.device)
-            context_final_loss = torch.tensor(0.0, device=x_imgs.device)
-            context_3d_loss = torch.tensor(0.0, device=x_imgs.device)
-            if (
-                self.config.third_party.defense.weight.context_middle > 0
-                and self.config.third_party.defense.weight.context_final > 0
-                and self.config.third_party.defense.weight.context_3d > 0
-            ):
-                x_middle_feat, x_final_feat = self.net.generator.encoder(x_imgs)
-                context_middle_loss = (
-                    -self.config.third_party.defense.weight.context_middle
-                    * l2_per_image(x_middle_feat, middle_feat.detach())
-                )
-                context_final_loss = (
-                    -self.config.third_party.defense.weight.context_final
-                    * torch.clamp(
-                        l2_per_image(x_final_feat, final_feat.detach()),
-                        min=0,
-                        max=self.config.third_party.defense.limit.context_final,
-                    )
-                )
+            # context_middle_loss = torch.tensor(0.0, device=x_imgs.device)
+            # context_final_loss = torch.tensor(0.0, device=x_imgs.device)
+            # context_3d_loss = torch.tensor(0.0, device=x_imgs.device)
+            # if (
+            #     self.config.third_party.defense.weight.context_middle > 0
+            #     and self.config.third_party.defense.weight.context_final > 0
+            #     and self.config.third_party.defense.weight.context_3d > 0
+            # ):
+            #     x_middle_feat, x_final_feat = self.net.generator.encoder(x_imgs)
+            #     context_middle_loss = (
+            #         -self.config.third_party.defense.weight.context_middle
+            #         * l2_per_image(x_middle_feat, middle_feat.detach())
+            #     )
+            #     context_final_loss = (
+            #         -self.config.third_party.defense.weight.context_final
+            #         * torch.clamp(
+            #             l2_per_image(x_final_feat, final_feat.detach()),
+            #             min=0,
+            #             max=self.config.third_party.defense.limit.context_final,
+            #         )
+            #     )
 
-                x_context_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, 80:]
-                context_3d_loss = (
-                    -self.config.third_party.defense.weight.context_3d
-                    * l2_per_image(x_context_3d, context_3d.detach())
-                )
+            #     x_context_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, 80:]
+            #     context_3d_loss = (
+            #         -self.config.third_party.defense.weight.context_3d
+            #         * l2_per_image(x_context_3d, context_3d.detach())
+            #     )
 
             loss_per_img = (
                 pert_diff_loss
@@ -265,9 +265,9 @@ class Defense(Base):
                 + cloak_3d_diff_loss
                 + x_id_diff_loss
                 + cloak_id_diff_loss
-                + context_middle_loss
-                + context_final_loss
-                + context_3d_loss
+                # + context_middle_loss
+                # + context_final_loss
+                # + context_3d_loss
             )
             loss = loss_per_img.mean()
             loss.backward()
@@ -303,9 +303,9 @@ class Defense(Base):
                     f"{cloak_3d_diff_loss.mean().item():.3f}, "
                     f"{x_id_diff_loss.mean().item():.3f}, "
                     f"{cloak_id_diff_loss.mean().item():.3f}, "
-                    f"{context_middle_loss.mean().item():.3f}, "
-                    f"{context_final_loss.mean().item():.3f}, "
-                    f"{context_3d_loss.mean().item():.3f})"
+                    # f"{context_middle_loss.mean().item():.3f}, "
+                    # f"{context_final_loss.mean().item():.3f}, "
+                    # f"{context_3d_loss.mean().item():.3f})"
                 )
 
         return best_imgs
