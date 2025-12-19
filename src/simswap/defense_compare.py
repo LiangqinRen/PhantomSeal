@@ -147,7 +147,7 @@ class Lowkey(Base):
 
             self.logger.info(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, anchor) target(swap, pert_swap)
+            utility(mse, psnr, ssim, lpips), effectiveness{self.effectiveness.candi_funcs.keys()} source(pert, swap, pert_swap, cloak) target(swap, pert_swap)
             pert utility: {metric.generate_iter_utility_log(pert_utilities)}
             pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
             pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}

@@ -1103,7 +1103,7 @@ class Cloak:
             imgs_gender = self._check_imgs_gender(imgs)
 
         imgs_ndarray = imgs.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
-        best_anchors = []
+        best_cloaks = []
         for i in range(imgs.shape[0]):
             if self.config.third_party.dataset.cloak_mix:
                 candidates = self.cloak_imgs["mix"]
@@ -1140,14 +1140,14 @@ class Cloak:
 
             sorted_distances = sorted(distances)
             if len(sorted_distances) > self.config.third_party.dataset.cloak_index:
-                best_anchor_idx = sorted_distances[
+                best_cloak_idx = sorted_distances[
                     self.config.third_party.dataset.cloak_index
                 ][1]
-                best_anchors.append(candidates[best_anchor_idx])
+                best_cloaks.append(candidates[best_cloak_idx])
             else:
-                best_anchors.append(candidates[sorted_distances[-1][1]])
+                best_cloaks.append(candidates[sorted_distances[-1][1]])
 
-        return torch.stack(best_anchors, dim=0)
+        return torch.stack(best_cloaks, dim=0)
 
 
 class KMeansCloakSelector:

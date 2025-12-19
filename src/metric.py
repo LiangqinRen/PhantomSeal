@@ -303,7 +303,7 @@ def generate_summary_robustness_log(data: dict) -> str:
 def generate_forensics_robustness_log(data: dict) -> str:
     content = "("
     for _, v in data.items():
-        content += f"{v['anchor'][0]/v['anchor'][1]*100:.3f}/{v['anchor'][1]:.0f}, "
+        content += f"{v['cloak'][0]/v['cloak'][1]*100:.3f}/{v['cloak'][1]:.0f}, "
     content = content[:-2]
     content += ")"
 
