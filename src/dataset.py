@@ -15,8 +15,14 @@ class SampleDataset(Dataset):
     def _get_double_imgs_list(self):
         sample_dir = self.root_dir
 
-        A = [sample_dir / f for f in ["zjl.jpg", "james.jpg", "source.png"]]
-        B = [sample_dir / f for f in ["6.jpg", "6.jpg", "6.jpg"]]
+        A = [
+            sample_dir / f
+            for f in ["imgs_A_1_7.png", "imgs_A_5_1.png", "imgs_A_7_4.png"]
+        ]
+        B = [
+            sample_dir / f
+            for f in ["imgs_B_1_7.png", "imgs_B_5_1.png", "imgs_B_7_4.png"]
+        ]
 
         return A, B
 
@@ -143,6 +149,39 @@ class AdaptiveMetricDataset(Dataset):
         img_C = self.transform(Image.open(img_C_path).convert("RGB"))
 
         return img_A, img_B, img_C
+
+
+class FFHQSample(Dataset):
+    def __init__(self, config):
+        self.root_dir = Path(config.dataset.sample_dir)
+        image_size = config.third_party.dataset.input_size
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize((image_size, image_size)),
+                transforms.ToTensor(),
+            ]
+        )
+
+        self.A, self.B = self._get_double_imgs_list()
+
+    def _get_double_imgs_list(self):
+        sample_dir = self.root_dir
+
+        A = [sample_dir / f for f in ["09861.png"]]
+        B = [sample_dir / f for f in ["67533.png"]]
+
+        return A, B
+
+    def __len__(self):
+        return len(self.A)
+
+    def __getitem__(self, idx):
+        img_A_path, img_B_path = self.A[idx], self.B[idx]
+
+        img_A = self.transform(Image.open(img_A_path).convert("RGB"))
+        img_B = self.transform(Image.open(img_B_path).convert("RGB"))
+
+        return img_A, img_B
 
 
 class FFHQDataset(Dataset):

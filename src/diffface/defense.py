@@ -1,5 +1,5 @@
 from src.diffface.base import Base
-from src.dataset import FFHQDataset
+from src.dataset import FFHQSample, FFHQDataset
 from src.utils import save_tensor_imgs
 from src.evaluate import ScoreCalculator
 import src.metric as metric
@@ -27,6 +27,98 @@ class Defense(Base):
 
         self.face_ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
         self.target_nonface_id = 0
+
+    def sample(self) -> None:
+        dataset = FFHQSample(self.config.third_party.dataset.sample_dir)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+
+            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+
+            imgs_A_src_swap = self._face_swap_per_image(imgs_A, imgs_B)
+            pert_imgs_A_src_swap = self._face_swap_per_image(x_imgs, imgs_B)
+            imgs_A_tgt_swap = self._face_swap_per_image(imgs_B, imgs_A)
+            pert_imgs_A_tgt_swap = self._face_swap_per_image(imgs_B, x_imgs)
+
+            (
+                pert_utilities,
+                pert_as_src_swap_utilities,
+                pert_as_tgt_swap_utilities,
+                source_effectivenesses,
+                target_effectivenesses,
+            ) = metric.get_defense_metric(
+                self.utility,
+                self.effectiveness,
+                imgs_A,
+                imgs_B,
+                x_imgs,
+                cloak_imgs,
+                imgs_A_src_swap,
+                pert_imgs_A_src_swap,
+                imgs_A_tgt_swap,
+                pert_imgs_A_tgt_swap,
+            )
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "pert_imgs",
+                    "cloak_imgs",
+                    "swap",
+                    "pert_swap",
+                    "rev\nswap",
+                    "rev\npert_swap",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    x_imgs,
+                    cloak_imgs,
+                    imgs_A_src_swap,
+                    pert_imgs_A_src_swap,
+                    imgs_A_tgt_swap,
+                    pert_imgs_A_tgt_swap,
+                ],
+                only_save_summary=False,
+            )
+
+            scores = self.score_calculator.calculate_score(
+                source_effectivenesses, target_effectivenesses, None
+            )
+
+            self.logger.info(
+                textwrap.dedent(
+                    f"""
+            pert utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_utilities)}
+            pert source utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
+            pert target utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
+            effectiveness tools: {list(self.effectiveness.candi_funcs.keys())}, source(pert, swap, pert_swap, cloak), target(swap, pert_swap)
+            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
+            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            """
+                )
+            )
+
+            iter_log_str = textwrap.dedent(
+                f"""
+            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
+            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
+            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
+            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
+            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
+            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            scores: {metric.generate_iter_score_log(scores)}
+            """
+            )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
 
     def metric(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
