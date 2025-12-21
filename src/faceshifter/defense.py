@@ -39,52 +39,35 @@ class Defense(Base):
             torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             cloak_imgs = self.cloak.find_best_cloaks(self._denormalize(imgs_A))
-            x_imgs = self._perturb_imgs(self._denormalize(imgs_A), cloak_imgs)
+            pert_imgs = self._perturb_imgs(self._denormalize(imgs_A), cloak_imgs)
 
             torch.set_grad_enabled(False)
 
             imgs_A_list = list(torch.chunk(imgs_A, chunks=batch_size, dim=0))
             imgs_B_list = list(torch.chunk(imgs_B, chunks=batch_size, dim=0))
-            cloak_imgs_list = list(torch.chunk(cloak_imgs, chunks=batch_size, dim=0))
-            x_imgs_list = list(
-                torch.chunk(self._normalize(x_imgs), chunks=batch_size, dim=0)
+            pert_imgs_list = list(
+                torch.chunk(self._normalize(pert_imgs), chunks=batch_size, dim=0)
             )
 
-            imgs_A_src_swap = []
-            cloak_imgs_src_swap = []
-            pert_imgs_A_src_swap = []
-            imgs_A_tgt_swap = []
-            pert_imgs_A_tgt_swap = []
+            source_swap_list = []
+            pert_source_swap_list = []
             valid_indexes = []
             for i in range(batch_size):
                 try:
-                    result = self.swapface(imgs_A_list[i], imgs_B_list[i]).cuda()
-                    cloak_result = self.swapface(
-                        cloak_imgs_list[i], imgs_B_list[i]
-                    ).cuda()
-                    pert_result = self.swapface(x_imgs_list[i], imgs_B_list[i]).cuda()
-                    reverse_result = self.swapface(
-                        imgs_B_list[i], imgs_A_list[i]
-                    ).cuda()
-                    reverse_pert_result = self.swapface(
-                        imgs_B_list[i], x_imgs_list[i]
+                    source_swap = self.swapface(imgs_A_list[i], imgs_B_list[i]).cuda()
+                    pert_source_swap = self.swapface(
+                        pert_imgs_list[i], imgs_B_list[i]
                     ).cuda()
 
-                    imgs_A_src_swap.append(result)
-                    cloak_imgs_src_swap.append(cloak_result)
-                    pert_imgs_A_src_swap.append(pert_result)
-                    imgs_A_tgt_swap.append(reverse_result)
-                    pert_imgs_A_tgt_swap.append(reverse_pert_result)
+                    source_swap_list.append(source_swap)
+                    pert_source_swap_list.append(pert_source_swap)
 
                     valid_indexes.append(i)
                     total_count += 1
                 except Exception as e:
                     for imgs_list in [
-                        imgs_A_src_swap,
-                        cloak_imgs_src_swap,
-                        pert_imgs_A_src_swap,
-                        imgs_A_tgt_swap,
-                        pert_imgs_A_tgt_swap,
+                        source_swap_list,
+                        pert_source_swap_list,
                     ]:
                         if len(imgs_list) < i + 1:
                             imgs_list.append(torch.zeros_like(imgs_A[0]).cuda())
@@ -93,51 +76,43 @@ class Defense(Base):
             images_idx = torch.as_tensor(valid_indexes, device=imgs_A.device)
             imgs_A = self._denormalize(imgs_A[images_idx])
             imgs_B = self._denormalize(imgs_B[images_idx])
-            x_imgs = x_imgs[images_idx]
+            pert_imgs = pert_imgs[images_idx]
             cloak_imgs = cloak_imgs[images_idx]
-            results = torch.cat(
-                [imgs_A_src_swap[i] for i in valid_indexes], dim=0
+
+            source_swap = torch.cat(
+                [source_swap_list[i] for i in valid_indexes], dim=0
             ).float()
-            cloak_results = torch.cat(
-                [cloak_imgs_src_swap[i] for i in valid_indexes], dim=0
-            ).float()
-            pert_results = torch.cat(
-                [pert_imgs_A_src_swap[i] for i in valid_indexes], dim=0
-            ).float()
-            reverse_results = torch.cat(
-                [imgs_A_tgt_swap[i] for i in valid_indexes], dim=0
-            ).float()
-            reverse_pert_results = torch.cat(
-                [pert_imgs_A_tgt_swap[i] for i in valid_indexes], dim=0
+            pert_source_swap = torch.cat(
+                [pert_source_swap_list[i] for i in valid_indexes], dim=0
             ).float()
 
             (
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                _,
+                source_effectiveness,
+                _,
             ) = metric.get_defense_metric(
                 self.utility,
                 self.effectiveness,
                 imgs_A,
                 imgs_B,
-                x_imgs,
+                pert_imgs,
                 cloak_imgs,
-                results,
-                pert_results,
-                reverse_results,
-                reverse_pert_results,
+                source_swap,
+                pert_source_swap,
+                None,
+                None,
             )
 
             metric.merge_metric(
                 self.effectiveness,
                 metrics,
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                None,
+                source_effectiveness,
+                None,
             )
 
             save_tensor_imgs(
@@ -146,54 +121,44 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "pert_imgs",
-                    "cloak_imgs",
-                    "swap",
-                    "cloak_swap",
-                    "pert_swap",
-                    "rev\nswap",
-                    "rev\npert_swap",
+                    "perturb\nimgs",
+                    "cloak\nimgs",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    x_imgs,
+                    pert_imgs,
                     cloak_imgs,
-                    results,
-                    cloak_results,
-                    pert_results,
-                    reverse_results,
-                    reverse_pert_results,
+                    source_swap,
+                    pert_source_swap,
                 ],
                 only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
-            del imgs_A, imgs_B, x_imgs, cloak_imgs
+            del imgs_A, imgs_B, pert_imgs, cloak_imgs
             self._free_gpu()
 
             scores = self.score_calculator.calculate_score(
-                source_effectivenesses, target_effectivenesses, metrics
+                source_effectiveness, None, metrics
             )
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
-            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
-            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
-            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
-            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
-            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())})
+            utility: {metric.generate_iter_utility_log(utility)}
+            source utility: {metric.generate_iter_utility_log(source_utility)}
+            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+            source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )
@@ -220,7 +185,6 @@ class Defense(Base):
         with torch.no_grad():
             self_identity = get_imgs_identity(imgs)
             cloak_identity = get_imgs_identity(cloak_imgs)
-            # imgs_latent_code = self.G.encoder(imgs)
 
         epsilon = (
             self.config.third_party.defense.epsilon
@@ -266,22 +230,7 @@ class Defense(Base):
                 * l2_per_image(x_identity, cloak_identity)
             )
 
-            # x_latent_code = self.G.encoder(x_imgs)
-            # context_diff = torch.clamp(
-            #     l2_per_image(x_latent_code, imgs_latent_code),
-            #     0,
-            #     self.config.third_party.defense.limit.context,
-            # )
-            # context_diff_loss = (
-            #     -self.config.third_party.defense.weight.context * context_diff
-            # )
-
-            loss_per_img = (
-                pert_diff_loss
-                + identity_diff_loss
-                + cloak_diff_loss
-                # + context_diff_loss
-            )
+            loss_per_img = pert_diff_loss + identity_diff_loss + cloak_diff_loss
             loss = loss_per_img.mean()
             loss.backward()
 
@@ -313,8 +262,7 @@ class Defense(Base):
                     f"loss: {loss.item():.5f}("
                     f"{pert_diff_loss.mean().item():.5f}, "
                     f"{identity_diff_loss.mean().item():.5f}, "
-                    f"{cloak_diff_loss.mean().item():.5f}, "
-                    # f"{context_diff_loss.mean().item():.5f})"
+                    f"{cloak_diff_loss.mean().item():.5f})"
                 )
 
         return best_imgs

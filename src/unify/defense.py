@@ -35,11 +35,11 @@ class Defense(Base):
             torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
             torch.set_grad_enabled(False)
 
             simswap_pert_swap, hififace_pert_swap, faceshifter_pert_swap = (
-                self._get_full_swap_results(x_imgs, imgs_B)
+                self._get_full_swap_results(pert_imgs, imgs_B)
             )
 
             # filter valid images
@@ -53,7 +53,7 @@ class Defense(Base):
             imgs_A = imgs_A[faceshifter_swap_mask]
             imgs_B = imgs_B[faceshifter_swap_mask]
             cloak_imgs = cloak_imgs[faceshifter_swap_mask]
-            x_imgs = x_imgs[faceshifter_swap_mask]
+            pert_imgs = pert_imgs[faceshifter_swap_mask]
             simswap_pert_swap = simswap_pert_swap[faceshifter_swap_mask]
             hififace_pert_swap = hififace_pert_swap[faceshifter_swap_mask]
             faceshifter_pert_swap = faceshifter_pert_swap[faceshifter_swap_mask]
@@ -64,16 +64,16 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "pert_imgs",
-                    "cloak_imgs",
-                    "simswap\npert_swap",
-                    "hififace\npert_swap",
-                    "faceshifter\npert_swap",
+                    "perturb\nimgs",
+                    "cloak\nimgs",
+                    "simswap\nperturb\nswap",
+                    "hififace\nperturb\nswap",
+                    "faceshifter\nperturb\nswap",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    x_imgs,
+                    pert_imgs,
                     cloak_imgs,
                     simswap_pert_swap,
                     hififace_pert_swap,
@@ -85,13 +85,13 @@ class Defense(Base):
             total_count += len(faceshifter_pert_swap)
 
             (
-                pert_utilities,
-                simswap_identity_effec,
-                hififace_identity_effec,
-                faceshifter_identity_effec,
+                utility,
+                simswap_effectiveness,
+                hififace_effectiveness,
+                faceshifter_effectiveness,
             ) = self._calculate_cross_model_metric(
                 imgs_A,
-                x_imgs,
+                pert_imgs,
                 cloak_imgs,
                 simswap_pert_swap,
                 hififace_pert_swap,
@@ -100,40 +100,40 @@ class Defense(Base):
 
             self._merge_unify_metric(
                 metrics,
-                pert_utilities,
-                simswap_identity_effec,
-                faceshifter_identity_effec,
-                hififace_identity_effec,
+                utility,
+                simswap_effectiveness,
+                faceshifter_effectiveness,
+                hififace_effectiveness,
             )
 
-            del imgs_A, imgs_B, x_imgs, cloak_imgs
+            del imgs_A, imgs_B, pert_imgs, cloak_imgs
             del simswap_pert_swap, hififace_pert_swap, faceshifter_pert_swap
             self._free_gpu()
 
-            simswap_iter_scores = self._calculate_iter_score(simswap_identity_effec)
+            simswap_iter_scores = self._calculate_iter_score(simswap_effectiveness)
             faceshifter_iter_scores = self._calculate_iter_score(
-                faceshifter_identity_effec
+                faceshifter_effectiveness
             )
-            hififace_iter_scores = self._calculate_iter_score(hififace_identity_effec)
+            hififace_iter_scores = self._calculate_iter_score(hififace_effectiveness)
             summary_scores = self._calculate_summary_score(metrics)
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness {tuple(simswap_identity_effec.keys())} identity {tuple(next(iter(simswap_identity_effec.values())).keys())}
-            pert: {metric.generate_iter_utility_log(pert_utilities)}
-            simswap iter: {metric.generate_iter_effectiveness_log(simswap_identity_effec)}
-            faceshifter iter: {metric.generate_iter_effectiveness_log(faceshifter_identity_effec)}
-            hififace iter: {metric.generate_iter_effectiveness_log(hififace_identity_effec)}
+            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(simswap_effectiveness.values())).keys())})
+            utility: {metric.generate_iter_utility_log(utility)}
+            simswap: {metric.generate_iter_effectiveness_log(simswap_effectiveness)}
+            faceshifter: {metric.generate_iter_effectiveness_log(faceshifter_effectiveness)}
+            hififace: {metric.generate_iter_effectiveness_log(hififace_effectiveness)}
             scores: {metric.generate_iter_score_log(simswap_iter_scores)} {metric.generate_iter_score_log(faceshifter_iter_scores)} {metric.generate_iter_score_log(hififace_iter_scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            pert: {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
-            simswap summary: {metric.generate_summary_effectiveness_log(metrics, 'simswap')}
-            faceshifter summary: {metric.generate_summary_effectiveness_log(metrics, 'faceshifter')}
-            hififace summary: {metric.generate_summary_effectiveness_log(metrics, 'hififace')}
+            utility: {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            simswap: {metric.generate_summary_effectiveness_log(metrics, 'simswap')}
+            faceshifter: {metric.generate_summary_effectiveness_log(metrics, 'faceshifter')}
+            hififace: {metric.generate_summary_effectiveness_log(metrics, 'hififace')}
             scores: {self._generate_summary_score_log(summary_scores['simswap'])} {self._generate_summary_score_log(summary_scores['faceshifter'])} {self._generate_summary_score_log(summary_scores['hififace'])}
             """
             )
@@ -326,22 +326,22 @@ class Defense(Base):
         faceshifter_pert_swap: Tensor,
         hififace_pert_swap: Tensor,
     ) -> tuple[dict, dict, dict, dict]:
-        pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
-        simswap_identity_effec = self.effectiveness.calculate_effectiveness(
+        utility = self.utility.calculate_utility(imgs_A, x_imgs)
+        simswap_effectiveness = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
             None,
             simswap_pert_swap,
             cloak_imgs,
         )
-        faceshifter_identity_effec = self.effectiveness.calculate_effectiveness(
+        faceshifter_effectiveness = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
             None,
             faceshifter_pert_swap,
             cloak_imgs,
         )
-        hififace_identity_effec = self.effectiveness.calculate_effectiveness(
+        hififace_effectiveness = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
             None,
@@ -350,10 +350,10 @@ class Defense(Base):
         )
 
         return (
-            pert_utilities,
-            simswap_identity_effec,
-            faceshifter_identity_effec,
-            hififace_identity_effec,
+            utility,
+            simswap_effectiveness,
+            faceshifter_effectiveness,
+            hififace_effectiveness,
         )
 
     def _get_unify_metric_template(self) -> dict:
@@ -388,20 +388,20 @@ class Defense(Base):
     def _merge_unify_metric(
         self,
         data: dict,
-        pert_utilities: dict,
-        simswap_identity_effec: dict,
-        faceshifter_identity_effec: dict,
-        hififace_identity_effec: dict,
+        utility: dict,
+        simswap_effectiveness: dict,
+        faceshifter_effectiveness: dict,
+        hififace_effectiveness: dict,
     ) -> None:
         data["pert_utility"] = tuple(
             x + y
             for x, y in zip(
                 data["pert_utility"],
                 (
-                    pert_utilities["mse"],
-                    pert_utilities["psnr"],
-                    pert_utilities["ssim"],
-                    pert_utilities["lpips"],
+                    utility["mse"],
+                    utility["psnr"],
+                    utility["ssim"],
+                    utility["lpips"],
                 ),
             )
         )
@@ -411,21 +411,21 @@ class Defense(Base):
                 key2: (value1[0] + value2[0], value1[1] + value2[1])
                 for (key1, value1), (key2, value2) in zip(
                     data["simswap"][effec].items(),
-                    simswap_identity_effec[effec].items(),
+                    simswap_effectiveness[effec].items(),
                 )
             }
             data["faceshifter"][effec] = {
                 key2: (value1[0] + value2[0], value1[1] + value2[1])
                 for (key1, value1), (key2, value2) in zip(
                     data["faceshifter"][effec].items(),
-                    faceshifter_identity_effec[effec].items(),
+                    faceshifter_effectiveness[effec].items(),
                 )
             }
             data["hififace"][effec] = {
                 key2: (value1[0] + value2[0], value1[1] + value2[1])
                 for (key1, value1), (key2, value2) in zip(
                     data["hififace"][effec].items(),
-                    hififace_identity_effec[effec].items(),
+                    hififace_effectiveness[effec].items(),
                 )
             }
 
@@ -479,8 +479,5 @@ class Defense(Base):
         return scores
 
     def _generate_summary_score_log(self, scores: dict) -> str:
-        total_scores = []
-        for effec in scores:
-            total_scores.append(f"{scores[effec]:.3f}")
-
-        return str(tuple(total_scores))
+        vals = (f"{scores[effec]:.3f}" for effec in scores)
+        return f"({', '.join(vals)})"

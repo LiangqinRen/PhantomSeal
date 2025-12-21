@@ -13,13 +13,27 @@ fi
 
 ROOT=$(dirname $(dirname $(realpath "$0")))
 
-if [[ $function == 'metric' || $function == 'validate' ]]
-then
+run() {
     PYTHONPATH="$ROOT" python -m src.diffface.main \
-    third_party=diffface \
-    third_party.function=$function \
-    log.file_suffix=$suffix \
-    log.record_level=$log_level
+        third_party=diffface \
+        third_party.function="$function" \
+        log.file_suffix="$suffix" \
+        log.record_level="$log_level" \
+        "$@"
+}
+
+multirun() {
+    PYTHONPATH="$ROOT" python -m src.diffface.main -m \
+        third_party=diffface \
+        third_party.function=metric \
+        log.file_suffix="$suffix" \
+        log.record_level="$log_level" \
+        "$@"
+}
+
+if [[ $function == 'sample' || $function == 'metric' ]]
+then
+    run
 else
     echo "⚠️ Oops! That function doesn't exist."
 fi

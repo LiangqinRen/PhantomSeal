@@ -5,9 +5,9 @@ defaults:
 
 hydra:
   run:
-    dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
+    dir: logs/run/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
   sweep:
-    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
+    dir: logs/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}${log.file_suffix}
   output_subdir: config
 
 log:

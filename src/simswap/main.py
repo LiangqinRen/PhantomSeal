@@ -1,8 +1,5 @@
 from src import utils
 from src.simswap.defense import Defense
-from src.simswap.defense_compare import Lowkey
-from src.simswap.misc import Misc
-
 import sys
 import hydra
 from omegaconf import DictConfig
@@ -17,20 +14,16 @@ def main(config: DictConfig):
     timer = utils.Timer("main", logger)
 
     defense = Defense(logger, config)
-    lowkey_defense = Lowkey(logger, config)
-    misc = Misc(logger, config)
     defense_functions = {
         "sample": defense.sample,
         "metric": defense.metric,
-        "robustness_sample": defense.robustness_sample,
-        "robustness_metric": defense.robustness_metric,
-        "robustness_forensics_sample": defense.robustness_forensics_sample,
-        "robustness_forensics_metric": defense.robustness_forensics_metric,
+        "protection_robustness_sample": defense.protection_robustness_sample,
+        "protection_robustness_metric": defense.protection_robustness_metric,
+        "forensics_robustness_sample": defense.forensics_robustness_sample,
+        "forensics_robustness_metric": defense.forensics_robustness_metric,
         "image_robustness_metric": defense.image_robustness_metric,
-        "adaptive_attack": defense.adaptive_attack,
-        "adaptive_attack_self": defense.adaptive_attack_self,
-        "lowkey": lowkey_defense.metric,
-        "misclassify": misc.compute_misclassification_rate,
+        "adaptive_attack_with_self_image": defense.adaptive_attack_with_self_image,
+        "adaptive_attack_with_other_image": defense.adaptive_attack_with_other_image,
     }
 
     if config.third_party.function in defense_functions:

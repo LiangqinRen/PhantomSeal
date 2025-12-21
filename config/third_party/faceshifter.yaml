@@ -25,12 +25,10 @@ defense:
     G: 0.030
     B: 0.075
     identity: 0.003
-    context: 0
   weight:
     perturb: 1000
     identity: 35000
     cloak: 1000000
-    context: 0
   silent_perturb: false
   only_save_summary: true
   log_interval: 100

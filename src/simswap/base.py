@@ -3,7 +3,6 @@ from src.evaluate import (
     Effectiveness,
     AIEditing,
     Cloak,
-    KMeansCloakSelector,
     DistanceCloakSelector,
 )
 from src.utils import cd, use_project

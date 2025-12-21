@@ -2,6 +2,7 @@ from src.utils import cd, use_project
 from src.evaluate import Utility, Effectiveness, AIEditing, DistanceCloakSelector
 
 import torch
+import warnings
 from omegaconf import OmegaConf
 from pathlib import Path
 
@@ -11,6 +12,15 @@ class Base:
         super(Base, self).__init__()
         self.logger = logger
         self.config = config
+
+        warnings.filterwarnings(
+            "ignore",
+            message=".*parameter 'pretrained' is deprecated.*",
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=".*Arguments other than a weight enum.*",
+        )
 
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)

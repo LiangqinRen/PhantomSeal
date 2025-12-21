@@ -8,7 +8,7 @@ from src.utils import save_tensor_imgs
 
 import textwrap
 import torch
-from torch import tensor, Tensor, nn
+from torch import tensor, Tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
 
@@ -40,32 +40,32 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
 
             (
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
-            ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs)
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
+            ) = self._get_full_swap_results(imgs_A, imgs_B, pert_imgs)
 
             (
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                target_utility,
+                source_effectiveness,
+                target_effectiveness,
             ) = metric.get_defense_metric(
                 self.utility,
                 self.effectiveness,
                 imgs_A,
                 imgs_B,
-                x_imgs,
+                pert_imgs,
                 cloak_imgs,
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
             )
 
             save_tensor_imgs(
@@ -74,51 +74,38 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "pert_imgs",
-                    "cloak_imgs",
-                    "swap",
-                    "pert_swap",
-                    "rev\nswap",
-                    "rev\npert_swap",
+                    "perturb\nimgs",
+                    "cloak\nimgs",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
+                    "target\nswap",
+                    "perturb\ntarget\nswap",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    x_imgs,
+                    pert_imgs,
                     cloak_imgs,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
-                    imgs_A_tgt_swap,
-                    pert_imgs_A_tgt_swap,
+                    source_swap,
+                    pert_source_swap,
+                    target_swap,
+                    pert_target_swap,
                 ],
                 only_save_summary=False,
             )
 
             scores = self.score_calculator.calculate_score(
-                source_effectivenesses, target_effectivenesses, None
-            )
-
-            self.logger.info(
-                textwrap.dedent(
-                    f"""
-            pert utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_utilities)}
-            pert source utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
-            pert target utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
-            effectiveness tools: {list(self.effectiveness.candi_funcs.keys())}, source(pert, swap, pert_swap, cloak), target(swap, pert_swap)
-            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
-            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
-            """
-                )
+                source_effectiveness, target_effectiveness, None
             )
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
-            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
-            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
-            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
-            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
-            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
+            utility: {metric.generate_iter_utility_log(utility)}
+            source utility: {metric.generate_iter_utility_log(source_utility)}
+            target utility: {metric.generate_iter_utility_log(target_utility)}
+            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
+            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
@@ -152,19 +139,19 @@ class Defense(Base):
                 total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
 
             torch.set_grad_enabled(False)
             (
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
-            ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs)
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
+            ) = self._get_full_swap_results(imgs_A, imgs_B, pert_imgs)
 
             if self.config.third_party.defense.failure_defense_tracing:
                 success_swap_indices = self.effectiveness.get_success_swap_indices(
-                    imgs_A, pert_imgs_A_src_swap
+                    imgs_A, pert_source_swap
                 )
                 if len(success_swap_indices) == 0:
                     continue
@@ -186,10 +173,10 @@ class Defense(Base):
                     imgs_B = self._pick_on_cpu_then_to_gpu(
                         imgs_B_cpu, idx_cpu, device="cuda"
                     )
-                    x_imgs_cpu = x_imgs.detach().to("cpu")
-                    del x_imgs
+                    x_imgs_cpu = pert_imgs.detach().to("cpu")
+                    del pert_imgs
                     self._free_gpu()
-                    x_imgs = self._pick_on_cpu_then_to_gpu(
+                    pert_imgs = self._pick_on_cpu_then_to_gpu(
                         x_imgs_cpu, idx_cpu, device="cuda"
                     )
                     cloak_imgs_cpu = cloak_imgs.detach().to("cpu")
@@ -198,28 +185,28 @@ class Defense(Base):
                     cloak_imgs = self._pick_on_cpu_then_to_gpu(
                         cloak_imgs_cpu, idx_cpu, device="cuda"
                     )
-                    imgs_A_src_swap_cpu = imgs_A_src_swap.detach().to("cpu")
-                    del imgs_A_src_swap
+                    imgs_A_src_swap_cpu = source_swap.detach().to("cpu")
+                    del source_swap
                     self._free_gpu()
-                    imgs_A_src_swap = self._pick_on_cpu_then_to_gpu(
+                    source_swap = self._pick_on_cpu_then_to_gpu(
                         imgs_A_src_swap_cpu, idx_cpu, device="cuda"
                     )
-                    pert_imgs_A_src_swap_cpu = pert_imgs_A_src_swap.detach().to("cpu")
-                    del pert_imgs_A_src_swap
+                    pert_imgs_A_src_swap_cpu = pert_source_swap.detach().to("cpu")
+                    del pert_source_swap
                     self._free_gpu()
-                    pert_imgs_A_src_swap = self._pick_on_cpu_then_to_gpu(
+                    pert_source_swap = self._pick_on_cpu_then_to_gpu(
                         pert_imgs_A_src_swap_cpu, idx_cpu, device="cuda"
                     )
-                    imgs_A_tgt_swap_cpu = imgs_A_tgt_swap.detach().to("cpu")
-                    del imgs_A_tgt_swap
+                    imgs_A_tgt_swap_cpu = target_swap.detach().to("cpu")
+                    del target_swap
                     self._free_gpu()
-                    imgs_A_tgt_swap = self._pick_on_cpu_then_to_gpu(
+                    target_swap = self._pick_on_cpu_then_to_gpu(
                         imgs_A_tgt_swap_cpu, idx_cpu, device="cuda"
                     )
-                    pert_imgs_A_tgt_swap_cpu = pert_imgs_A_tgt_swap.detach().to("cpu")
-                    del pert_imgs_A_tgt_swap
+                    pert_imgs_A_tgt_swap_cpu = pert_target_swap.detach().to("cpu")
+                    del pert_target_swap
                     self._free_gpu()
-                    pert_imgs_A_tgt_swap = self._pick_on_cpu_then_to_gpu(
+                    pert_target_swap = self._pick_on_cpu_then_to_gpu(
                         pert_imgs_A_tgt_swap_cpu, idx_cpu, device="cuda"
                     )
 
@@ -237,32 +224,32 @@ class Defense(Base):
                     self._free_gpu()
 
             (
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                target_utility,
+                source_effectiveness,
+                target_effectiveness,
             ) = metric.get_defense_metric(
                 self.utility,
                 self.effectiveness,
                 imgs_A,
                 imgs_B,
-                x_imgs,
+                pert_imgs,
                 cloak_imgs,
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
             )
 
             metric.merge_metric(
                 self.effectiveness,
                 metrics,
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                target_utility,
+                source_effectiveness,
+                target_effectiveness,
             )
 
             save_tensor_imgs(
@@ -271,58 +258,58 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "pert_imgs",
-                    "cloak_imgs",
-                    "swap",
-                    "pert_swap",
-                    "rev\nswap",
-                    "rev\npert_swap",
+                    "perturb\nimgs",
+                    "cloak\nimgs",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
+                    "target\nswap",
+                    "perturb\ntarget\nswap",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    x_imgs,
+                    pert_imgs,
                     cloak_imgs,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
-                    imgs_A_tgt_swap,
-                    pert_imgs_A_tgt_swap,
+                    source_swap,
+                    pert_source_swap,
+                    target_swap,
+                    pert_target_swap,
                 ],
                 only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
-            del imgs_A, imgs_B, x_imgs, cloak_imgs
+            del imgs_A, imgs_B, pert_imgs, cloak_imgs
             del (
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
             )
             self._free_gpu()
 
             scores = self.score_calculator.calculate_score(
-                source_effectivenesses, target_effectivenesses, metrics
+                source_effectiveness, target_effectiveness, metrics
             )
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
-            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
-            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
-            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
-            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
-            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
+            utility: {metric.generate_iter_utility_log(utility)}
+            source utility: {metric.generate_iter_utility_log(source_utility)}
+            target utility: {metric.generate_iter_utility_log(target_utility)}
+            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
+            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+            target utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
+            source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
+            target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness')}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )
@@ -330,7 +317,7 @@ class Defense(Base):
             self.logger.info(textwrap.indent(iter_log_str, "    "))
             self.logger.info(textwrap.indent(summary_log_str, "    "))
 
-    def robustness_sample(self) -> None:
+    def protection_robustness_sample(self) -> None:
         dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
@@ -340,75 +327,74 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
 
-            pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
+            utility = self.utility.calculate_utility(imgs_A, pert_imgs)
 
             (
                 noise_source_effectivenesses,
                 noise_target_effectivenesses,
             ) = self.robustness.get_gauss_noise_metrics(
-                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
             )
 
             (
                 compress_source_effectivenesses,
                 compress_target_effectivenesses,
             ) = self.robustness.get_compress_metrics(
-                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
             )
 
             (
                 crop_source_effectivenesses,
                 crop_target_effectivenesses,
             ) = self.robustness.get_crop_metrics(
-                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
             )
 
             (
                 logo_source_effectivenesses,
                 logo_target_effectivenesses,
             ) = self.robustness.get_logo_metrics(
-                idx, imgs_A, imgs_B, x_imgs, logo, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, logo, cloak_imgs, self.image_dir
             )
 
             (
-                inc_bright_source_effectivenesses,
-                inc_bright_target_effectivenesses,
+                brighten_source_effectivenesses,
+                brighten_target_effectivenesses,
             ) = self.robustness.get_brightness_metrics(
-                idx, imgs_A, imgs_B, x_imgs, 1.25, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, 1.25, cloak_imgs, self.image_dir
             )
 
             (
-                dec_bright_source_effectivenesses,
-                dec_bright_target_effectivenesses,
+                darken_source_effectivenesses,
+                darken_target_effectivenesses,
             ) = self.robustness.get_brightness_metrics(
-                idx, imgs_A, imgs_B, x_imgs, 0.75, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, 0.75, cloak_imgs, self.image_dir
             )
 
             self._free_gpu()
-            self.logger.info(
-                textwrap.dedent(
-                    f"""
-                pert utility(mse, psnr, ssim, lpips): {metric.generate_iter_utility_log(pert_utilities)}
-                effectiveness tools: {list(self.effectiveness.candi_funcs.keys())}, noise, compress, crop, overlay, increase and decrease the brightness
-                source(robust swap, robust pert swap, robust cloak), target(robust swap, robust pert swap)
-                noise, compress, crop, logo, inc_bright, dec_bright
-                {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
-                {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
-                {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
-                {metric.generate_iter_robustness_log(logo_source_effectivenesses,logo_target_effectivenesses)}
-                {metric.generate_iter_robustness_log(inc_bright_source_effectivenesses,inc_bright_target_effectivenesses)}
-                {metric.generate_iter_robustness_log(dec_bright_source_effectivenesses,dec_bright_target_effectivenesses)}
+
+            iter_log_str = textwrap.dedent(
+                f"""
+                utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())}), context ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())})
+                utility: {metric.generate_iter_utility_log(utility)}
+                noise: {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
+                compress: {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
+                crop: {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
+                logo: {metric.generate_iter_robustness_log(logo_source_effectivenesses,logo_target_effectivenesses)}
+                brighten: {metric.generate_iter_robustness_log(brighten_source_effectivenesses,brighten_target_effectivenesses)}
+                darken: {metric.generate_iter_robustness_log(darken_source_effectivenesses,darken_target_effectivenesses)}
                 """
-                )
             )
 
-    def robustness_metric(self) -> None:
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+
+    def protection_robustness_metric(self) -> None:
         metrics = metric.get_robustness_metric_data_template(
             self.config, self.effectiveness
         )
@@ -425,21 +411,21 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
             torch.set_grad_enabled(False)
 
-            pert_utilities = self.utility.calculate_utility(imgs_A, x_imgs)
-            metric.merge_single_dict(metrics["utility"], pert_utilities)
+            utility = self.utility.calculate_utility(imgs_A, pert_imgs)
+            metric.merge_single_dict(metrics["utility"], utility)
 
             (
                 noise_source_effectivenesses,
                 noise_target_effectivenesses,
             ) = self.robustness.get_gauss_noise_metrics(
-                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
                 metrics,
@@ -452,7 +438,7 @@ class Defense(Base):
                 compress_source_effectivenesses,
                 compress_target_effectivenesses,
             ) = self.robustness.get_compress_metrics(
-                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
                 metrics,
@@ -465,7 +451,7 @@ class Defense(Base):
                 crop_source_effectivenesses,
                 crop_target_effectivenesses,
             ) = self.robustness.get_crop_metrics(
-                idx, imgs_A, imgs_B, x_imgs, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
                 metrics,
@@ -478,7 +464,7 @@ class Defense(Base):
                 logo_source_effectivenesses,
                 logo_target_effectivenesses,
             ) = self.robustness.get_logo_metrics(
-                idx, imgs_A, imgs_B, x_imgs, logo, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, logo, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
                 metrics,
@@ -488,64 +474,63 @@ class Defense(Base):
             )
 
             (
-                inc_bright_source_effectivenesses,
-                inc_bright_target_effectivenesses,
+                brighten_source_effectivenesses,
+                brighten_target_effectivenesses,
             ) = self.robustness.get_brightness_metrics(
-                idx, imgs_A, imgs_B, x_imgs, 1.25, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, 1.25, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
                 metrics,
-                inc_bright_source_effectivenesses,
-                inc_bright_target_effectivenesses,
-                "inc_bright",
+                brighten_source_effectivenesses,
+                brighten_target_effectivenesses,
+                "brighten",
             )
 
             (
-                dec_bright_source_effectivenesses,
-                dec_bright_target_effectivenesses,
+                darken_source_effectivenesses,
+                darken_target_effectivenesses,
             ) = self.robustness.get_brightness_metrics(
-                idx, imgs_A, imgs_B, x_imgs, 0.75, cloak_imgs, self.image_dir
+                idx, imgs_A, imgs_B, pert_imgs, 0.75, cloak_imgs, self.image_dir
             )
             metric.merge_single_robustness_metric(
                 metrics,
-                dec_bright_source_effectivenesses,
-                dec_bright_target_effectivenesses,
-                "dec_bright",
+                darken_source_effectivenesses,
+                darken_target_effectivenesses,
+                "darken",
             )
 
             self._free_gpu()
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness {tuple(self.effectiveness.candi_funcs.keys())} identity {tuple(next(iter(noise_source_effectivenesses.values())).keys())} context {tuple(next(iter(noise_target_effectivenesses.values())).keys())}
-            noise, compress, crop, overlay, increase and decrease the brightness
-            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
-            {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
-            {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
-            {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
-            {metric.generate_iter_robustness_log(logo_source_effectivenesses,logo_target_effectivenesses)}
-            {metric.generate_iter_robustness_log(inc_bright_source_effectivenesses,inc_bright_target_effectivenesses)}
-            {metric.generate_iter_robustness_log(dec_bright_source_effectivenesses,dec_bright_target_effectivenesses)}
+            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())}), context ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())})
+            utility: {metric.generate_iter_utility_log(utility)}
+            noise: {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
+            compress: {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
+            crop: {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
+            logo: {metric.generate_iter_robustness_log(logo_source_effectivenesses,logo_target_effectivenesses)}
+            brighten: {metric.generate_iter_robustness_log(brighten_source_effectivenesses,brighten_target_effectivenesses)}
+            darken: {metric.generate_iter_robustness_log(darken_source_effectivenesses,darken_target_effectivenesses)}
             """
             )
 
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
-            {metric.generate_summary_robustness_log(metrics['noise'])}
-            {metric.generate_summary_robustness_log(metrics['compress'])}
-            {metric.generate_summary_robustness_log(metrics['crop'])}
-            {metric.generate_summary_robustness_log(metrics['logo'])}
-            {metric.generate_summary_robustness_log(metrics['inc_bright'])}
-            {metric.generate_summary_robustness_log(metrics['dec_bright'])}
+            utility: {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
+            noise: {metric.generate_summary_robustness_log(metrics['noise'])}
+            compress: {metric.generate_summary_robustness_log(metrics['compress'])}
+            crop: {metric.generate_summary_robustness_log(metrics['crop'])}
+            logo: {metric.generate_summary_robustness_log(metrics['logo'])}
+            brighten: {metric.generate_summary_robustness_log(metrics['brighten'])}
+            darken: {metric.generate_summary_robustness_log(metrics['darken'])}
             """
             )
 
             self.logger.info(textwrap.indent(iter_log_str, "    "))
             self.logger.info(textwrap.indent(summary_log_str, "    "))
 
-    def robustness_forensics_sample(self):
+    def forensics_robustness_sample(self):
         dataset = SampleDataset(self.config.third_party.dataset.sample_dir)
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
@@ -555,146 +540,142 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
 
             imgs_A_identity = self._get_imgs_identity(imgs_A)
-            imgs_A_src_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
-            pert_imgs_A_identity = self._get_imgs_identity(x_imgs)
-            pert_imgs_A_src_swap = self.target(
+            source_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
+            pert_imgs_A_identity = self._get_imgs_identity(pert_imgs)
+            pert_source_swap = self.target(
                 None, imgs_B, pert_imgs_A_identity, None, True
             )
 
-            results = {"clean": pert_imgs_A_src_swap}
-            results["noise"] = self.robustness.gauss_noise(pert_imgs_A_src_swap)
+            results = {"clean": pert_source_swap}
+            results["noise"] = self.robustness.gauss_noise(pert_source_swap)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
                 [
                     "imgs_A",
                     "imgs_B",
-                    "imgs_A_src_swap",
-                    "pert_imgs_A_src_swap",
+                    "source_swap",
+                    "pert_source_swap",
                     "noise",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
+                    source_swap,
+                    pert_source_swap,
                     results["noise"],
                 ],
                 only_save_summary=True,
             )
 
-            results["compress"] = self.robustness.webp_compress(pert_imgs_A_src_swap)
+            results["compress"] = self.robustness.webp_compress(pert_source_swap)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
                 [
                     "imgs_A",
                     "imgs_B",
-                    "imgs_A_src_swap",
-                    "pert_imgs_A_src_swap",
+                    "source_swap",
+                    "pert_source_swap",
                     "compress",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
+                    source_swap,
+                    pert_source_swap,
                     results["compress"],
                 ],
                 only_save_summary=True,
             )
 
-            results["crop"] = self.robustness.crop(pert_imgs_A_src_swap)
+            results["crop"] = self.robustness.crop(pert_source_swap)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
                 [
                     "imgs_A",
                     "imgs_B",
-                    "imgs_A_src_swap",
-                    "pert_imgs_A_src_swap",
+                    "source_swap",
+                    "pert_source_swap",
                     "crop",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
+                    source_swap,
+                    pert_source_swap,
                     results["crop"],
                 ],
                 only_save_summary=True,
             )
 
-            results["logo"] = self.robustness.logo(pert_imgs_A_src_swap, logo)
+            results["logo"] = self.robustness.logo(pert_source_swap, logo)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
                 [
                     "imgs_A",
                     "imgs_B",
-                    "imgs_A_src_swap",
-                    "pert_imgs_A_src_swap",
+                    "source_swap",
+                    "pert_source_swap",
                     "logo",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
+                    source_swap,
+                    pert_source_swap,
                     results["logo"],
                 ],
                 only_save_summary=True,
             )
 
-            results["inc_bright"] = self.robustness.brightness(
-                pert_imgs_A_src_swap, 1.25
-            )
+            results["brighten"] = self.robustness.brightness(pert_source_swap, 1.25)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
                 [
                     "imgs_A",
                     "imgs_B",
-                    "imgs_A_src_swap",
-                    "pert_imgs_A_src_swap",
-                    "inc_bright",
+                    "source_swap",
+                    "pert_source_swap",
+                    "brighten",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
-                    results["inc_bright"],
+                    source_swap,
+                    pert_source_swap,
+                    results["brighten"],
                 ],
                 only_save_summary=True,
             )
 
-            results["dec_bright"] = self.robustness.brightness(
-                pert_imgs_A_src_swap, 0.75
-            )
+            results["darken"] = self.robustness.brightness(pert_source_swap, 0.75)
             save_tensor_imgs(
                 self.image_dir,
                 idx,
                 [
                     "imgs_A",
                     "imgs_B",
-                    "imgs_A_src_swap",
-                    "pert_imgs_A_src_swap",
-                    "dec_bright",
+                    "source_swap",
+                    "pert_source_swap",
+                    "darken",
                 ],
                 [
                     imgs_A,
                     imgs_B,
-                    imgs_A_src_swap,
-                    pert_imgs_A_src_swap,
-                    results["dec_bright"],
+                    source_swap,
+                    pert_source_swap,
+                    results["darken"],
                 ],
                 only_save_summary=True,
             )
@@ -704,22 +685,23 @@ class Defense(Base):
             )
 
             self._free_gpu()
-            self.logger.info(
-                textwrap.dedent(
-                    f"""
-            effectiveness tools: {list(self.effectiveness.candi_funcs.keys())}, cloak
-            original: {metric.generate_forensics_robustness_log(forensic_metrics['clean'])}
+
+            iter_log_str = textwrap.dedent(
+                f"""
+            cloak ({', '.join(self.effectiveness.candi_funcs.keys())})
+            origin: {metric.generate_forensics_robustness_log(forensic_metrics['clean'])}
             noise: {metric.generate_forensics_robustness_log(forensic_metrics['noise'])}
             compress: {metric.generate_forensics_robustness_log(forensic_metrics['compress'])}
             crop: {metric.generate_forensics_robustness_log(forensic_metrics['crop'])}
-            overlay: {metric.generate_forensics_robustness_log(forensic_metrics['logo'])}
-            increase the brightness: {metric.generate_forensics_robustness_log(forensic_metrics['inc_bright'])}
-            decrease the brightness: {metric.generate_forensics_robustness_log(forensic_metrics['dec_bright'])}
+            logo: {metric.generate_forensics_robustness_log(forensic_metrics['logo'])}
+            brighten: {metric.generate_forensics_robustness_log(forensic_metrics['brighten'])}
+            darken: {metric.generate_forensics_robustness_log(forensic_metrics['darken'])}
             """
-                )
             )
 
-    def robustness_forensics_metric(self):
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+
+    def forensics_robustness_metric(self):
         metrics = metric.get_robustness_forensics_metric_data_template(
             self.effectiveness
         )
@@ -736,31 +718,27 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
-            x_imgs = self.robustness.webp_compress(x_imgs, 80)
-            x_imgs = self._perturb_imgs(x_imgs, cloak_imgs)
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
 
             torch.set_grad_enabled(False)
-            pert_imgs_A_identity = self._get_imgs_identity(x_imgs)
-            pert_imgs_A_src_swap = self.target(
+            pert_imgs_A_identity = self._get_imgs_identity(pert_imgs)
+            pert_source_swap = self.target(
                 None, imgs_B, pert_imgs_A_identity, None, True
             )
 
-            swap_results = {"clean": pert_imgs_A_src_swap}
-            swap_results["noise"] = self.robustness.gauss_noise(pert_imgs_A_src_swap)
-            swap_results["compress"] = self.robustness.webp_compress(
-                pert_imgs_A_src_swap
+            swap_results = {"clean": pert_source_swap}
+            swap_results["noise"] = self.robustness.gauss_noise(pert_source_swap)
+            swap_results["compress"] = self.robustness.webp_compress(pert_source_swap)
+            swap_results["crop"] = self.robustness.crop(pert_source_swap)
+            swap_results["logo"] = self.robustness.logo(pert_source_swap, logo)
+            swap_results["brighten"] = self.robustness.brightness(
+                pert_source_swap, 1.25
             )
-            swap_results["crop"] = self.robustness.crop(pert_imgs_A_src_swap)
-            swap_results["logo"] = self.robustness.logo(pert_imgs_A_src_swap, logo)
-            swap_results["inc_bright"] = self.robustness.brightness(
-                pert_imgs_A_src_swap, 1.25
-            )
-            swap_results["dec_bright"] = self.robustness.brightness(
-                pert_imgs_A_src_swap, 0.75
-            )
+            swap_results["darken"] = self.robustness.brightness(pert_source_swap, 0.75)
 
             forensic_metrics = metric.get_robustness_forensics_metric(
                 self.effectiveness, cloak_imgs, swap_results
@@ -768,31 +746,34 @@ class Defense(Base):
             metric.merge_single_dict(metrics, forensic_metrics)
 
             self._free_gpu()
-            self.logger.info(
+
+            iter_log_str = textwrap.dedent(
                 f"""
-            noise, compress, crop, overlay, increase and decrease the brightness {self.effectiveness.candi_funcs.keys()}
-            cloak images
-            {metric.generate_forensics_robustness_log(forensic_metrics['clean'])}
-            {metric.generate_forensics_robustness_log(forensic_metrics['noise'])}
-            {metric.generate_forensics_robustness_log(forensic_metrics['compress'])}
-            {metric.generate_forensics_robustness_log(forensic_metrics['crop'])}
-            {metric.generate_forensics_robustness_log(forensic_metrics['logo'])}
-            {metric.generate_forensics_robustness_log(forensic_metrics['inc_bright'])}
-            {metric.generate_forensics_robustness_log(forensic_metrics['dec_bright'])}
+            cloak ({', '.join(self.effectiveness.candi_funcs.keys())})
+            origin: {metric.generate_forensics_robustness_log(forensic_metrics['clean'])}
+            noise: {metric.generate_forensics_robustness_log(forensic_metrics['noise'])}
+            compress: {metric.generate_forensics_robustness_log(forensic_metrics['compress'])}
+            crop: {metric.generate_forensics_robustness_log(forensic_metrics['crop'])}
+            logo: {metric.generate_forensics_robustness_log(forensic_metrics['logo'])}
+            brighten: {metric.generate_forensics_robustness_log(forensic_metrics['brighten'])}
+            darken: {metric.generate_forensics_robustness_log(forensic_metrics['darken'])}
+            """
+            )
+            summary_log_str = textwrap.dedent(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            origin: {metric.generate_forensics_robustness_log(metrics['clean'])}
+            noise: {metric.generate_forensics_robustness_log(metrics['noise'])}
+            compress: {metric.generate_forensics_robustness_log(metrics['compress'])}
+            crop: {metric.generate_forensics_robustness_log(metrics['crop'])}
+            logo: {metric.generate_forensics_robustness_log(metrics['logo'])}
+            brighten: {metric.generate_forensics_robustness_log(metrics['brighten'])}
+            darken: {metric.generate_forensics_robustness_log(metrics['darken'])}
             """
             )
 
-            self.logger.info(
-                f"""[{idx}/{len(dataloader)}]Average of {total_count} pictures
-            {metric.generate_forensics_robustness_log(metrics['clean'])}
-            {metric.generate_forensics_robustness_log(metrics['noise'])}
-            {metric.generate_forensics_robustness_log(metrics['compress'])}
-            {metric.generate_forensics_robustness_log(metrics['crop'])}
-            {metric.generate_forensics_robustness_log(metrics['logo'])}
-            {metric.generate_forensics_robustness_log(metrics['inc_bright'])}
-            {metric.generate_forensics_robustness_log(metrics['dec_bright'])}
-            """
-            )
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
 
     def image_robustness_metric(self):
         metrics = metric.get_image_robustness_data_template(self.effectiveness)
@@ -840,66 +821,69 @@ class Defense(Base):
                 metrics["logo"],
             )
 
-            inc_bright_imgs_A = self.robustness.brightness(imgs_A, 1.25)
+            brighten_imgs_A = self.robustness.brightness(imgs_A, 1.25)
             self._get_single_robustness_operate_metric(
                 imgs_B,
-                inc_bright_imgs_A,
+                brighten_imgs_A,
                 cloak_imgs,
-                metrics["inc_bright"],
+                metrics["brighten"],
             )
 
-            dec_bright_imgs_A = self.robustness.brightness(imgs_A, 0.75)
+            darken_imgs_A = self.robustness.brightness(imgs_A, 0.75)
             self._get_single_robustness_operate_metric(
                 imgs_B,
-                dec_bright_imgs_A,
+                darken_imgs_A,
                 cloak_imgs,
-                metrics["dec_bright"],
+                metrics["darken"],
             )
 
             torch.cuda.empty_cache()
-            self.logger.info(
+
+            summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
             noise
-            {metric.generate_summary_utility_log(metrics['noise'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['noise'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['noise'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics['noise'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics['noise'], 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics['noise'], 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_target_effectiveness')}
             compress
-            {metric.generate_summary_utility_log(metrics['compress'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['compress'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['compress'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics['compress'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics['compress'], 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics['compress'], 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_target_effectiveness')}
             crop
-            {metric.generate_summary_utility_log(metrics['crop'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['crop'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['crop'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics['crop'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics['crop'], 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics['crop'], 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_target_effectiveness')}
             logo
-            {metric.generate_summary_utility_log(metrics['logo'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['logo'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['logo'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics['logo'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics['logo'], 'tgt_pert_swap_effectiveness')}
-            inc_bright
-            {metric.generate_summary_utility_log(metrics['inc_bright'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['inc_bright'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['inc_bright'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics['inc_bright'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics['inc_bright'], 'tgt_pert_swap_effectiveness')}
-            dec_bright
-            {metric.generate_summary_utility_log(metrics['dec_bright'], 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['dec_bright'], 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics['dec_bright'], 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics['dec_bright'], 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics['dec_bright'], 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics['logo'], 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_target_effectiveness')}
+            brighten
+            utility: {metric.generate_summary_utility_log(metrics['brighten'], 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_target_effectiveness')}
+            darken
+            utility: {metric.generate_summary_utility_log(metrics['darken'], 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_target_effectiveness')}
             """
             )
 
-    def adaptive_attack(self) -> None:
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
+
+    def adaptive_attack_with_other_image(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
 
         dataset = AdaptiveMetricDataset(self.config)
@@ -913,45 +897,45 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs)
             x_imgs_B = self._perturb_imgs(imgs_B, cloak_imgs)
 
             torch.set_grad_enabled(False)
-            x_imgs = x_imgs_A - (x_imgs_B - imgs_B)
+            pert_imgs = pert_imgs_A - (x_imgs_B - imgs_B)
             (
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
-            ) = self._get_full_swap_results(imgs_A, imgs_C, x_imgs)
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
+            ) = self._get_full_swap_results(imgs_A, imgs_C, pert_imgs)
 
             (
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                target_utility,
+                source_effectiveness,
+                target_effectiveness,
             ) = metric.get_defense_metric(
                 self.utility,
                 self.effectiveness,
                 imgs_A,
                 imgs_C,
-                x_imgs,
+                pert_imgs,
                 cloak_imgs,
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
             )
 
             metric.merge_metric(
                 self.effectiveness,
                 metrics,
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                target_utility,
+                source_effectiveness,
+                target_effectiveness,
             )
 
             save_tensor_imgs(
@@ -962,7 +946,7 @@ class Defense(Base):
                     "imgs_B",
                     "imgs_C",
                     "cloak_imgs",
-                    "x_imgs",
+                    "pert_imgs",
                     "imgs_A\ndiff",
                     "imgs_B\ndiff",
                 ],
@@ -971,45 +955,45 @@ class Defense(Base):
                     imgs_B,
                     imgs_C,
                     cloak_imgs,
-                    x_imgs,
+                    pert_imgs,
                     (x_imgs_B - imgs_B) * 10,
-                    (x_imgs_A - imgs_A) * 10,
+                    (pert_imgs_A - imgs_A) * 10,
                 ],
                 only_save_summary=True,
             )
 
-            del imgs_A, imgs_B, imgs_C, x_imgs, cloak_imgs
+            del imgs_A, imgs_B, imgs_C, pert_imgs, cloak_imgs
             del (
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
             )
             self._free_gpu()
 
             scores = self.score_calculator.calculate_score(
-                source_effectivenesses, target_effectivenesses, metrics
+                source_effectiveness, target_effectiveness, metrics
             )
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
-            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
-            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
-            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
-            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
-            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
+            utility: {metric.generate_iter_utility_log(utility)}
+            source utility: {metric.generate_iter_utility_log(source_utility)}
+            target utility: {metric.generate_iter_utility_log(target_utility)}
+            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
+            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness')}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )
@@ -1017,7 +1001,7 @@ class Defense(Base):
             self.logger.info(textwrap.indent(iter_log_str, "    "))
             self.logger.info(textwrap.indent(summary_log_str, "    "))
 
-    def adaptive_attack_self(self) -> None:
+    def adaptive_attack_with_self_image(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
 
         dataset = MetricDataset(self.config)
@@ -1031,45 +1015,45 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            x_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs)
-            x_x_imgs_A = self._perturb_imgs(x_imgs_A, cloak_imgs)
+            pert_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs)
+            pert_pert_imgs_A = self._perturb_imgs(pert_imgs_A, cloak_imgs)
 
             torch.set_grad_enabled(False)
-            x_imgs = x_imgs_A - (x_x_imgs_A - x_imgs_A)
+            pert_imgs = pert_imgs_A - (pert_pert_imgs_A - pert_imgs_A)
             (
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
-            ) = self._get_full_swap_results(imgs_A, imgs_B, x_imgs)
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
+            ) = self._get_full_swap_results(imgs_A, imgs_B, pert_imgs)
 
             (
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                target_utility,
+                source_effectiveness,
+                target_effectiveness,
             ) = metric.get_defense_metric(
                 self.utility,
                 self.effectiveness,
                 imgs_A,
                 imgs_B,
-                x_imgs,
+                pert_imgs,
                 cloak_imgs,
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
             )
 
             metric.merge_metric(
                 self.effectiveness,
                 metrics,
-                pert_utilities,
-                pert_as_src_swap_utilities,
-                pert_as_tgt_swap_utilities,
-                source_effectivenesses,
-                target_effectivenesses,
+                utility,
+                source_utility,
+                target_utility,
+                source_effectiveness,
+                target_effectiveness,
             )
 
             save_tensor_imgs(
@@ -1079,7 +1063,7 @@ class Defense(Base):
                     "imgs_A",
                     "imgs_B",
                     "cloak_imgs",
-                    "x_imgs",
+                    "pert_imgs",
                     "pert_imgs_A\nsrc_swap",
                     "pert_imgs_A\ntgt_swap",
                     "protect\ndiff",
@@ -1089,47 +1073,47 @@ class Defense(Base):
                     imgs_A,
                     imgs_B,
                     cloak_imgs,
-                    x_imgs,
-                    pert_imgs_A_src_swap,
-                    pert_imgs_A_tgt_swap,
-                    (x_imgs_A - imgs_A) * 10,
-                    (x_x_imgs_A - x_imgs_A) * 10,
+                    pert_imgs,
+                    pert_source_swap,
+                    pert_target_swap,
+                    (pert_imgs_A - imgs_A) * 10,
+                    (pert_pert_imgs_A - pert_imgs_A) * 10,
                 ],
                 only_save_summary=False,
             )
 
-            del imgs_A, imgs_B, cloak_imgs, x_imgs
+            del imgs_A, imgs_B, cloak_imgs, pert_imgs
             del (
-                imgs_A_src_swap,
-                pert_imgs_A_src_swap,
-                imgs_A_tgt_swap,
-                pert_imgs_A_tgt_swap,
+                source_swap,
+                pert_source_swap,
+                target_swap,
+                pert_target_swap,
             )
             self._free_gpu()
 
             scores = self.score_calculator.calculate_score(
-                source_effectivenesses, target_effectivenesses, metrics
+                source_effectiveness, target_effectiveness, metrics
             )
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility(mse, psnr, ssim, lpips), effectiveness {tuple(source_effectivenesses.keys())} identity {tuple(next(iter(source_effectivenesses.values())).keys())} context {tuple(next(iter(target_effectivenesses.values())).keys())}
-            pert utility: {metric.generate_iter_utility_log(pert_utilities)}
-            pert as swap source utility: {metric.generate_iter_utility_log(pert_as_src_swap_utilities)}
-            pert as swap target utility: {metric.generate_iter_utility_log(pert_as_tgt_swap_utilities)}
-            pert as swap source effectiveness: {metric.generate_iter_effectiveness_log(source_effectivenesses)}
-            pert as swap target effectiveness: {metric.generate_iter_effectiveness_log(target_effectivenesses)}
+            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
+            utility: {metric.generate_iter_utility_log(utility)}
+            source utility: {metric.generate_iter_utility_log(source_utility)}
+            target utility: {metric.generate_iter_utility_log(target_utility)}
+            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
+            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'src_pert_swap_utility', idx)}
-            {metric.generate_summary_utility_log(metrics, 'tgt_pert_swap_utility', idx)}
-            {metric.generate_summary_effectiveness_log(metrics, 'src_pert_swap_effectiveness')}
-            {metric.generate_summary_effectiveness_log(metrics, 'tgt_pert_swap_effectiveness')}
+            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            pert source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+            pert target utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
+            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
+            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness')}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )
@@ -1146,7 +1130,7 @@ class Defense(Base):
         with torch.no_grad():
             self_identity = self._get_imgs_identity(imgs)
             cloak_identity = self._get_imgs_identity(cloak_imgs)
-            imgs_latent_code = self.target.netG.encoder(x_imgs)
+            imgs_latent_code = self.target.netG.encoder(x_imgs)  # type: ignore
 
         epsilon = (
             self.config.third_party.defense.epsilon
@@ -1192,7 +1176,7 @@ class Defense(Base):
                 * l2_per_image(x_identity, cloak_identity)
             )
 
-            x_latent_code = self.target.netG.encoder(x_imgs)
+            x_latent_code = self.target.netG.encoder(x_imgs)  # type: ignore
             context_diff = torch.clamp(
                 l2_per_image(x_latent_code, imgs_latent_code),
                 0,
@@ -1249,25 +1233,21 @@ class Defense(Base):
         self, imgs_A: Tensor, imgs_B: Tensor, pert_imgs_A: Tensor
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         imgs_A_identity = self._get_imgs_identity(imgs_A)
-        imgs_A_src_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
+        source_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
 
         pert_imgs_A_identity = self._get_imgs_identity(pert_imgs_A)
-        pert_imgs_A_src_swap = self.target(
-            None, imgs_B, pert_imgs_A_identity, None, True
-        )
+        pert_source_swap = self.target(None, imgs_B, pert_imgs_A_identity, None, True)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        imgs_A_tgt_swap = self.target(None, imgs_A, imgs_B_identity, None, True)
+        target_swap = self.target(None, imgs_A, imgs_B_identity, None, True)
 
-        pert_imgs_A_tgt_swap = self.target(
-            None, pert_imgs_A, imgs_B_identity, None, True
-        )
+        pert_target_swap = self.target(None, pert_imgs_A, imgs_B_identity, None, True)
 
         return (
-            imgs_A_src_swap,
-            pert_imgs_A_src_swap,
-            imgs_A_tgt_swap,
-            pert_imgs_A_tgt_swap,
+            source_swap,
+            pert_source_swap,
+            target_swap,
+            pert_target_swap,
         )
 
     def _get_single_robustness_operate_metric(
@@ -1281,18 +1261,18 @@ class Defense(Base):
         operate_x_imgs = self._perturb_imgs(operate_imgs_A, cloak_imgs)
         torch.set_grad_enabled(False)
         (
-            imgs_A_src_swap,
-            pert_imgs_A_src_swap,
-            imgs_A_tgt_swap,
-            pert_imgs_A_tgt_swap,
+            source_swap,
+            pert_source_swap,
+            target_swap,
+            pert_target_swap,
         ) = self._get_full_swap_results(operate_imgs_A, imgs_B, operate_x_imgs)
 
         (
-            pert_utilities,
-            pert_as_src_swap_utilities,
-            pert_as_tgt_swap_utilities,
-            source_effectivenesses,
-            target_effectivenesses,
+            utility,
+            source_utility,
+            target_utility,
+            source_effectiveness,
+            target_effectiveness,
         ) = metric.get_defense_metric(
             self.utility,
             self.effectiveness,
@@ -1300,20 +1280,20 @@ class Defense(Base):
             imgs_B,
             operate_x_imgs,
             cloak_imgs,
-            imgs_A_src_swap,
-            pert_imgs_A_src_swap,
-            imgs_A_tgt_swap,
-            pert_imgs_A_tgt_swap,
+            source_swap,
+            pert_source_swap,
+            target_swap,
+            pert_target_swap,
         )
 
         metric.merge_metric(
             self.effectiveness,
             data,
-            pert_utilities,
-            pert_as_src_swap_utilities,
-            pert_as_tgt_swap_utilities,
-            source_effectivenesses,
-            target_effectivenesses,
+            utility,
+            source_utility,
+            target_utility,
+            source_effectiveness,
+            target_effectiveness,
         )
 
     def _pick_on_cpu_then_to_gpu(

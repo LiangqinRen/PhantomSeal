@@ -1,14 +1,9 @@
-from third_party.insightface.recognition.arcface_torch.backbones.iresnet import (
-    iresnet100,
-)
-
 import torch
 import lpips
 import math
 import requests
 import base64
 import time
-import os
 import random
 import warnings
 import urllib3
@@ -31,29 +26,27 @@ from skimage import metrics
 from torch import Tensor
 from PIL import Image
 from io import BytesIO
-from sklearn.cluster import KMeans
 from torchvision.transforms.functional import to_pil_image
 from concurrent.futures import ThreadPoolExecutor
-from insightface.model_zoo import get_model
 from pathlib import Path
 from typing import cast
 from torchvision.utils import save_image
 
-_ORIG_TORCH_LOAD = torch.load
+# _ORIG_TORCH_LOAD = torch.load
 
 
-def _load_patch(*args, **kwargs):
-    if (
-        args
-        and isinstance(args[0], str)
-        and os.path.basename(args[0]) in ("Arcface_model_only.tar")
-    ):
-        kwargs.setdefault("weights_only", False)
-        kwargs.setdefault("map_location", "cpu")
-    return _ORIG_TORCH_LOAD(*args, **kwargs)
+# def _load_patch(*args, **kwargs):
+#     if (
+#         args
+#         and isinstance(args[0], str)
+#         and os.path.basename(args[0]) in ("Arcface_model_only.tar")
+#     ):
+#         kwargs.setdefault("weights_only", False)
+#         kwargs.setdefault("map_location", "cpu")
+#     return _ORIG_TORCH_LOAD(*args, **kwargs)
 
 
-torch.load = _load_patch
+# torch.load = _load_patch
 
 
 class RateLimiter:
@@ -92,7 +85,10 @@ class Utility:
             warnings.simplefilter("ignore", UserWarning)
             self.lpips_distance = lpips.LPIPS(net="vgg", verbose=False).cuda()
 
-    def calculate_utility(self, imgs1: Tensor, imgs2: Tensor):
+    def calculate_utility(self, imgs1: Tensor, imgs2: Tensor) -> dict | None:
+        if imgs1 is None or imgs2 is None:
+            return None
+
         utilities = {"mse": [], "psnr": [], "ssim": [], "lpips": []}
 
         imgs1_ndarray = imgs1.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
@@ -149,20 +145,6 @@ class Effectiveness:
             aws_secret_access_key=self.config.evaluate.aws.api_secret,
             region_name=self.config.evaluate.aws.api_region,
         )
-
-        self.arcface_resnet = get_model(self.config.evaluate.arcface_resnet_path)
-        self.arcface_resnet.prepare(ctx_id=0)  # type: ignore
-
-        self.cosface_resnet = iresnet100(fp16=False)
-        self.cosface_resnet.eval()
-
-        state = torch.load(self.config.evaluate.cosface_resnet_path, map_location="cpu")
-        self.cosface_resnet.load_state_dict(state, strict=False)
-        self.cosface_resnet.cuda()
-
-        arcface_diffface_checkpoint = torch.load(f"checkpoints/Arcface_model_only.tar")
-        self.arcface_diffface = arcface_diffface_checkpoint["model"].module
-        self.arcface_diffface = self.arcface_diffface.cuda().eval()
 
         self.facepp_limiter = RateLimiter(config.evaluate.facepp.qps)
 
@@ -385,6 +367,7 @@ class Effectiveness:
     def _get_aws_matching(self, imgs1: Tensor, imgs2: Tensor) -> tuple[float, float]:
         matching_count, valid_count = 0, 1e-10
         for img1, img2 in zip(imgs1, imgs2):
+            response = None
             try:
                 img1 = Image.fromarray(
                     (img1.detach().cpu().permute(1, 2, 0).numpy() * 255)
@@ -413,9 +396,13 @@ class Effectiveness:
                 matching_count += len(response["FaceMatches"])
                 valid_count += 1
             except Exception as e:
-                error_code = e.response["Error"]["Code"]
-                if error_code == "InvalidParameterException":
-                    valid_count += 1
+                if response is not None and "Error" in response:
+                    error_code = response["Error"]["Code"]
+                    if error_code == "InvalidParameterException":
+                        valid_count += 1
+                    else:
+                        self.logger.error(e)
+                        valid_count += 1e-10
                 else:
                     self.logger.error(e)
                     valid_count += 1e-10
@@ -515,187 +502,6 @@ class Effectiveness:
                 effectivenesses[k]["cloak"] = v(pert_swap_imgs, cloak_imgs)
 
         return effectivenesses
-
-    def _get_ndarray_similarity(self, e1: np.ndarray, e2: np.ndarray):
-        e1 = np.asarray(e1).reshape(-1).astype(np.float32)
-        e2 = np.asarray(e2).reshape(-1).astype(np.float32)
-
-        e1 /= np.linalg.norm(e1) + 1e-12
-        e2 /= np.linalg.norm(e2) + 1e-12
-
-        return float(np.dot(e1, e2))
-
-    def _get_tensor_similarity(self, e1: Tensor, e2: Tensor):
-        f1 = F.normalize(e1, p=2, dim=1)
-        f2 = F.normalize(e2, p=2, dim=1)
-        sim = (f1 * f2).sum(dim=1)
-
-        return sim
-
-    def evaluate_similarity_via_arcface(
-        self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
-    ) -> tuple[list[int], list[int]]:
-        imgs3_close_to_imgs1 = []
-        imgs3_close_to_imgs2 = []
-        for idx, (img1, img2, img3) in enumerate(zip(imgs1, imgs2, imgs3)):
-            e1 = self.arcface_resnet.get_feat(  # type: ignore
-                self._convert_to_bgr112_ndarray(img1.unsqueeze(0))
-            ).astype(np.float32)
-            e2 = self.arcface_resnet.get_feat(  # type: ignore
-                self._convert_to_bgr112_ndarray(img2.unsqueeze(0))
-            ).astype(np.float32)
-            e3 = self.arcface_resnet.get_feat(  # type: ignore
-                self._convert_to_bgr112_ndarray(img3.unsqueeze(0))
-            ).astype(np.float32)
-
-            if self._get_ndarray_similarity(e3, e1) >= self._get_ndarray_similarity(
-                e3, e2
-            ):
-                imgs3_close_to_imgs1.append(idx)
-            else:
-                imgs3_close_to_imgs2.append(idx)
-
-        return imgs3_close_to_imgs1, imgs3_close_to_imgs2
-
-    def evaluate_similarity_via_cosface(
-        self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
-    ) -> tuple[list[int], list[int]]:
-        imgs3_close_to_imgs1 = []
-        imgs3_close_to_imgs2 = []
-        for idx, (img1, img2, img3) in enumerate(zip(imgs1, imgs2, imgs3)):
-            e1 = self.cosface_resnet(self._convert_to_bgr112_tensor(img1.unsqueeze(0)))
-            e2 = self.cosface_resnet(self._convert_to_bgr112_tensor(img2.unsqueeze(0)))
-            e3 = self.cosface_resnet(self._convert_to_bgr112_tensor(img3.unsqueeze(0)))
-
-            if (
-                self._get_tensor_similarity(e3, e1).item()
-                >= self._get_tensor_similarity(e3, e2).item()
-            ):
-                imgs3_close_to_imgs1.append(idx)
-            else:
-                imgs3_close_to_imgs2.append(idx)
-
-        return imgs3_close_to_imgs1, imgs3_close_to_imgs2
-
-    def evaluate_similarity_via_arcface_diffface(
-        self, imgs1: Tensor, imgs2: Tensor, imgs3: Tensor
-    ) -> tuple[list[int], list[int]]:
-        def cosin_metric(x1, x2):
-            return torch.sum(x1 * x2, dim=1) / (
-                torch.norm(x1, dim=1) * torch.norm(x2, dim=1)
-            )
-
-        imgs3_close_to_imgs1 = []
-        imgs3_close_to_imgs2 = []
-        for idx, (img1, img2, img3) in enumerate(zip(imgs1, imgs2, imgs3)):
-            img1 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                img1.unsqueeze(0)
-            )
-            img1 = F.interpolate(img1, (112, 112))
-            img1_id = self.arcface_diffface(img1)
-
-            img2 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                img2.unsqueeze(0)
-            )
-            img2 = F.interpolate(img2, (112, 112))
-            img2_id = self.arcface_diffface(img2)
-
-            img3 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                img3.unsqueeze(0)
-            )
-            img3 = F.interpolate(img3, (112, 112))
-            img3_id = self.arcface_diffface(img3)
-
-            if cosin_metric(img3_id, img1_id) >= cosin_metric(img3_id, img2_id):
-                imgs3_close_to_imgs1.append(idx)
-            else:
-                imgs3_close_to_imgs2.append(idx)
-
-        return imgs3_close_to_imgs1, imgs3_close_to_imgs2
-
-    def get_arcface_scores(
-        self, imgs_A: Tensor, imgs_B: Tensor, results: Tensor
-    ) -> tuple[list[float], list[float]]:
-        scores, scoresR = [], []
-        for img1, img2, img3 in zip(imgs_A, imgs_B, results):
-            e1 = self.arcface_resnet.get_feat(  # type: ignore
-                self._convert_to_bgr112_ndarray(img1.unsqueeze(0))
-            ).astype(np.float32)
-            e2 = self.arcface_resnet.get_feat(  # type: ignore
-                self._convert_to_bgr112_ndarray(img2.unsqueeze(0))
-            ).astype(np.float32)
-            e3 = self.arcface_resnet.get_feat(  # type: ignore
-                self._convert_to_bgr112_ndarray(img3.unsqueeze(0))
-            ).astype(np.float32)
-
-            score = self._get_ndarray_similarity(e3, e1)
-            scoreR = self._get_ndarray_similarity(e3, e1) / (
-                self._get_ndarray_similarity(e3, e1)
-                + self._get_ndarray_similarity(e2, e1)
-            )
-
-            scores.append(score)
-            scoresR.append(scoreR)
-
-        return scores, scoresR
-
-    def get_arcface_diffface_scores(
-        self, imgs_A: Tensor, imgs_B: Tensor, results: Tensor
-    ) -> tuple[list[float], list[float]]:
-        def cosin_metric(x1, x2):
-            return torch.sum(x1 * x2, dim=1) / (
-                torch.norm(x1, dim=1) * torch.norm(x2, dim=1)
-            )
-
-        scores, scoresR = [], []
-        for img1, img2, img3 in zip(imgs_A, imgs_B, results):
-            img1 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                img1.unsqueeze(0)
-            )
-            img1 = F.interpolate(img1, (112, 112))
-            img1_id = self.arcface_diffface(img1)
-
-            img2 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                img2.unsqueeze(0)
-            )
-            img2 = F.interpolate(img2, (112, 112))
-            img2_id = self.arcface_diffface(img2)
-
-            img3 = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(
-                img3.unsqueeze(0)
-            )
-            img3 = F.interpolate(img3, (112, 112))
-            img3_id = self.arcface_diffface(img3)
-
-            score = cosin_metric(img3_id, img1_id)
-            scoreR = cosin_metric(img3_id, img1_id) / (
-                cosin_metric(img3_id, img1_id) + cosin_metric(img3_id, img2_id)
-            )
-
-            scores.append(score.item())
-            scoresR.append(scoreR.item())
-
-        return scores, scoresR
-
-    def get_cosface_scores(
-        self, imgs_A: Tensor, imgs_B: Tensor, results: Tensor
-    ) -> tuple[list[float], list[float]]:
-        scores, scoresR = [], []
-        for img1, img2, img3 in zip(imgs_A, imgs_B, results):
-            e1 = self.cosface_resnet(self._convert_to_bgr112_tensor(img1.unsqueeze(0)))
-            e2 = self.cosface_resnet(self._convert_to_bgr112_tensor(img2.unsqueeze(0)))
-            e3 = self.cosface_resnet(self._convert_to_bgr112_tensor(img3.unsqueeze(0)))
-
-            score = self._get_tensor_similarity(e3, e1)
-            scoreR = self._get_tensor_similarity(e3, e1) / (
-                self._get_tensor_similarity(e3, e1)
-                + self._get_tensor_similarity(e3, e2)
-            )
-
-            scores.append(score.item())
-            scoresR.append(scoreR.item())
-
-        return scores, scoresR
 
 
 class AIEditing:
@@ -1099,6 +905,7 @@ class Cloak:
         return imgs_gender
 
     def find_best_cloaks(self, imgs: Tensor) -> Tensor:
+        imgs_gender = {}
         if not self.config.third_party.dataset.cloak_mix:
             imgs_gender = self._check_imgs_gender(imgs)
 
@@ -1148,264 +955,6 @@ class Cloak:
                 best_cloaks.append(candidates[sorted_distances[-1][1]])
 
         return torch.stack(best_cloaks, dim=0)
-
-
-class KMeansCloakSelector:
-    def __init__(self, logger, config, effectiveness):
-        self.logger = logger
-        self.config = config
-        self.effectiveness = effectiveness
-
-        self.cloak_dir = Path(self.config.third_party.dataset.cloak_dir)
-
-        self.cloak_imgs = self._get_cloak_imgs()
-        self.cloak_embeddings = self._cache_cloak_embeddings()
-        self.clusters = self._cluster_cloak_imgs()
-        self.print_cluster_summary()
-
-    def _get_cloak_imgs_path(self) -> dict:
-        male_imgs_path_list = [
-            p for p in (self.cloak_dir / "male_full").rglob("*") if p.is_file()
-        ]
-        female_imgs_path_list = [
-            p for p in (self.cloak_dir / "female_full").rglob("*") if p.is_file()
-        ]
-        mix_imgs_path_list = [
-            p for p in (self.cloak_dir / "mix_full").rglob("*") if p.is_file()
-        ]
-
-        if self.config.third_party.dataset.cloak_mix:
-            return {"mix": mix_imgs_path_list}
-        else:
-            return {"male": male_imgs_path_list, "female": female_imgs_path_list}
-
-    def _load_imgs(self, imgs_path: list[Path]) -> Tensor:
-        transform = (
-            transforms.Compose([transforms.Resize(224), transforms.ToTensor()])
-            if OmegaConf.select(self.config, "third_party.dataset.use_224") is not None
-            and self.config.third_party.dataset.use_224
-            else transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
-        )
-        imgs_list = [
-            cast(Tensor, transform(Image.open(path).convert("RGB")))
-            for path in imgs_path
-        ]
-
-        imgs = torch.stack(imgs_list)
-
-        return imgs.cuda()
-
-    def _get_cloak_imgs(self) -> dict:
-        cloak_imgs_path = self._get_cloak_imgs_path()
-        return {k: self._load_imgs(v) for k, v in cloak_imgs_path.items()}
-
-    def _cluster_cloak_imgs(self) -> dict:
-        cluster_count = self.config.third_party.dataset.cluster_count
-        clusters = {}
-        for k in self.cloak_embeddings.keys():
-            clusters[k] = {i: {} for i in range(cluster_count)}
-
-            embeddings = torch.stack(self.cloak_embeddings[k], dim=0).squeeze(1)
-            features = embeddings.numpy()
-            kmeans = KMeans(n_clusters=cluster_count, random_state=0, n_init="auto")
-            kmeans.fit(features)
-
-            centers = kmeans.cluster_centers_
-            for i, center in enumerate(centers):
-                clusters[k][i]["center"] = center
-                clusters[k][i]["indexes"] = []
-
-            labels = kmeans.labels_
-            for i, label in enumerate(labels):
-                clusters[k][label]["indexes"].append(i)
-
-        return clusters
-
-    def _cache_cloak_embeddings(self) -> dict:
-        cloak_embeddings = {}
-        for k, v in self.cloak_imgs.items():
-            imgs_ndarray = v.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
-
-            embeddings = []
-            for i, img in enumerate(imgs_ndarray):
-                img_cropped = self.effectiveness.mtcnn(img)
-                if img_cropped is None:
-                    self.logger.fatal(f"Cannot detect the face from {i}-th cloak")
-                    save_image(v, self.config.image_dir / "cloak_without_face.png")
-
-                embedding = self.effectiveness.FaceVerification(
-                    img_cropped.unsqueeze(0).cuda()
-                )
-                embedding = embedding.detach().cpu()
-                embeddings.append(embedding)
-
-            cloak_embeddings[k] = embeddings
-
-        return cloak_embeddings
-
-    def print_cluster_summary(self):
-        message = f"Cluster count is {self.config.third_party.dataset.cluster_count}\n"
-        for k, v in self.clusters.items():
-            message += f"{k}\n"
-            for kk, vv in v.items():
-                message += f"   node {kk} has {len(vv['indexes'])} cloak images\n"
-        self.logger.info(message)
-
-    def _hash_tensor(self, img: Tensor):
-        return hash(tuple(img.view(-1).tolist()))
-
-    def _check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
-        result = {self._hash_tensor(img): "fail"}
-
-        buffered = BytesIO()
-        img_image = img * 255
-        img_image = Image.fromarray(img_image.cpu().permute(1, 2, 0).byte().numpy())
-        img_image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-        url = "https://api-us.faceplusplus.com/facepp/v3/detect"
-        payload = {
-            "api_key": key,
-            "api_secret": secret,
-            "image_base64": img_base64,
-            "return_attributes": "gender",
-        }
-
-        fail_count = 0
-        while fail_count < 10:
-            try:
-                response = requests.post(url, data=payload)
-                if response.status_code == 200:
-                    response = response.json()
-                    if len(response["faces"]) > 1:
-                        return result
-
-                    gender = response["faces"][0]["attributes"]["gender"]["value"]
-                    result[self._hash_tensor(img)] = gender.lower()
-                    break
-                elif response.status_code == 400:
-                    return result
-                elif response.status_code == 403:
-                    fail_count += 0.25
-                    time.sleep(0.3)
-                else:
-                    fail_count += 1
-                    self.logger.error(response)
-            except BaseException as e:
-                fail_count += 1
-                self.logger.error(e)
-
-        return result
-
-    def _check_imgs_gender(self, imgs: Tensor):
-        api_keys = self.config.evaluate.facepp.api_key
-        api_secrets = self.config.evaluate.facepp.api_secret
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(
-                    self._check_imgs_gender_single,
-                    imgs[i],
-                    api_keys[i % len(api_keys)],
-                    api_secrets[i % len(api_secrets)],
-                )
-                for i in range(imgs.shape[0])
-            ]
-            results = [future.result() for future in futures]
-
-        imgs_gender = {}
-        for result in results:
-            imgs_gender.update(result)
-
-        return imgs_gender
-
-    def find_best_cloaks(self, imgs: Tensor) -> Tensor:
-        if not self.config.third_party.dataset.cloak_mix:
-            imgs_gender = self._check_imgs_gender(imgs)
-
-        imgs_ndarray = imgs.detach().cpu().numpy().transpose(0, 2, 3, 1) * 255.0
-        best_cloak_imgs = []
-        for i in range(imgs.shape[0]):
-            if self.config.third_party.dataset.cloak_mix:
-                candidates = self.cloak_imgs["mix"]
-                embeddings = self.cloak_embeddings["mix"]
-                clusters = self.clusters["mix"]
-            else:
-                candidates = (
-                    self.cloak_imgs["female"]
-                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
-                    else self.cloak_imgs["male"]
-                )
-                embeddings = (
-                    self.cloak_embeddings["female"]
-                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
-                    else self.cloak_embeddings["male"]
-                )
-                clusters = (
-                    self.clusters["female"]
-                    if imgs_gender[self._hash_tensor(imgs[i])] == "male"  # type: ignore
-                    else self.clusters["male"]
-                )
-
-            cluster_centers_embedding = [
-                torch.from_numpy(v["center"]).cuda() for _, v in clusters.items()
-            ]
-            distances = self.effectiveness.get_image_distance(
-                imgs_ndarray[i], cluster_centers_embedding
-            )
-            cluster_distances = []
-            for j, distance in enumerate(distances):
-                if (
-                    distance is math.nan
-                    or distance <= self.config.third_party.dataset.cloak_min_distance
-                ):
-                    continue
-
-                cluster_distances.append((distance, j))
-
-            sorted_cluster_distances = sorted(cluster_distances)
-            if (
-                len(sorted_cluster_distances)
-                > self.config.third_party.dataset.cluster_index
-            ):
-                best_cluster_idx = sorted_cluster_distances[
-                    self.config.third_party.dataset.cluster_index
-                ][1]
-            else:
-                best_cluster_idx = sorted_cluster_distances[-1][1]
-
-            best_cluster = clusters[best_cluster_idx]
-            cluster_cloak_embeddings = [
-                embeddings[i].cuda() for i in best_cluster["indexes"]
-            ]
-            distances = self.effectiveness.get_image_distance(
-                imgs_ndarray[i], cluster_cloak_embeddings
-            )
-            cloak_distances = []
-            for j, distance in enumerate(distances):
-                if (
-                    distance is math.nan
-                    or distance <= self.config.third_party.dataset.cloak_min_distance
-                ):
-                    continue
-
-                cloak_distances.append((distance, j))
-
-            sorted_cluster_distances = sorted(cloak_distances)
-            if (
-                len(sorted_cluster_distances)
-                > self.config.third_party.dataset.cloak_index
-            ):
-                best_cloak_imgs.append(
-                    candidates[
-                        sorted_cluster_distances[
-                            self.config.third_party.dataset.cloak_index
-                        ][1]
-                    ]
-                )
-            else:
-                best_cloak_imgs.append(candidates[sorted_cluster_distances[-1][1]])
-
-        return torch.stack(best_cloak_imgs, dim=0)
 
 
 class DistanceCloakSelector:
@@ -1545,6 +1094,7 @@ class DistanceCloakSelector:
         return imgs_gender
 
     def find_best_cloaks(self, imgs: Tensor) -> Tensor:
+        imgs_gender = {}
         if not self.config.third_party.dataset.cloak_mix:
             imgs_gender = self._check_imgs_gender(imgs)
 
@@ -1603,7 +1153,10 @@ class ScoreCalculator:
         self.config = config
 
     def calculate_score(
-        self, iter_source_metric: dict, iter_context_metric: dict, metric: dict | None
+        self,
+        iter_source_metric: dict,
+        iter_context_metric: dict | None,
+        metric: dict | None,
     ) -> dict:
         scores = {key: {"iter": 0, "total": 0} for key in iter_source_metric.keys()}
         identity_weight = self.config.evaluate.score.identity
@@ -1618,10 +1171,14 @@ class ScoreCalculator:
                 iter_source_metric[key]["cloak"][0]
                 / iter_source_metric[key]["cloak"][1]
             )
-            iter_context_swap = (
-                iter_context_metric[key]["pert_swap"][0]
-                / iter_context_metric[key]["pert_swap"][1]
-            )
+
+            if iter_context_metric is not None:
+                iter_context_swap = (
+                    iter_context_metric[key]["pert_swap"][0]
+                    / iter_context_metric[key]["pert_swap"][1]
+                )
+            else:
+                iter_context_swap = 1
 
             scores[key]["iter"] = (
                 identity_weight * (1 - iter_source_swap)
@@ -1631,17 +1188,21 @@ class ScoreCalculator:
 
             if metric is not None:
                 total_source_swap = (
-                    metric["src_pert_swap_effectiveness"][key]["pert_swap"][0]
-                    / metric["src_pert_swap_effectiveness"][key]["pert_swap"][1]
+                    metric["pert_source_effectiveness"][key]["pert_swap"][0]
+                    / metric["pert_source_effectiveness"][key]["pert_swap"][1]
                 )
                 total_trace = (
-                    metric["src_pert_swap_effectiveness"][key]["cloak"][0]
-                    / metric["src_pert_swap_effectiveness"][key]["cloak"][1]
+                    metric["pert_source_effectiveness"][key]["cloak"][0]
+                    / metric["pert_source_effectiveness"][key]["cloak"][1]
                 )
-                total_context_swap = (
-                    metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][0]
-                    / metric["tgt_pert_swap_effectiveness"][key]["pert_swap"][1]
-                )
+
+                if iter_context_metric is not None:
+                    total_context_swap = (
+                        metric["pert_target_effectiveness"][key]["pert_swap"][0]
+                        / metric["pert_target_effectiveness"][key]["pert_swap"][1]
+                    )
+                else:
+                    total_context_swap = 1
 
                 scores[key]["total"] = (
                     identity_weight * (1 - total_source_swap)

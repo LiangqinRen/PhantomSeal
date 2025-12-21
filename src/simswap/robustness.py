@@ -1,17 +1,12 @@
 from src.simswap.base import Base
 from src.utils import save_tensor_imgs
 
-import os
-import io
-import random
-import torch
 
-import torch.nn as nn
+import io
+import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-
-from tqdm import tqdm
-from torch import tensor, Tensor
+from torch import Tensor
 from torchvision.transforms import ToPILImage, ToTensor
 from PIL import Image
 from pathlib import Path
@@ -96,7 +91,7 @@ class Robustness(Base):
         idx: int,
         imgs_A: Tensor,
         imgs_B: Tensor,
-        x_imgs: Tensor,
+        pert_imgs: Tensor,
         cloak_imgs: Tensor,
         image_dir: Path,
     ) -> tuple[dict, dict]:
@@ -104,30 +99,28 @@ class Robustness(Base):
 
         noise_imgs = self.gauss_noise(imgs_A, gauss_mean, gauss_std)
         noise_identity = self._get_imgs_identity(noise_imgs)
-        noise_pert_imgs = self.gauss_noise(x_imgs, gauss_mean, gauss_std)
+        noise_pert_imgs = self.gauss_noise(pert_imgs, gauss_mean, gauss_std)
         noise_pert_identity = self._get_imgs_identity(noise_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        noise_swap_imgs = self.target(None, imgs_B, noise_identity, None, True)
-        reverse_noise_swap_imgs = self.target(
-            None, noise_imgs, imgs_B_identity, None, True
-        )
-        noise_pert_swap_imgs = self.target(
+        noise_source_swap = self.target(None, imgs_B, noise_identity, None, True)
+        noise_target_swap = self.target(None, noise_imgs, imgs_B_identity, None, True)
+        noise_pert_source_swap = self.target(
             None, imgs_B, noise_pert_identity, None, True
         )
-        reverse_noise_pert_swap_imgs = self.target(
+        noise_pert_target_swap = self.target(
             None, noise_pert_imgs, imgs_B_identity, None, True
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
             imgs_A,
             None,
-            noise_swap_imgs,
-            noise_pert_swap_imgs,
+            noise_source_swap,
+            noise_pert_source_swap,
             cloak_imgs,
         )
         target_effectivenesses = self.effectiveness.calculate_effectiveness(
-            imgs_B, None, reverse_noise_swap_imgs, reverse_noise_pert_swap_imgs, None
+            imgs_B, None, noise_target_swap, noise_pert_target_swap, None
         )
 
         save_tensor_imgs(
@@ -137,23 +130,23 @@ class Robustness(Base):
                 "imgs_A",
                 "imgs_B",
                 "noise_imgs",
-                "noise_swap\nimgs",
-                "reverse\nnoise_swap\nimgs",
-                "x_imgs",
-                "noise_pert_imgs",
-                "noise\npert_swap\nimgs",
-                "reverse\nnoise_pert_swap\nimgs",
+                "noise\nsource\nswap",
+                "noise\ntarget\nswap",
+                "perturb\nimgs",
+                "noise\nperturb\nimgs",
+                "noise\nperturb\nsource\nswap",
+                "noise\nperturb\ntarget\nswap",
             ],
             [
                 imgs_A,
                 imgs_B,
                 noise_imgs,
-                noise_swap_imgs,
-                reverse_noise_swap_imgs,
-                x_imgs,
+                noise_source_swap,
+                noise_target_swap,
+                pert_imgs,
                 noise_pert_imgs,
-                noise_pert_swap_imgs,
-                reverse_noise_pert_swap_imgs,
+                noise_pert_source_swap,
+                noise_pert_target_swap,
             ],
             image_name="noise",
             only_save_summary=self.config.third_party.defense.only_save_summary,
@@ -169,40 +162,40 @@ class Robustness(Base):
         idx: int,
         imgs_A: Tensor,
         imgs_B: Tensor,
-        x_imgs: Tensor,
+        pert_imgs: Tensor,
         cloak_imgs: Tensor,
         image_dir: Path,
     ) -> tuple[dict, dict]:
         compress_rate = 80
         compress_imgs = self.webp_compress(imgs_A, compress_rate)
         compress_identity = self._get_imgs_identity(compress_imgs)
-        compress_pert_imgs = self.webp_compress(x_imgs, compress_rate)
+        compress_pert_imgs = self.webp_compress(pert_imgs, compress_rate)
         compress_pert_identity = self._get_imgs_identity(compress_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        compress_swap_imgs = self.target(None, imgs_B, compress_identity, None, True)
-        reverse_compress_swap_imgs = self.target(
+        compress_source_swap = self.target(None, imgs_B, compress_identity, None, True)
+        compress_target_swap = self.target(
             None, compress_imgs, imgs_B_identity, None, True
         )
-        compress_pert_swap_imgs = self.target(
+        compress_pert_source_swap = self.target(
             None, imgs_B, compress_pert_identity, None, True
         )
-        reverse_compress_pert_swap_imgs = self.target(
+        compress_pert_target_swap = self.target(
             None, compress_pert_imgs, imgs_B_identity, None, True
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
             imgs_A,
             None,
-            compress_swap_imgs,
-            compress_pert_swap_imgs,
+            compress_source_swap,
+            compress_pert_source_swap,
             cloak_imgs,
         )
         target_effectivenesses = self.effectiveness.calculate_effectiveness(
             imgs_B,
             None,
-            reverse_compress_swap_imgs,
-            reverse_compress_pert_swap_imgs,
+            compress_target_swap,
+            compress_pert_target_swap,
             None,
         )
 
@@ -212,24 +205,24 @@ class Robustness(Base):
             [
                 "imgs_A",
                 "imgs_B",
-                "compress_imgs",
-                "compress_swap\nimgs",
-                "reverse\ncompress_swap\nimgs",
-                "x_imgs",
-                "compress_pert_imgs",
-                "compress\npert_swap\nimgs",
-                "reverse\ncompress_pert_swap\nimgs",
+                "compress\nimgs",
+                "compress\nsource\nswap",
+                "compress\ntarget\nswap",
+                "perturb\nimgs",
+                "compress\nperturb\nimgs",
+                "compress\nperturb\nsource\nswap",
+                "compress\nperturb\ntarget\nswap",
             ],
             [
                 imgs_A,
                 imgs_B,
                 compress_imgs,
-                compress_swap_imgs,
-                reverse_compress_swap_imgs,
-                x_imgs,
+                compress_source_swap,
+                compress_target_swap,
+                pert_imgs,
                 compress_pert_imgs,
-                compress_pert_swap_imgs,
-                reverse_compress_pert_swap_imgs,
+                compress_pert_source_swap,
+                compress_pert_target_swap,
             ],
             image_name="compress",
             only_save_summary=self.config.third_party.defense.only_save_summary,
@@ -245,7 +238,7 @@ class Robustness(Base):
         idx: int,
         imgs_A: Tensor,
         imgs_B: Tensor,
-        x_imgs: Tensor,
+        pert_imgs: Tensor,
         cloak_imgs: Tensor,
         image_dir: Path,
     ) -> tuple[dict, dict]:
@@ -253,28 +246,28 @@ class Robustness(Base):
 
         crop_imgs = self.crop(imgs_A, border_thickness)
         crop_identity = self._get_imgs_identity(crop_imgs)
-        crop_pert_imgs = self.crop(x_imgs, border_thickness)
+        crop_pert_imgs = self.crop(pert_imgs, border_thickness)
         crop_pert_identity = self._get_imgs_identity(crop_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        crop_swap_imgs = self.target(None, imgs_B, crop_identity, None, True)
-        reverse_crop_swap_imgs = self.target(
-            None, crop_imgs, imgs_B_identity, None, True
+        crop_source_swap = self.target(None, imgs_B, crop_identity, None, True)
+        crop_target_swap = self.target(None, crop_imgs, imgs_B_identity, None, True)
+        crop_pert_source_swap = self.target(
+            None, imgs_B, crop_pert_identity, None, True
         )
-        crop_pert_swap_imgs = self.target(None, imgs_B, crop_pert_identity, None, True)
-        reverse_crop_pert_swap_imgs = self.target(
+        crop_pert_target_swap = self.target(
             None, crop_pert_imgs, imgs_B_identity, None, True
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
             imgs_A,
             None,
-            crop_swap_imgs,
-            crop_pert_swap_imgs,
+            crop_source_swap,
+            crop_pert_source_swap,
             cloak_imgs,
         )
         target_effectivenesses = self.effectiveness.calculate_effectiveness(
-            imgs_B, None, reverse_crop_swap_imgs, reverse_crop_pert_swap_imgs, None
+            imgs_B, None, crop_target_swap, crop_pert_target_swap, None
         )
 
         save_tensor_imgs(
@@ -284,23 +277,23 @@ class Robustness(Base):
                 "imgs_A",
                 "imgs_B",
                 "crop_imgs",
-                "crop_swap\nimgs",
-                "reverse\ncrop_swap\nimgs",
-                "x_imgs",
-                "crop_pert_imgs",
-                "crop\npert_swap\nimgs",
-                "reverse\ncrop_pert_swap\nimgs",
+                "crop\nsource\nswap",
+                "crop\ntarget\nswap",
+                "perturb\nimgs",
+                "crop\nperturb\nimgs",
+                "crop\nperturb\nsource\nswap",
+                "crop\nperturb\ntarget\nswap",
             ],
             [
                 imgs_A,
                 imgs_B,
                 crop_imgs,
-                crop_swap_imgs,
-                reverse_crop_swap_imgs,
-                x_imgs,
+                crop_source_swap,
+                crop_target_swap,
+                pert_imgs,
                 crop_pert_imgs,
-                crop_pert_swap_imgs,
-                reverse_crop_pert_swap_imgs,
+                crop_pert_source_swap,
+                crop_pert_target_swap,
             ],
             image_name="crop",
             only_save_summary=self.config.third_party.defense.only_save_summary,
@@ -316,35 +309,35 @@ class Robustness(Base):
         idx: int,
         imgs_A: Tensor,
         imgs_B: Tensor,
-        x_imgs: Tensor,
+        pert_imgs: Tensor,
         logo: Tensor,
         cloak_imgs: Tensor,
         image_dir: Path,
     ) -> tuple[dict, dict]:
         logo_imgs = self.logo(imgs_A, logo)
         logo_identity = self._get_imgs_identity(logo_imgs)
-        logo_pert_imgs = self.logo(x_imgs, logo)
+        logo_pert_imgs = self.logo(pert_imgs, logo)
         logo_pert_identity = self._get_imgs_identity(logo_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        logo_swap_imgs = self.target(None, imgs_B, logo_identity, None, True)
-        reverse_logo_swap_imgs = self.target(
-            None, logo_imgs, imgs_B_identity, None, True
+        logo_source_swap = self.target(None, imgs_B, logo_identity, None, True)
+        logo_target_swap = self.target(None, logo_imgs, imgs_B_identity, None, True)
+        logo_pert_source_swap = self.target(
+            None, imgs_B, logo_pert_identity, None, True
         )
-        logo_pert_swap_imgs = self.target(None, imgs_B, logo_pert_identity, None, True)
-        reverse_logo_pert_swap_imgs = self.target(
+        logo_pert_target_swap = self.target(
             None, logo_pert_imgs, imgs_B_identity, None, True
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
             imgs_A,
             None,
-            logo_swap_imgs,
-            logo_pert_swap_imgs,
+            logo_source_swap,
+            logo_pert_source_swap,
             cloak_imgs,
         )
         target_effectivenesses = self.effectiveness.calculate_effectiveness(
-            imgs_B, None, reverse_logo_swap_imgs, reverse_logo_pert_swap_imgs, None
+            imgs_B, None, logo_target_swap, logo_pert_target_swap, None
         )
 
         save_tensor_imgs(
@@ -354,23 +347,23 @@ class Robustness(Base):
                 "imgs_A",
                 "imgs_B",
                 "logo_imgs",
-                "logo_swap\nimgs",
-                "reverse\nlogo_swap\nimgs",
-                "x_imgs",
-                "logo_pert_imgs",
-                "logo\npert_swap\nimgs",
-                "reverse\nlogo_pert_swap\nimgs",
+                "logo\nsource\nswap",
+                "logo\ntarget\nswap",
+                "perturb\nimgs",
+                "logo\nperturb\nimgs",
+                "logo\nperturb\nsource\nswap",
+                "logo\nperturb\ntarget\nswap",
             ],
             [
                 imgs_A,
                 imgs_B,
                 logo_imgs,
-                logo_swap_imgs,
-                reverse_logo_swap_imgs,
-                x_imgs,
+                logo_source_swap,
+                logo_target_swap,
+                pert_imgs,
                 logo_pert_imgs,
-                logo_pert_swap_imgs,
-                reverse_logo_pert_swap_imgs,
+                logo_pert_source_swap,
+                logo_pert_target_swap,
             ],
             image_name="logo",
             only_save_summary=self.config.third_party.defense.only_save_summary,
@@ -386,42 +379,42 @@ class Robustness(Base):
         idx: int,
         imgs_A: Tensor,
         imgs_B: Tensor,
-        x_imgs: Tensor,
+        pert_imgs: Tensor,
         factor: float,
         cloak_imgs: Tensor,
         image_dir: Path,
     ) -> tuple[dict, dict]:
         brightness_imgs = self.brightness(imgs_A, factor)
         brightness_identity = self._get_imgs_identity(brightness_imgs)
-        brightness_pert_imgs = self.brightness(x_imgs, factor)
+        brightness_pert_imgs = self.brightness(pert_imgs, factor)
         brightness_pert_identity = self._get_imgs_identity(brightness_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        brightness_swap_imgs = self.target(
+        brightness_source_swap = self.target(
             None, imgs_B, brightness_identity, None, True
         )
-        reverse_brightness_swap_imgs = self.target(
+        brightness_target_swap = self.target(
             None, brightness_imgs, imgs_B_identity, None, True
         )
-        brightness_pert_swap_imgs = self.target(
+        brightness_pert_source_swap = self.target(
             None, imgs_B, brightness_pert_identity, None, True
         )
-        reverse_brightness_pert_swap_imgs = self.target(
+        brightness_pert_target_swap = self.target(
             None, brightness_pert_imgs, imgs_B_identity, None, True
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
             imgs_A,
             None,
-            brightness_swap_imgs,
-            brightness_pert_swap_imgs,
+            brightness_source_swap,
+            brightness_pert_source_swap,
             cloak_imgs,
         )
         target_effectivenesses = self.effectiveness.calculate_effectiveness(
             imgs_B,
             None,
-            reverse_brightness_swap_imgs,
-            reverse_brightness_pert_swap_imgs,
+            brightness_target_swap,
+            brightness_pert_target_swap,
             None,
         )
 
@@ -431,24 +424,24 @@ class Robustness(Base):
             [
                 "imgs_A",
                 "imgs_B",
-                f"brightness_{factor}\nimgs",
-                f"brightness_{factor}\nswap_imgs",
-                f"reverse\nbrightness_{factor}\nswap_imgs",
-                "x_imgs",
-                f"brightness_{factor}\npert_imgs",
-                f"brightness_{factor}\npert_swap\nimgs",
-                f"reverse\nbrightness_{factor}\npert_swap\nimgs",
+                f"brightness\n{factor}\nimgs",
+                f"brightness\n{factor}\nsource\nswap",
+                f"brightness\n{factor}\ntarget\nswap",
+                "perturb\nimgs",
+                f"brightness\n{factor}\nperturb\nimgs",
+                f"brightness\n{factor}\nperturb\nsource\nswap",
+                f"brightness\n{factor}\nperturb\ntarget\nswap",
             ],
             [
                 imgs_A,
                 imgs_B,
                 brightness_imgs,
-                brightness_swap_imgs,
-                reverse_brightness_swap_imgs,
-                x_imgs,
+                brightness_source_swap,
+                brightness_target_swap,
+                pert_imgs,
                 brightness_pert_imgs,
-                brightness_pert_swap_imgs,
-                reverse_brightness_pert_swap_imgs,
+                brightness_pert_source_swap,
+                brightness_pert_target_swap,
             ],
             image_name=f"brightness_{factor}",
             only_save_summary=self.config.third_party.defense.only_save_summary,
