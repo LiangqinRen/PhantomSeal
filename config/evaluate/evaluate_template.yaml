@@ -6,14 +6,13 @@ face_recognition:
   use: false
 
 facepp:
-  use: true
+  use: false
   qps: 10
   thread_limit: 5
   compare_url: "https://api-us.faceplusplus.com/facepp/v3/compare"
-  api_key:
-    - ""
-  api_secret: 
-    - ""
+  detect_url: "https://api-us.faceplusplus.com/facepp/v3/detect"
+  api_key: ""
+  api_secret: ""
 
 aws:
   use: false
@@ -22,16 +21,14 @@ aws:
   api_region: ""
 
 ai_lab_tools:
+  qps: 10
   face_beauty_url: "https://www.ailabapi.com/api/portrait/effects/face-beauty"
-  cartoon_url: "https://www.ailabapi.com/api/portrait/effects/portrait-animation"
   api_key: ""
 
 tencent_cloud:
+  qps: 10
   secret_id: ""
   secret_key: ""
-
-arcface_resnet_path: checkpoints/glintr100.onnx
-cosface_resnet_path: checkpoints/16_backbone.pth
 
 score:
   identity: 1

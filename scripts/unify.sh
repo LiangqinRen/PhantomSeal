@@ -14,8 +14,8 @@ fi
 ROOT=$(dirname $(dirname $(realpath "$0")))
 
 run() {
-    PYTHONPATH="$ROOT" python -m src.hififace.main \
-        third_party=hififace \
+    PYTHONPATH="$ROOT" python -m src.unify.main \
+        third_party=unify \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
         log.record_level="$log_level" \
@@ -23,8 +23,8 @@ run() {
 }
 
 multirun() {
-    PYTHONPATH="$ROOT" python -m src.hififace.main -m \
-        third_party=hififace \
+    PYTHONPATH="$ROOT" python -m src.unify.main -m \
+        third_party=unify \
         third_party.function=metric \
         log.file_suffix="$suffix" \
         log.record_level="$log_level" \

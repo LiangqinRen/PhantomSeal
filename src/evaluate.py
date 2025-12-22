@@ -32,22 +32,6 @@ from pathlib import Path
 from typing import cast
 from torchvision.utils import save_image
 
-# _ORIG_TORCH_LOAD = torch.load
-
-
-# def _load_patch(*args, **kwargs):
-#     if (
-#         args
-#         and isinstance(args[0], str)
-#         and os.path.basename(args[0]) in ("Arcface_model_only.tar")
-#     ):
-#         kwargs.setdefault("weights_only", False)
-#         kwargs.setdefault("map_location", "cpu")
-#     return _ORIG_TORCH_LOAD(*args, **kwargs)
-
-
-# torch.load = _load_patch
-
 
 class RateLimiter:
     def __init__(self, rps: float):
@@ -115,10 +99,11 @@ class Utility:
             lpips_score = self.lpips_distance(imgs1[i], imgs2[i])
             utilities["lpips"].append(lpips_score.detach().cpu().numpy())
 
-        for i in utilities:
-            utilities[i] = np.mean(utilities[i])
+        average_utilities = {}
+        for k in utilities.keys():
+            average_utilities[k] = np.mean(utilities[k])
 
-        return utilities
+        return average_utilities
 
 
 class Effectiveness:
@@ -161,44 +146,6 @@ class Effectiveness:
             candidate_functions["aws"] = self._get_aws_matching
 
         return candidate_functions
-
-    def _convert_to_bgr112_ndarray(self, x: Tensor) -> np.ndarray:
-        assert x.ndim == 4 and x.shape[0] == 1 and x.shape[1] == 3
-        x = x.detach().float()
-
-        xmax, xmin = float(x.max().item()), float(x.min().item())
-        if xmax <= 1.5 and xmin >= -0.5:
-            x = x * 255.0
-        elif xmin >= -1.1 and xmax <= 1.1:
-            x = (x * 127.5) + 127.5
-        x = x.clamp(0, 255)
-
-        x = F.interpolate(
-            x, size=(112, 112), mode="bilinear", align_corners=False, antialias=True
-        )
-
-        img = x[0].permute(1, 2, 0).cpu().numpy()
-        img = img[..., ::-1]
-        img = np.ascontiguousarray(img.astype(np.uint8))
-
-        return img
-
-    def _convert_to_bgr112_tensor(self, x: Tensor) -> Tensor:
-        assert x.dim() in (3, 4), f"unexpected shape: {x.shape}"
-        if x.dim() == 3:
-            x = x.unsqueeze(0)
-
-        x = x.detach().clone().float()
-
-        if x.max() <= 1.5:
-            x = x * 255.0
-
-        x = x[:, [2, 1, 0], :, :]
-
-        x = F.interpolate(x, size=(112, 112), mode="bilinear", align_corners=False)
-        x = (x - 127.5) / 128.0
-
-        return x.contiguous()
 
     def get_images_distance(self, imgs1: Tensor, imgs2: Tensor) -> list[float]:
         distances = []
@@ -332,11 +279,11 @@ class Effectiveness:
                     )
                     time.sleep(1)
                 else:
+                    fail_count += 1
                     self.logger.error(response)
-                    return (0, 1e-10)
             except BaseException as e:
+                fail_count += 1
                 self.logger.error(e)
-                return (0, 1e-10)
 
         return (0, 1e-10)
 
@@ -509,6 +456,9 @@ class AIEditing:
         self.logger = logger
         self.config = config
 
+        self.ailabtools_limiter = RateLimiter(config.evaluate.ai_lab_tools.qps)
+        self.tencentcloud_limiter = RateLimiter(config.evaluate.tencent_cloud.qps)
+
     def face_beauty_via_ailabtools(self, imgs: Tensor) -> tuple[Tensor, int]:
         url = self.config.evaluate.ai_lab_tools.face_beauty_url
         headers = {"ailabapi-api-key": self.config.evaluate.ai_lab_tools.api_key}
@@ -530,83 +480,35 @@ class AIEditing:
             files = {"image": buffer}
 
             fail_count = 0
-            while fail_count < 3:
+            while fail_count < 5:
+                self.ailabtools_limiter.wait_if_needed()
                 response = requests.post(url, headers=headers, files=files, data=data)
-                try:
-                    if response.status_code == 200:
-                        response = response.json()
-                        urllib3.disable_warnings(
-                            urllib3.exceptions.InsecureRequestWarning
-                        )
-                        response = requests.get(
-                            response["data"]["image_url"], verify=False
-                        )
+                if response.status_code == 200:
+                    response = response.json()
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    response = requests.get(response["data"]["image_url"], verify=False)
 
-                        img = Image.open(BytesIO(response.content)).convert("RGB")
-                        img_list.append(transform(img))
+                    img = Image.open(BytesIO(response.content)).convert("RGB")
+                    img_list.append(transform(img))
 
-                        beauty_success_count += 1
-                        break
-                    else:
-                        fail_count += 1
-                        self.logger.error(
-                            "ailabtools status=%s reason=%s url=%s body=%s",
-                            response.status_code,
-                            response.reason,
-                            response.url,
-                            response.text[:1000],
-                        )
-                except Exception as e:
+                    beauty_success_count += 1
+                    break
+                else:
                     fail_count += 1
-                    self.logger.error(response)
-                    self.logger.error(e)
+                    self.logger.debug(
+                        "ailabtools status=%s reason=%s url=%s body=%s",
+                        response.status_code,
+                        response.reason,
+                        response.url,
+                        response.text[:1000],
+                    )
 
-            if fail_count == 3:
+            if fail_count == 5:
                 img_list.append(imgs[i])
+                self.logger.warning("fail to beautify images via AI lab tools")
 
         beauty_imgs = torch.stack(img_list, dim=0).cuda()
         return beauty_imgs, beauty_success_count
-
-    def cartoon_via_ailabtools(self, imgs: Tensor) -> tuple[Tensor, int]:
-        url = self.config.evaluate.ai_lab_tools.cartoon_url
-        headers = {"ailabapi-api-key": self.config.evaluate.ai_lab_tools.api_key}
-        data = {"type": "jpcartoon"}
-        transform = transforms.ToTensor()
-
-        img_list = []
-        cartoon_success_count = 0
-        for i in range(imgs.size(0)):
-            img = to_pil_image(imgs[i])
-
-            buffer = BytesIO()
-            img.save(buffer, format="JPEG")
-            buffer.seek(0)
-            files = {"image": buffer}
-
-            fail_count = 0
-            while fail_count < 1:
-                response = requests.post(url, headers=headers, files=files, data=data)
-                try:
-                    if response.status_code == 200:
-                        response = response.json()
-                        response = requests.get(response["data"]["image_url"])
-                        img = Image.open(BytesIO(response.content)).convert("RGB")
-                        img_list.append(transform(img))
-
-                        cartoon_success_count += 1
-                        break
-                    else:
-                        fail_count += 1
-                        self.logger.error(response)
-                except Exception as e:
-                    fail_count += 1
-                    self.logger.error(response)
-
-            if fail_count == 1:
-                img_list.append(imgs[i])
-
-        cartoon_imgs = torch.stack(img_list, dim=0).cuda()
-        return cartoon_imgs, cartoon_success_count
 
     def face_beauty_via_tencentcloud(self, imgs: Tensor) -> tuple[Tensor, int]:
         def sign(key, msg):
@@ -718,17 +620,18 @@ class AIEditing:
                 headers["X-TC-Token"] = token
 
             fail_count = 0
-            while fail_count < 3:
+            while fail_count < 5:
                 try:
-                    req = HTTPSConnection(host)
-                    req.request(
+                    self.tencentcloud_limiter.wait_if_needed()
+                    request = HTTPSConnection(host)
+                    request.request(
                         "POST",
                         "/",
                         headers=headers,
                         body=json.dumps(payload).encode("utf-8"),
                     )
-                    resp = req.getresponse()
-                    text_data = resp.read()
+                    response = request.getresponse()
+                    text_data = response.read()
                     json_data = json.loads(text_data)
                     image_bytes = base64.b64decode(json_data["Response"]["ResultImage"])
                     img = Image.open(BytesIO(image_bytes)).convert("RGB")
@@ -737,11 +640,11 @@ class AIEditing:
                     break
                 except Exception as e:
                     fail_count += 1
-                    self.logger.error(e)
-                    traceback.print_exc()
+                    self.logger.debug(traceback.print_exc())
 
-            if fail_count == 3:
+            if fail_count == 5:
                 img_list.append(imgs[i].cuda())
+                self.logger.warning("fail to beautify images via tencent cloud")
 
         beauty_imgs = torch.stack(img_list, dim=0).cuda()
         return beauty_imgs, beauty_success_count
@@ -754,6 +657,8 @@ class Cloak:
         self.effectiveness = effectiveness
 
         self.cloak_dir = Path(self.config.third_party.dataset.cloak_dir)
+
+        self.facepp_limiter = RateLimiter(config.evaluate.facepp.qps)
 
         self.cloak_imgs = self._get_cloak_imgs()
         self.cloak_cache = self._cache_cloak_embeddings()
@@ -839,13 +744,13 @@ class Cloak:
     def _check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
         result = {self._hash_tensor(img): "fail"}
 
-        buffered = BytesIO()
+        buffer = BytesIO()
         img_image = img * 255
         img_image = Image.fromarray(img_image.cpu().permute(1, 2, 0).byte().numpy())
-        img_image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        img_image.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-        url = "https://api-us.faceplusplus.com/facepp/v3/detect"
+        url = self.config.evaluate.facepp.detect_url
         payload = {
             "api_key": key,
             "api_secret": secret,
@@ -854,8 +759,9 @@ class Cloak:
         }
 
         fail_count = 0
-        while fail_count < 10:
+        while fail_count < 5:
             try:
+                self.facepp_limiter.wait_if_needed()
                 response = requests.post(url, data=payload)
                 if response.status_code == 200:
                     response_json = response.json()
@@ -872,8 +778,11 @@ class Cloak:
                         self.logger.info("face++ returned status 400")
                     return result
                 elif response.status_code == 403:
-                    fail_count += 0.25
-                    time.sleep(0.3)
+                    fail_count += 1
+                    self.logger.debug(
+                        f"Face++ API rate limit reached, retrying... {response.status_code}, {response.text}"
+                    )
+                    time.sleep(1)
                 else:
                     fail_count += 1
                     self.logger.error(response)
@@ -883,16 +792,17 @@ class Cloak:
 
         return result
 
-    def _check_imgs_gender(self, imgs: Tensor):
-        api_keys = self.config.evaluate.facepp.api_key
-        api_secrets = self.config.evaluate.facepp.api_secret
-        with ThreadPoolExecutor() as executor:
+    def _check_imgs_gender(self, imgs: Tensor) -> dict:
+        api_key = self.config.evaluate.facepp.api_key
+        api_secret = self.config.evaluate.facepp.api_secret
+        thread_limit = self.config.evaluate.facepp.thread_limit
+        with ThreadPoolExecutor(max_workers=thread_limit) as executor:
             futures = [
                 executor.submit(
                     self._check_imgs_gender_single,
                     imgs[i],
-                    api_keys[i % len(api_keys)],
-                    api_secrets[i % len(api_secrets)],
+                    api_key,
+                    api_secret,
                 )
                 for i in range(imgs.shape[0])
             ]
@@ -965,6 +875,8 @@ class DistanceCloakSelector:
 
         self.cloak_dir = Path(self.config.third_party.dataset.cloak_dir)
 
+        self.facepp_limiter = RateLimiter(config.evaluate.facepp.qps)
+
         self.cloak_imgs = self._get_cloak_imgs()
         self.cloak_embeddings = self._cache_cloak_embeddings()
 
@@ -1032,13 +944,13 @@ class DistanceCloakSelector:
     def _check_imgs_gender_single(self, img: Tensor, key: str, secret: str) -> dict:
         result = {self._hash_tensor(img): "fail"}
 
-        buffered = BytesIO()
+        buffer = BytesIO()
         img_image = img * 255
         img_image = Image.fromarray(img_image.cpu().permute(1, 2, 0).byte().numpy())
-        img_image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        img_image.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-        url = "https://api-us.faceplusplus.com/facepp/v3/detect"
+        url = self.config.evaluate.facepp.detect_url
         payload = {
             "api_key": key,
             "api_secret": secret,
@@ -1047,22 +959,30 @@ class DistanceCloakSelector:
         }
 
         fail_count = 0
-        while fail_count < 10:
+        while fail_count < 5:
             try:
+                self.facepp_limiter.wait_if_needed()
                 response = requests.post(url, data=payload)
                 if response.status_code == 200:
-                    response = response.json()
-                    if len(response["faces"]) > 1:
+                    response_json = response.json()
+                    if len(response_json["faces"]) > 1:
                         return result
 
-                    gender = response["faces"][0]["attributes"]["gender"]["value"]
+                    gender = response_json["faces"][0]["attributes"]["gender"]["value"]
                     result[self._hash_tensor(img)] = gender.lower()
                     break
                 elif response.status_code == 400:
+                    try:
+                        self.logger.info(response.json().get("time_used"))
+                    except Exception:
+                        self.logger.info("face++ returned status 400")
                     return result
                 elif response.status_code == 403:
-                    fail_count += 0.25
-                    time.sleep(0.3)
+                    fail_count += 1
+                    self.logger.debug(
+                        f"Face++ API rate limit reached, retrying... {response.status_code}, {response.text}"
+                    )
+                    time.sleep(1)
                 else:
                     fail_count += 1
                     self.logger.error(response)
@@ -1072,16 +992,17 @@ class DistanceCloakSelector:
 
         return result
 
-    def _check_imgs_gender(self, imgs: Tensor):
-        api_keys = self.config.evaluate.facepp.api_key
-        api_secrets = self.config.evaluate.facepp.api_secret
-        with ThreadPoolExecutor() as executor:
+    def _check_imgs_gender(self, imgs: Tensor) -> dict:
+        api_key = self.config.evaluate.facepp.api_key
+        api_secret = self.config.evaluate.facepp.api_secret
+        thread_limit = self.config.evaluate.facepp.thread_limit
+        with ThreadPoolExecutor(max_workers=thread_limit) as executor:
             futures = [
                 executor.submit(
                     self._check_imgs_gender_single,
                     imgs[i],
-                    api_keys[i % len(api_keys)],
-                    api_secrets[i % len(api_secrets)],
+                    api_key,
+                    api_secret,
                 )
                 for i in range(imgs.shape[0])
             ]

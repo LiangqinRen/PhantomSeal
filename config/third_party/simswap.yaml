@@ -12,8 +12,6 @@ dataset:
   cloak_mix: true
   cloak_count: full
   cloak_min_distance: 1.04
-  cluster_count: 10
-  cluster_index: 0
   cloak_index: 0
   cloak_distance: 1.20
 
@@ -38,19 +36,7 @@ defense:
   only_save_summary: true
   log_interval: 100
 
-
-lowkey:
-  batch_size: 15
-  epochs: 300
-  epsilon: 0.005
-  weight:
-    perturb: 1000
-    identity: 10000
-
 robustness:
   ai_beauty: false
   ai_beauty_tool: null # ai_lab_tools or tencent_cloud
   logo_img_path: data/vggface2_samples_224/ccs.png
-
-misc:
-  dataset: vggface2

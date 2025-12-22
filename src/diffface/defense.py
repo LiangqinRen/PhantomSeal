@@ -85,7 +85,7 @@ class Defense(Base):
                     target_swap,
                     pert_target_swap,
                 ],
-                only_save_summary=False,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             scores = self.score_calculator.calculate_score(

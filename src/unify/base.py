@@ -47,7 +47,7 @@ class Base:
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             ]
         )
-        simswap_root = Path(self.config.third_party.simswap_root_dir)
+        simswap_root = Path(self.config.third_party.simswap_dir)
         with use_project([simswap_root]), cd(simswap_root):
             from models.models import create_model
             from models import arcface_models
@@ -96,7 +96,7 @@ class Base:
             )
 
         # hififace
-        hififace_root = Path(self.config.third_party.hififace_root_dir)
+        hififace_root = Path(self.config.third_party.hififace_dir)
         with use_project([hififace_root]), cd(hififace_root):
             from hififace_pl import HifiFace
 
@@ -110,7 +110,7 @@ class Base:
             self.net = self.net.eval().to(self.device)
 
         # faceshifter
-        faceshifter_root = Path(self.config.third_party.faceshifter_root_dir)
+        faceshifter_root = Path(self.config.third_party.faceshifter_dir)
         with use_project([faceshifter_root, faceshifter_root / "face_modules"]), cd(
             faceshifter_root
         ):

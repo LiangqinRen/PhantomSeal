@@ -86,7 +86,11 @@ class Base:
                 112, config.third_party.origin.aug_num
             )
 
-            netArc_checkpoint = torch.load(f"checkpoints/Arcface_model_only.tar")
+            netArc_checkpoint = torch.load(
+                f"checkpoints/Arcface_model_only.tar",
+                map_location="cpu",
+                weights_only=False,
+            )
             netArc = netArc_checkpoint["model"].module
             self.netArc = netArc.to(self.device).eval()
 

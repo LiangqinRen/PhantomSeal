@@ -17,6 +17,7 @@ def main(config: DictConfig):
     defense_functions = {
         "sample": defense.sample,
         "metric": defense.metric,
+        "ai_beauty": defense.metric,
         "protection_robustness_sample": defense.protection_robustness_sample,
         "protection_robustness_metric": defense.protection_robustness_metric,
         "forensics_robustness_sample": defense.forensics_robustness_sample,

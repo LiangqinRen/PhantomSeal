@@ -11,6 +11,7 @@ import torch
 from torch import tensor, Tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
+from typing import cast
 
 
 class Defense(Base):
@@ -91,7 +92,7 @@ class Defense(Base):
                     target_swap,
                     pert_target_swap,
                 ],
-                only_save_summary=False,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             scores = self.score_calculator.calculate_score(
@@ -418,7 +419,7 @@ class Defense(Base):
             pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
             torch.set_grad_enabled(False)
 
-            utility = self.utility.calculate_utility(imgs_A, pert_imgs)
+            utility = cast(dict, self.utility.calculate_utility(imgs_A, pert_imgs))
             metric.merge_single_dict(metrics["utility"], utility)
 
             (
@@ -572,7 +573,7 @@ class Defense(Base):
                     pert_source_swap,
                     results["noise"],
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             results["compress"] = self.robustness.webp_compress(pert_source_swap)
@@ -593,7 +594,7 @@ class Defense(Base):
                     pert_source_swap,
                     results["compress"],
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             results["crop"] = self.robustness.crop(pert_source_swap)
@@ -614,7 +615,7 @@ class Defense(Base):
                     pert_source_swap,
                     results["crop"],
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             results["logo"] = self.robustness.logo(pert_source_swap, logo)
@@ -635,7 +636,7 @@ class Defense(Base):
                     pert_source_swap,
                     results["logo"],
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             results["brighten"] = self.robustness.brightness(pert_source_swap, 1.25)
@@ -656,7 +657,7 @@ class Defense(Base):
                     pert_source_swap,
                     results["brighten"],
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             results["darken"] = self.robustness.brightness(pert_source_swap, 0.75)
@@ -677,7 +678,7 @@ class Defense(Base):
                     pert_source_swap,
                     results["darken"],
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             forensic_metrics = metric.get_robustness_forensics_metric(
@@ -959,7 +960,7 @@ class Defense(Base):
                     (x_imgs_B - imgs_B) * 10,
                     (pert_imgs_A - imgs_A) * 10,
                 ],
-                only_save_summary=True,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             del imgs_A, imgs_B, imgs_C, pert_imgs, cloak_imgs
@@ -1079,7 +1080,7 @@ class Defense(Base):
                     (pert_imgs_A - imgs_A) * 10,
                     (pert_pert_imgs_A - pert_imgs_A) * 10,
                 ],
-                only_save_summary=False,
+                only_save_summary=self.config.third_party.defense.only_save_summary,
             )
 
             del imgs_A, imgs_B, cloak_imgs, pert_imgs

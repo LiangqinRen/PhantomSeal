@@ -1,8 +1,8 @@
 name: unify
 function: metric
-simswap_root_dir: ${root_dir}/third_party/SimSwap
-hififace_root_dir: ${root_dir}/third_party/HifiFace
-faceshifter_root_dir: ${root_dir}/third_party/FaceShifter/ModelC
+simswap_dir: ${root_dir}/third_party/SimSwap
+hififace_dir: ${root_dir}/third_party/HifiFace
+faceshifter_dir: ${root_dir}/third_party/FaceShifter/ModelC
 
 origin:
   config_path: config/model.yaml

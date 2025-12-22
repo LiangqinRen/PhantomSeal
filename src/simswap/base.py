@@ -17,6 +17,7 @@ from types import MethodType
 from torch.serialization import add_safe_globals
 from torchvision import transforms
 from pathlib import Path
+from typing import Callable, Any, cast
 
 
 class Base:
@@ -62,7 +63,6 @@ class Base:
                 if inspect.isfunction(obj):
                     add_safe_globals([obj])
                 elif inspect.isclass(obj):
-                    from typing import Callable, Any, cast
 
                     add_safe_globals([cast(Callable[..., Any], obj)])
 
@@ -74,7 +74,9 @@ class Base:
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             ]
         )
-        self.target.netG.encoder = MethodType(self.encoder, self.target.netG)
+
+        netG = cast(nn.Module, self.target.netG)
+        setattr(netG, "encoder", MethodType(self.encoder, netG))
 
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)
@@ -84,7 +86,8 @@ class Base:
     def _get_imgs_identity(self, imgs: Tensor) -> Tensor:
         imgs = self.transformer_Arcface(imgs)
         imgs_downsample = F.interpolate(imgs, size=(112, 112))
-        prior = self.target.netArc(imgs_downsample)
+        netArc = cast(nn.Module, self.target.netArc)
+        prior = netArc(imgs_downsample)
         prior = prior / torch.norm(prior, p=2, dim=1)[0]
 
         return prior.cuda()
