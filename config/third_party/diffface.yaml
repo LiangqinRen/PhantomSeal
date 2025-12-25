@@ -20,7 +20,7 @@ dataset:
   cloak_count: full
   cloak_index: 0
   cloak_min_distance: 1.04
-  cloak_distance: 1.20
+  cloak_distance: 1.31
 
 defense:
   batch_size: 60 # cloak selection

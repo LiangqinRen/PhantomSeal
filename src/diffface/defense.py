@@ -28,7 +28,7 @@ class Defense(Base):
         self.target_nonface_id = 0
 
     def sample(self) -> None:
-        dataset = FFHQSample(self.config.third_party.dataset.sample_dir)
+        dataset = FFHQSample(self.config)
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
         )
@@ -38,6 +38,7 @@ class Defense(Base):
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
             pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
 
+            cloak_swap = self._face_swap_per_image(cloak_imgs, imgs_B)
             source_swap = self._face_swap_per_image(imgs_A, imgs_B)
             pert_source_swap = self._face_swap_per_image(pert_imgs, imgs_B)
             target_swap = self._face_swap_per_image(imgs_B, imgs_A)
@@ -70,6 +71,7 @@ class Defense(Base):
                     "imgs_B",
                     "perturb\nimgs",
                     "cloak\nimgs",
+                    "cloak\nswap",
                     "source\nswap",
                     "perturb\nsource\nswap",
                     "target\nswap",
@@ -80,6 +82,7 @@ class Defense(Base):
                     imgs_B,
                     pert_imgs,
                     cloak_imgs,
+                    cloak_swap,
                     source_swap,
                     pert_source_swap,
                     target_swap,

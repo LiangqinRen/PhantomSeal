@@ -25,7 +25,7 @@ run() {
 multirun() {
     PYTHONPATH="$ROOT" python -m src.hififace.main -m \
         third_party=hififace \
-        third_party.function=metric \
+        third_party.function="$function" \
         log.file_suffix="$suffix" \
         log.record_level="$log_level" \
         "$@"

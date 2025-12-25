@@ -153,7 +153,7 @@ class AdaptiveMetricDataset(Dataset):
 
 class FFHQSample(Dataset):
     def __init__(self, config):
-        self.root_dir = Path(config.dataset.sample_dir)
+        self.root_dir = Path(config.third_party.dataset.sample_dir)
         image_size = config.third_party.dataset.input_size
         self.transform = transforms.Compose(
             [
