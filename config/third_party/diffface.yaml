@@ -13,7 +13,7 @@ origin:
 dataset:
   metric_dir: data/FFHQ_test
   sample_dir: data/FFHQ_sample
-  metric_pairs: 1000
+  metric_pairs: 3000
   input_size: 256
   cloak_dir: data/FFHQ_cloak
   cloak_mix: true

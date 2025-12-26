@@ -562,8 +562,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source_swap",
-                    "pert_source_swap",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
                     "noise",
                 ],
                 [
@@ -583,8 +583,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source_swap",
-                    "pert_source_swap",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
                     "compress",
                 ],
                 [
@@ -604,8 +604,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source_swap",
-                    "pert_source_swap",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
                     "crop",
                 ],
                 [
@@ -625,8 +625,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source_swap",
-                    "pert_source_swap",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
                     "logo",
                 ],
                 [
@@ -646,8 +646,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source_swap",
-                    "pert_source_swap",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
                     "brighten",
                 ],
                 [
@@ -667,8 +667,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source_swap",
-                    "pert_source_swap",
+                    "source\nswap",
+                    "perturb\nsource\nswap",
                     "darken",
                 ],
                 [
@@ -946,8 +946,8 @@ class Defense(Base):
                     "imgs_A",
                     "imgs_B",
                     "imgs_C",
-                    "cloak_imgs",
-                    "pert_imgs",
+                    "cloak\nimgs",
+                    "perturb\nimgs",
                     "imgs_A\ndiff",
                     "imgs_B\ndiff",
                 ],
@@ -1063,10 +1063,10 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "cloak_imgs",
-                    "pert_imgs",
-                    "pert_imgs_A\nsrc_swap",
-                    "pert_imgs_A\ntgt_swap",
+                    "cloak\nimgs",
+                    "perturb\nimgs",
+                    "perturb\nimgs_A\nsource\nswap",
+                    "perturb\nimgs_A\ntarget\nswap",
                     "protect\ndiff",
                     "attack\ndiff",
                 ],
