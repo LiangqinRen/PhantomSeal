@@ -15,4 +15,4 @@
 	url = https://github.com/ningyu1991/ArtificialGANFingerprints.git
 [submodule "third_party/DiffFace"]
 	path = third_party/DiffFace
-	url = https://github.com/LiangqinRen/DiffFace.git
+	url = https://github.com/hxngiee/DiffFace.git

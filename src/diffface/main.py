@@ -1,13 +1,23 @@
 from src import utils
 from src.diffface.defense import Defense
+from src.diffface.patches.gaussian_diffusion import (
+    patch_gaussian_diffusion_arcface_load,
+)
 
 import sys
 import hydra
 from omegaconf import DictConfig
+from pathlib import Path
 
 
 @hydra.main(config_path="../../config", config_name="config", version_base=None)
 def main(config: DictConfig):
+    root_dir = Path(config.third_party.project_root)
+    with utils.cd(root_dir), utils.use_project([root_dir]):
+        patch_gaussian_diffusion_arcface_load(
+            module_path="models.guided_diffusion.gaussian_diffusion"
+        )
+
     logger = utils.get_customized_logger(config.log.record_level)
 
     utils.check_cuda_availability(logger)

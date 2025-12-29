@@ -1,12 +1,12 @@
 from src.utils import cd, use_project
 from src.evaluate import Utility, Effectiveness, Cloak, DistanceCloakSelector
 
-
 import torch
 import warnings
 import face_alignment
 import torch.nn.functional as F
 import numpy as np
+import torch.nn as nn
 from torch import Tensor
 from pathlib import Path
 from torch.serialization import SourceChangeWarning
@@ -34,16 +34,34 @@ class Base:
             from optimization.augmentations import (
                 ImageAugmentations,
             )
-            from utils.module import SpecificNorm
             from models.parsing import BiSeNet
-            from models.gaze_estimation.gaze_estimator import (
-                Gaze_estimator,
-            )
+            from models.gaze_estimation.models.eyenet import EyeNet
             from utils.module import SpecificNorm, cosin_metric
             from utils.eye_crop import get_eye_coords
-            from models.gaze_estimation.gaze_estimator import (
-                Gaze_estimator,
-            )
+
+            class PatchedGazeEstimator(nn.Module):
+                def __init__(self):
+                    super().__init__()
+                    self.device = torch.device("cpu")
+                    self.checkpoint = torch.load(
+                        "checkpoints/GazeEstimator.pt",
+                        map_location=self.device,
+                        weights_only=False,
+                    )
+                    self.nstack = self.checkpoint["nstack"]
+                    self.nfeatures = self.checkpoint["nfeatures"]
+                    self.nlandmarks = self.checkpoint["nlandmarks"]
+                    self.eyenet = EyeNet(
+                        nstack=self.nstack,
+                        nfeatures=self.nfeatures,
+                        nlandmarks=self.nlandmarks,
+                    ).to(self.device)
+                    self.eyenet.load_state_dict(self.checkpoint["model_state_dict"])
+                    self.t = transforms.Resize((96, 160))
+
+                def forward(self, image):
+                    _, _, gaze_pred = self.eyenet.forward(self.t(image))
+                    return gaze_pred
 
             self.cosin_metric = cosin_metric
             self.get_eye_coords = get_eye_coords
@@ -105,7 +123,7 @@ class Base:
             )
             self.netSeg.eval()
 
-            self.netGaze = Gaze_estimator().to(self.device)
+            self.netGaze = PatchedGazeEstimator().to(self.device)
             self.fa = face_alignment.FaceAlignment(
                 face_alignment.LandmarksType.TWO_D, flip_input=False
             )
