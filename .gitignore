@@ -1,12 +1,10 @@
 .vscode/
 
 **/__pycache__/**
-config/evaluate/evaluate.yaml
+config/evaluate/evaluate_local.yaml
 checkpoints/
 data/
 logs/
 notebooks/
 
 pull_remote.sh
-
-config/evaluate/evaluate.yaml

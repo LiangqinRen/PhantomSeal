@@ -16,6 +16,7 @@ ROOT=$(dirname $(dirname $(realpath "$0")))
 run() {
     PYTHONPATH="$ROOT" python -m src.diffface.main \
         third_party=diffface \
+        evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
         log.record_level="$log_level" \
@@ -25,6 +26,7 @@ run() {
 multirun() {
     PYTHONPATH="$ROOT" python -m src.diffface.main -m \
         third_party=diffface \
+        evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
         log.record_level="$log_level" \

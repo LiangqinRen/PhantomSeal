@@ -16,6 +16,7 @@ ROOT=$(dirname $(dirname $(realpath "$0")))
 run() {
     PYTHONPATH="$ROOT" python -m src.faceshifter.main \
         third_party=faceshifter \
+        evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
         log.record_level="$log_level" \
@@ -25,6 +26,7 @@ run() {
 multirun() {
     PYTHONPATH="$ROOT" python -m src.faceshifter.main -m \
         third_party=faceshifter \
+        evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
         log.record_level="$log_level" \
