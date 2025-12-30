@@ -136,13 +136,13 @@ class Effectiveness:
     def _init_functions(self) -> dict:
         candidate_functions = {}
 
-        if self.config.evaluate.facenet_512.use:
+        if self.config.evaluate.facenet_512.enable:
             candidate_functions["facenet"] = self._get_facenet_matching
-        if self.config.evaluate.face_recognition.use:
+        if self.config.evaluate.face_recognition.enable:
             candidate_functions["facerec"] = self._get_facerec_matching
-        if self.config.evaluate.facepp.use:
+        if self.config.evaluate.facepp.enable:
             candidate_functions["face++"] = self._get_facepp_matching
-        if self.config.evaluate.aws.use:
+        if self.config.evaluate.aws.enable:
             candidate_functions["aws"] = self._get_aws_matching
 
         return candidate_functions

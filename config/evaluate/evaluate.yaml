@@ -1,12 +1,12 @@
 facenet_512:
-  use: true
+  enable: true
   threshold: 1.04
 
 face_recognition:
-  use: false
+  enable: false
 
 facepp:
-  use: false
+  enable: false
   qps: 10
   thread_limit: 5
   compare_url: "https://api-us.faceplusplus.com/facepp/v3/compare"
@@ -15,7 +15,7 @@ facepp:
   api_secret: ""
 
 aws:
-  use: false
+  enable: false
   api_key: ""
   api_secret: ""
   api_region: "us-west-2"
