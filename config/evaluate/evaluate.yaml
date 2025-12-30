@@ -18,7 +18,7 @@ aws:
   use: false
   api_key: ""
   api_secret: ""
-  api_region: ""
+  api_region: "us-west-2"
 
 ai_lab_tools:
   qps: 10
