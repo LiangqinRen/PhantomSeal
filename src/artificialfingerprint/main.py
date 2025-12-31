@@ -1,5 +1,5 @@
 from src import utils
-from src.artificialfingerprint.base import Base
+from src.artificialfingerprint.defense import Defense
 
 import sys
 import hydra
@@ -12,11 +12,13 @@ def main(config: DictConfig):
 
     utils.check_cuda_availability(logger)
     utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer("Artificial GAN Fingerprints main", logger)
+    timer = utils.Timer(
+        f"Artificial GAN Fingerprints {config.third_party.function}", logger
+    )
 
-    defense = Base(logger, config)
+    defense = Defense(logger, config)
 
-    defense_function_list = ["train"]  # , "forensics_robustness_metric"
+    defense_function_list = ["train", "forensics_robustness_metric"]
     defense_functions = {name: getattr(defense, name) for name in defense_function_list}
 
     if config.third_party.function in defense_functions:

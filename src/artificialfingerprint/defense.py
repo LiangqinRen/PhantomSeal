@@ -1,18 +1,15 @@
-from src.utils import cd, use_project
 from src.artificialfingerprint.base import Base
 from src.simswap.robustness import Robustness
-from src import metric
 from src.dataset import MetricDataset
 from src.utils import save_tensor_imgs
-from src.evaluate import Effectiveness
 
 import textwrap
 import torch
 import copy
-from torch import tensor, Tensor
+from torch import Tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
-from typing import cast
+from scipy.stats import binom
 
 
 class Defense(Base):
@@ -22,16 +19,22 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
-        self.effectiveness = Effectiveness(logger, config)
-
         simswap_config = copy.deepcopy(config)
         simswap_config.third_party.project_root = config.third_party.simswap_root
         self.robustness = Robustness(logger, simswap_config)
 
     def forensics_robustness_metric(self) -> None:
-        metrics = metric.get_robustness_metric_data_template(
-            self.config, self.effectiveness
-        )
+        torch.set_grad_enabled(False)
+        metrics = {  # BER, accuracy
+            "origin": (0, 0),
+            "none": (0, 0),
+            "noise": (0, 0),
+            "compress": (0, 0),
+            "crop": (0, 0),
+            "logo": (0, 0),
+            "brighten": (0, 0),
+            "darken": (0, 0),
+        }
 
         logo = self.robustness.load_logo()
         dataset = MetricDataset(self.config)
@@ -43,113 +46,144 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             total_count += len(imgs_A)
 
-            fingerprinted_imgs_A = imgs_A
-            break
-            # (
-            #     noise_source_effectivenesses,
-            #     noise_target_effectivenesses,
-            # ) = self.robustness.get_gauss_noise_metrics(
-            #     idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
-            # )
-            # metric.merge_single_robustness_metric(
-            #     metrics,
-            #     noise_source_effectivenesses,
-            #     noise_target_effectivenesses,
-            #     "noise",
-            # )
+            fingerprints = self._generate_random_fingerprints(
+                self.config.third_party.origin.fingerprint_length, len(imgs_A)
+            ).to(self.device)
 
-            # (
-            #     compress_source_effectivenesses,
-            #     compress_target_effectivenesses,
-            # ) = self.robustness.get_compress_metrics(
-            #     idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
-            # )
-            # metric.merge_single_robustness_metric(
-            #     metrics,
-            #     compress_source_effectivenesses,
-            #     compress_target_effectivenesses,
-            #     "compress",
-            # )
+            fingerprinted_imgs_B = self.encoder(fingerprints, imgs_B)
 
-            # (
-            #     crop_source_effectivenesses,
-            #     crop_target_effectivenesses,
-            # ) = self.robustness.get_crop_metrics(
-            #     idx, imgs_A, imgs_B, pert_imgs, cloak_imgs, self.image_dir
-            # )
-            # metric.merge_single_robustness_metric(
-            #     metrics,
-            #     crop_source_effectivenesses,
-            #     crop_target_effectivenesses,
-            #     "crop",
-            # )
+            origin_BER, origin_accuracy = self._calculate_metric(
+                fingerprinted_imgs_B, fingerprints
+            )
+            self._merge_metrics(metrics, "origin", (origin_BER, origin_accuracy))
 
-            # (
-            #     logo_source_effectivenesses,
-            #     logo_target_effectivenesses,
-            # ) = self.robustness.get_logo_metrics(
-            #     idx, imgs_A, imgs_B, pert_imgs, logo, cloak_imgs, self.image_dir
-            # )
-            # metric.merge_single_robustness_metric(
-            #     metrics,
-            #     logo_source_effectivenesses,
-            #     logo_target_effectivenesses,
-            #     "logo",
-            # )
+            none_results = self._simswap_faceswap(imgs_A, fingerprinted_imgs_B)
+            none_BER, none_accuracy = self._calculate_metric(none_results, fingerprints)
+            self._merge_metrics(metrics, "none", (none_BER, none_accuracy))
 
-            # (
-            #     brighten_source_effectivenesses,
-            #     brighten_target_effectivenesses,
-            # ) = self.robustness.get_brightness_metrics(
-            #     idx, imgs_A, imgs_B, pert_imgs, 1.25, cloak_imgs, self.image_dir
-            # )
-            # metric.merge_single_robustness_metric(
-            #     metrics,
-            #     brighten_source_effectivenesses,
-            #     brighten_target_effectivenesses,
-            #     "brighten",
-            # )
+            noise_imgs_B = self.robustness.gauss_noise(fingerprinted_imgs_B)
+            noise_results = self._simswap_faceswap(imgs_A, noise_imgs_B)
+            noise_BER, noise_accuracy = self._calculate_metric(
+                noise_results, fingerprints
+            )
+            self._merge_metrics(metrics, "noise", (noise_BER, noise_accuracy))
 
-            # (
-            #     darken_source_effectivenesses,
-            #     darken_target_effectivenesses,
-            # ) = self.robustness.get_brightness_metrics(
-            #     idx, imgs_A, imgs_B, pert_imgs, 0.75, cloak_imgs, self.image_dir
-            # )
-            # metric.merge_single_robustness_metric(
-            #     metrics,
-            #     darken_source_effectivenesses,
-            #     darken_target_effectivenesses,
-            #     "darken",
-            # )
+            compress_imgs_B = self.robustness.webp_compress(fingerprinted_imgs_B)
+            compress_results = self._simswap_faceswap(imgs_A, compress_imgs_B)
+            compress_BER, compress_accuracy = self._calculate_metric(
+                compress_results, fingerprints
+            )
+            self._merge_metrics(metrics, "compress", (compress_BER, compress_accuracy))
 
-            # self._free_gpu()
+            crop_imgs_B = self.robustness.crop(fingerprinted_imgs_B)
+            crop_results = self._simswap_faceswap(imgs_A, crop_imgs_B)
+            crop_BER, crop_accuracy = self._calculate_metric(crop_results, fingerprints)
+            self._merge_metrics(metrics, "crop", (crop_BER, crop_accuracy))
 
-            # iter_log_str = textwrap.dedent(
-            #     f"""
-            # utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())}), context ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())})
-            # utility: {metric.generate_iter_utility_log(utility)}
-            # noise: {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
-            # compress: {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
-            # crop: {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
-            # logo: {metric.generate_iter_robustness_log(logo_source_effectivenesses,logo_target_effectivenesses)}
-            # brighten: {metric.generate_iter_robustness_log(brighten_source_effectivenesses,brighten_target_effectivenesses)}
-            # darken: {metric.generate_iter_robustness_log(darken_source_effectivenesses,darken_target_effectivenesses)}
-            # """
-            # )
+            logo_imgs_B = self.robustness.logo(fingerprinted_imgs_B, logo)
+            logo_results = self._simswap_faceswap(imgs_A, logo_imgs_B)
+            logo_BER, logo_accuracy = self._calculate_metric(logo_results, fingerprints)
+            self._merge_metrics(metrics, "logo", (logo_BER, logo_accuracy))
 
-            # summary_log_str = textwrap.dedent(
-            #     f"""
-            # Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            # utility: {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
-            # noise: {metric.generate_summary_robustness_log(metrics['noise'])}
-            # compress: {metric.generate_summary_robustness_log(metrics['compress'])}
-            # crop: {metric.generate_summary_robustness_log(metrics['crop'])}
-            # logo: {metric.generate_summary_robustness_log(metrics['logo'])}
-            # brighten: {metric.generate_summary_robustness_log(metrics['brighten'])}
-            # darken: {metric.generate_summary_robustness_log(metrics['darken'])}
-            # """
-            # )
+            brighten_imgs_B = self.robustness.brightness(fingerprinted_imgs_B, 1.25)
+            brighten_results = self._simswap_faceswap(imgs_A, brighten_imgs_B)
+            brighten_BER, brighten_accuracy = self._calculate_metric(
+                brighten_results, fingerprints
+            )
+            self._merge_metrics(metrics, "brighten", (brighten_BER, brighten_accuracy))
 
-            # self.logger.info(textwrap.indent(iter_log_str, "    "))
-            # self.logger.info(textwrap.indent(summary_log_str, "    "))
+            darken_imgs_B = self.robustness.brightness(fingerprinted_imgs_B, 0.75)
+            darken_results = self._simswap_faceswap(imgs_A, darken_imgs_B)
+            darken_BER, darken_accuracy = self._calculate_metric(
+                darken_results, fingerprints
+            )
+            self._merge_metrics(metrics, "darken", (darken_BER, darken_accuracy))
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "finger\nprinted\nimgs_B",
+                    "none\nresults",
+                    "noise\nresults",
+                    "compress\nresults",
+                    "crop\nresults",
+                    "logo\nresults",
+                    "brighten\nresults",
+                    "darken\nresults",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    fingerprinted_imgs_B,
+                    none_results,
+                    noise_results,
+                    compress_results,
+                    crop_results,
+                    logo_results,
+                    brighten_results,
+                    darken_results,
+                ],
+                only_save_summary=self.config.third_party.defense.only_save_summary,
+            )
+
+            iter_log_str = textwrap.dedent(
+                f"""
+            BER (bit error rate) and accuracy
+            origin: {origin_BER:.3f}, {origin_accuracy:.3f}
+            simswap -> no operation: {none_BER:.3f}, {none_accuracy:.3f}
+            simswap -> noise: {noise_BER:.3f}, {noise_accuracy:.3f}
+            simswap -> compress: {compress_BER:.3f}, {compress_accuracy:.3f}
+            simswap -> crop: {crop_BER:.3f}, {crop_accuracy:.3f}
+            simswap -> logo: {logo_BER:.3f}, {logo_accuracy:.3f}
+            simswap -> brighten: {brighten_BER:.3f}, {brighten_accuracy:.3f}
+            simswap -> darken: {darken_BER:.3f}, {darken_accuracy:.3f}
+            """
+            )
+            summary_log_str = textwrap.dedent(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            origin: {metrics['origin'][0]/idx:.3f}, {metrics['origin'][1]/idx:.3f}
+            simswap -> no operation: {metrics['none'][0]/idx:.3f}, {metrics['none'][1]/idx:.3f}
+            simswap -> noise: {metrics['noise'][0]/idx:.3f}, {metrics['noise'][1]/idx:.3f}
+            simswap -> compress: {metrics['compress'][0]/idx:.3f}, {metrics['compress'][1]/idx:.3f}
+            simswap -> crop: {metrics['crop'][0]/idx:.3f}, {metrics['crop'][1]/idx:.3f}
+            simswap -> logo: {metrics['logo'][0]/idx:.3f}, {metrics['logo'][1]/idx:.3f}
+            simswap -> brighten: {metrics['brighten'][0]/idx:.3f}, {metrics['brighten'][1]/idx:.3f}
+            simswap -> darken: {metrics['darken'][0]/idx:.3f}, {metrics['darken'][1]/idx:.3f}
+            """
+            )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
+
+    def _simswap_faceswap(self, source_imgs: Tensor, target_imgs: Tensor) -> Tensor:
+        source_identity = self.robustness._get_imgs_identity(source_imgs)
+        results = self.robustness.target(None, target_imgs, source_identity, None, True)
+
+        return results
+
+    def _calculate_metric(
+        self, fingerprinted_imgs_A: Tensor, fingerprints: Tensor
+    ) -> tuple[float, float]:
+        decoder_output = self.decoder(fingerprinted_imgs_A)
+        fingerprints_predicted = (decoder_output > 0).float()
+
+        BER = torch.mean(torch.abs(fingerprints - fingerprints_predicted)).item()
+        accuracy = float(
+            binom.cdf(
+                self.config.third_party.defense.max_wrong_bits,
+                self.config.third_party.origin.fingerprint_length,
+                BER,
+            )
+        )
+
+        return BER * 100, accuracy * 100
+
+    def _merge_metrics(self, metrics: dict, iter: str, iter_metric: tuple) -> None:
+        metrics[iter] = (
+            metrics[iter][0] + iter_metric[0],
+            metrics[iter][1] + iter_metric[1],
+        )

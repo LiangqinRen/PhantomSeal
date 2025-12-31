@@ -45,6 +45,9 @@ echo -e "\033[1;34mDownloading pre-trained models...\033[0m"
         ["third_party/DiffFace/checkpoints/FaceParser.pth"]="1HZF2Z1aK-dxQ92oEhfuRbboGBOtE2mve"
         ["third_party/DiffFace/checkpoints/Arcface_model_only.tar"]="1qiAiF8g1lKD59VWB2vA50mGE2HDkflgZ"
         ["third_party/HifiFace/model/Deep3DFaceRecon_pytorch/BFM/Exp_Pca.bin"]="1Wwjp_3ZcvwUyJZLfdlzHcmB5DPZ03roI"
+
+        ["checkpoints/artificialfingerprint/encoder.pth"]="1icSfVjqAjorOYR2CRd58A4XAs47BF-iV"
+        ["checkpoints/artificialfingerprint/decoder.pth"]="1wtyb4vj-uWqO2av6bdyT0FV5m0IeL0Sz"
     )
 
     for rel in "${!FILES[@]}"; do

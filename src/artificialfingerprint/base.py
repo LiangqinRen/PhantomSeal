@@ -1,6 +1,7 @@
 from src.utils import cd, use_project, save_tensor_imgs
-from src.dataset import MetricDataset, AFDataset
+from src.dataset import AFDataset
 
+import math
 import torch
 from pathlib import Path
 from torch.utils.data import DataLoader
@@ -33,13 +34,18 @@ class Base:
                 config.third_party.origin.fingerprint_length,
             )
 
-    def train(self) -> None:
-        def generate_random_fingerprints(fingerprint_length, batch_size):
-            z = torch.zeros(
-                (batch_size, fingerprint_length), dtype=torch.float
-            ).random_(0, 2)
-            return z
+            if config.third_party.function != "train":
+                self.encoder.load_state_dict(
+                    torch.load(config.third_party.defense.encoder_path)
+                )
+                self.decoder.load_state_dict(
+                    torch.load(config.third_party.defense.decoder_path)
+                )
 
+                self.encoder = self.encoder.to(self.device)
+                self.decoder = self.decoder.to(self.device)
+
+    def train(self) -> None:
         origin_config = self.config.third_party.origin
 
         dataset = AFDataset(self.config)
@@ -58,7 +64,7 @@ class Base:
             lr=origin_config.lr,
         )
 
-        checkpoints = Path(self.config.third_party.project_root) / "checkpoints"
+        checkpoints = Path(self.config.log_dir) / "checkpoints"
         checkpoints.mkdir(parents=True, exist_ok=True)
 
         best_loss = float("inf")
@@ -68,7 +74,7 @@ class Base:
             decoder.train()
             for batch_idx, images in enumerate(dataloader, start=1):
                 batch_size = min(origin_config.batch_size, images.size(0))
-                fingerprints = generate_random_fingerprints(
+                fingerprints = self._generate_random_fingerprints(
                     origin_config.fingerprint_length, batch_size
                 )
 
@@ -88,10 +94,8 @@ class Base:
                 fingerprinted_images = encoder(fingerprints, clean_images)
 
                 decoder_output = decoder(fingerprinted_images)
-
                 criterion = nn.MSELoss()
                 l2_loss = criterion(fingerprinted_images, clean_images)
-
                 criterion = nn.BCEWithLogitsLoss()
                 BCE_loss = criterion(decoder_output.view(-1), fingerprints.view(-1))
 
@@ -125,19 +129,27 @@ class Base:
                         f"{epoch}_{batch_idx}",
                         ["clean\nimages", "finger\nprinted\nimages"],
                         [clean_images, fingerprinted_images],
-                        only_save_summary=True,
+                        only_save_summary=self.config.third_party.defense.only_save_summary,
                     )
 
-                if loss.item() < best_loss and bitwise_accuracy.item() > 0.95:
+                if loss.item() < best_loss and math.isclose(
+                    l2_loss_weight, origin_config.l2_loss_weight
+                ):
                     best_loss = loss.item()
                     torch.save(
                         decoder_encoder_optim.state_dict(), checkpoints / "optim.pth"
                     )
-                    torch.save(encoder.state_dict(), checkpoints / "encoder.pth")
-                    torch.save(decoder.state_dict(), checkpoints / "decoder.pth")
+                    torch.save(
+                        encoder.state_dict(),
+                        checkpoints / f"{epoch}_{batch_idx}_encoder.pth",
+                    )
+                    torch.save(
+                        decoder.state_dict(),
+                        checkpoints / f"{epoch}_{batch_idx}_decoder.pth",
+                    )
 
-    def embed_fingerprints(self):
-        pass
-
-    def detect_fingerprints(self):
-        pass
+    def _generate_random_fingerprints(self, fingerprint_length, batch_size):
+        z = torch.zeros((batch_size, fingerprint_length), dtype=torch.float).random_(
+            0, 2
+        )
+        return z

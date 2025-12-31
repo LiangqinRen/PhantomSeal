@@ -11,6 +11,7 @@ from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 from pathlib import Path
 from contextlib import contextmanager
+from typing import Iterable
 
 
 class Timer:
@@ -152,14 +153,53 @@ def cd(path):
         os.chdir(prev)
 
 
+def _infer_prefixes_from_project_roots(
+    project_paths: Iterable[Path],
+) -> tuple[str, ...]:
+    prefixes: set[str] = set()
+
+    for root in project_paths:
+        root = root.resolve()
+        if not root.exists() or not root.is_dir():
+            continue
+
+        for p in root.iterdir():
+            name = p.name
+
+            if name.startswith(".") or name in {"__pycache__", "build", "dist"}:
+                continue
+
+            # top-level module: xxx.py
+            if p.is_file() and p.suffix == ".py":
+                prefixes.add(p.stem)
+                continue
+
+            # top-level package: xxx/__init__.py
+            if p.is_dir() and (p / "__init__.py").exists():
+                prefixes.add(p.name)
+                continue
+
+    return tuple(sorted(prefixes))
+
+
 @contextmanager
-def use_project(project_paths: list[Path]):
+def use_project(project_paths: list[Path], purge_prefixes: Iterable[str] | None = None):
     abs_paths = [str(p.resolve()) for p in project_paths]
-    for path in abs_paths:
-        sys.path.insert(0, path)
+    old_sys_path = list(sys.path)
+    for path in reversed(abs_paths):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+    if purge_prefixes is None:
+        purge_prefixes = _infer_prefixes_from_project_roots(project_paths)
+    else:
+        purge_prefixes = tuple(purge_prefixes)
+
+    for name in list(sys.modules.keys()):
+        if any(name == p or name.startswith(p + ".") for p in purge_prefixes):
+            sys.modules.pop(name, None)
+
     try:
         yield
     finally:
-        for path in abs_paths:
-            if path in sys.path:
-                sys.path.remove(path)
+        sys.path[:] = old_sys_path

@@ -1,5 +1,5 @@
 name: artificialfingerprint
-function: robustness
+function: forensics_robustness_metric
 project_root: ${root_dir}/third_party/ArtificialGANFingerprints
 simswap_root: ${root_dir}/third_party/SimSwap
 
@@ -30,11 +30,11 @@ dataset:
   cloak_distance: 1.20
 
 defense:
-  batch_size: 60
-  epochs: 1000
+  batch_size: 100
+  max_wrong_bits: 10
   only_save_summary: true
+  encoder_path: ${root_dir}/checkpoints/artificialfingerprint/encoder.pth
+  decoder_path: ${root_dir}/checkpoints/artificialfingerprint/decoder.pth
 
 robustness:
-  ai_beauty: false
-  ai_beauty_tool: null # ai_lab_tools or tencent_cloud
   logo_img_path: data/vggface2_samples_224/ccs.png

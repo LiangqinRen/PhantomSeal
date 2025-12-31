@@ -31,12 +31,7 @@ multirun() {
         "$@"
 }
 
-if [[ $function == 'train' ]]
-then
-    run \
-    third_party.dataset.metric_512_dir=/data/Projects/PhantomSeal/vggface2_512
-
-elif [[ $function == 'forensics_robustness_metric' ]]
+if [[ $function == 'train' || $function == 'forensics_robustness_metric' ]]
 then
     run
 else
