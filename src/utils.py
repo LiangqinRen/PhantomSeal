@@ -82,7 +82,7 @@ def fix_random_seed(logger, random_seed: int) -> None:
 
 def save_tensor_imgs(
     image_dir: Path,
-    idx: int,
+    idx: int | str,
     img_labels: list[str],
     img_tensors: list[Tensor],
     image_name: str = "summary",

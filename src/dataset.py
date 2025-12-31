@@ -96,6 +96,38 @@ class MetricDataset(Dataset):
         return img_A, img_B
 
 
+class AFDataset(Dataset):
+    def __init__(self, config):
+        self.config = config
+        self.root_dir = Path(config.third_party.dataset.metric_512_dir)
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize(config.third_party.origin.image_resolution),
+                transforms.ToTensor(),
+            ]
+        )
+
+        self.images_path = self._get_images_list()
+
+    def _get_images_list(self) -> list[Path]:
+        image_path = sorted(
+            p
+            for p in self.root_dir.rglob("*")
+            if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+        )
+
+        return image_path
+
+    def __len__(self):
+        return len(self.images_path)
+
+    def __getitem__(self, idx):
+        image_path = self.images_path[random.randint(0, len(self.images_path) - 1)]
+        image = self.transform(Image.open(image_path).convert("RGB"))
+
+        return image
+
+
 class AdaptiveMetricDataset(Dataset):
     def __init__(self, config):
         self.config = config

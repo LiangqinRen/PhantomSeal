@@ -1,1 +1,40 @@
-seed: 42
+name: artificialfingerprint
+function: robustness
+project_root: ${root_dir}/third_party/ArtificialGANFingerprints
+simswap_root: ${root_dir}/third_party/SimSwap
+
+origin:
+  image_resolution: 256
+  image_channel: 3
+  fingerprint_length: 100
+  lr: 0.0001
+  num_epochs: 30
+  batch_size: 64
+  l2_loss_weight: 10
+  l2_loss_await: 1000
+  l2_loss_ramp: 3000
+  BCE_loss_weight: 1
+  log_interval: 100
+
+dataset:
+  sample_dir: data/vggface2_samples_224
+  metric_224_dir: data/vggface2_224_test
+  metric_512_dir: data/vggface2_512_test
+  use_224: false
+  metric_pairs: 3000
+  cloak_dir: data/vggface2_cloak
+  cloak_mix: true
+  cloak_count: full
+  cloak_min_distance: 1.04
+  cloak_index: 0
+  cloak_distance: 1.20
+
+defense:
+  batch_size: 60
+  epochs: 1000
+  only_save_summary: true
+
+robustness:
+  ai_beauty: false
+  ai_beauty_tool: null # ai_lab_tools or tencent_cloud
+  logo_img_path: data/vggface2_samples_224/ccs.png
