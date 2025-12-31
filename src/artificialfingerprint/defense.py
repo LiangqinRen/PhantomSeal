@@ -19,6 +19,9 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
+        notes_path = Path(self.config.notes_path)
+        notes_path.touch(exist_ok=True)
+
         simswap_config = copy.deepcopy(config)
         simswap_config.third_party.project_root = config.third_party.simswap_root
         self.robustness = Robustness(logger, simswap_config)
@@ -61,39 +64,33 @@ class Defense(Base):
             none_BER, none_accuracy = self._calculate_metric(none_results, fingerprints)
             self._merge_metrics(metrics, "none", (none_BER, none_accuracy))
 
-            noise_imgs_B = self.robustness.gauss_noise(fingerprinted_imgs_B)
-            noise_results = self._simswap_faceswap(imgs_A, noise_imgs_B)
+            noise_results = self.robustness.gauss_noise(none_results)
             noise_BER, noise_accuracy = self._calculate_metric(
                 noise_results, fingerprints
             )
             self._merge_metrics(metrics, "noise", (noise_BER, noise_accuracy))
 
-            compress_imgs_B = self.robustness.webp_compress(fingerprinted_imgs_B)
-            compress_results = self._simswap_faceswap(imgs_A, compress_imgs_B)
+            compress_results = self.robustness.webp_compress(none_results)
             compress_BER, compress_accuracy = self._calculate_metric(
                 compress_results, fingerprints
             )
             self._merge_metrics(metrics, "compress", (compress_BER, compress_accuracy))
 
-            crop_imgs_B = self.robustness.crop(fingerprinted_imgs_B)
-            crop_results = self._simswap_faceswap(imgs_A, crop_imgs_B)
+            crop_results = self.robustness.crop(none_results)
             crop_BER, crop_accuracy = self._calculate_metric(crop_results, fingerprints)
             self._merge_metrics(metrics, "crop", (crop_BER, crop_accuracy))
 
-            logo_imgs_B = self.robustness.logo(fingerprinted_imgs_B, logo)
-            logo_results = self._simswap_faceswap(imgs_A, logo_imgs_B)
+            logo_results = self.robustness.logo(none_results, logo)
             logo_BER, logo_accuracy = self._calculate_metric(logo_results, fingerprints)
             self._merge_metrics(metrics, "logo", (logo_BER, logo_accuracy))
 
-            brighten_imgs_B = self.robustness.brightness(fingerprinted_imgs_B, 1.25)
-            brighten_results = self._simswap_faceswap(imgs_A, brighten_imgs_B)
+            brighten_results = self.robustness.brightness(none_results, 1.25)
             brighten_BER, brighten_accuracy = self._calculate_metric(
                 brighten_results, fingerprints
             )
             self._merge_metrics(metrics, "brighten", (brighten_BER, brighten_accuracy))
 
-            darken_imgs_B = self.robustness.brightness(fingerprinted_imgs_B, 0.75)
-            darken_results = self._simswap_faceswap(imgs_A, darken_imgs_B)
+            darken_results = self.robustness.brightness(none_results, 0.75)
             darken_BER, darken_accuracy = self._calculate_metric(
                 darken_results, fingerprints
             )
@@ -166,9 +163,9 @@ class Defense(Base):
         return results
 
     def _calculate_metric(
-        self, fingerprinted_imgs_A: Tensor, fingerprints: Tensor
+        self, fingerprinted_imgs: Tensor, fingerprints: Tensor
     ) -> tuple[float, float]:
-        decoder_output = self.decoder(fingerprinted_imgs_A)
+        decoder_output = self.decoder(fingerprinted_imgs)
         fingerprints_predicted = (decoder_output > 0).float()
 
         BER = torch.mean(torch.abs(fingerprints - fingerprints_predicted)).item()
