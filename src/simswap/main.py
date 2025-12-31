@@ -1,5 +1,6 @@
 from src import utils
 from src.simswap.defense import Defense
+
 import sys
 import hydra
 from omegaconf import DictConfig
@@ -11,7 +12,7 @@ def main(config: DictConfig):
 
     utils.check_cuda_availability(logger)
     utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer("main", logger)
+    timer = utils.Timer(f"SimSwap {config.third_party.function}", logger)
 
     defense = Defense(logger, config)
     defense_functions = {

@@ -12,7 +12,7 @@ def main(config: DictConfig):
 
     utils.check_cuda_availability(logger)
     utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer("main", logger)
+    timer = utils.Timer(f"FaceShifter {config.third_party.function}", logger)
 
     defense = Defense(logger, config)
     defense_function_list = ["metric"]
