@@ -37,5 +37,5 @@ if [[ $function == 'metric' ]]
 then
     run
 else
-    echo "⚠️ Oops! That function doesn't exist."
+    echo "⚠️ Oops! Function '$function' is not supported."
 fi

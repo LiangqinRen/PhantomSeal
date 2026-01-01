@@ -35,5 +35,5 @@ if [[ $function == 'train' || $function == 'forensics_robustness_metric' ]]
 then
     run
 else
-    echo "⚠️ Oops! That function doesn't exist."
+    echo "⚠️ Oops! Function '$function' is not supported."
 fi

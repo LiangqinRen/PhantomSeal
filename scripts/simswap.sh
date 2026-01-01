@@ -88,5 +88,5 @@ then
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false
 else
-    echo "⚠️ Oops! That function doesn't exist."
+    echo "⚠️ Oops! Function '$function' is not supported."
 fi

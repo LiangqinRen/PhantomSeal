@@ -39,5 +39,5 @@ then
     # third_party.dataset.metric_dir=/home/liangqinren/PhantomSeal/data/vggface2_512_test
     # third_party.defense.batch_size=1
 else
-    echo "⚠️ Oops! That function doesn't exist."
+    echo "⚠️ Oops! Function '$function' is not supported."
 fi
