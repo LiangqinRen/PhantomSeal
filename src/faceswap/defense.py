@@ -1,13 +1,12 @@
-import metric
-from faceswap.models import Autoencoder
-from evaluate import Utility, Effectiveness
+from src import metric
+from src.faceswap.models import Autoencoder
+from src.evaluate import Utility, Effectiveness
 
 import cv2
 import torch
 import os
 import numpy as np
 import math
-
 from os.path import join
 from torch import nn, Tensor
 from torchvision.utils import save_image
@@ -26,10 +25,10 @@ class PGD:
 
     def __get_imgs_path(self, identity: int) -> list[str]:
         imgs_name = sorted(
-            os.listdir(join(self.config.third_party.data_dir, f"{identity}_64"))
+            os.listdir(join(self.config.third_party.dataset.data_dir, f"{identity}_64"))
         )
         imgs_path = [
-            join(self.config.third_party.data_dir, f"{identity}_64", name)
+            join(self.config.third_party.dataset.data_dir, f"{identity}_64", name)
             for name in imgs_name
         ]
 
@@ -88,7 +87,7 @@ class PGD:
         )
 
     def __get_source_imgs(self, identity: int, count: int) -> Tensor:
-        imgs_path = [join(self.config.third_party.data_dir, f"{identity}.png")]
+        imgs_path = [join(self.config.third_party.dataset.data_dir, f"{identity}.png")]
         imgs = self.__load_imgs_bgr(imgs_path)
 
         return imgs.repeat(count, 1, 1, 1)
@@ -293,7 +292,9 @@ class Defense:
         self.IDs = [1, 2, 3, 4, 5]
 
         self.model = Autoencoder(len(self.IDs)).cuda()
-        self.model.load_state_dict(torch.load(self.config.third_party.model_path))
+        self.model.load_state_dict(
+            torch.load(self.config.third_party.defense.model_path)
+        )
 
     def metric(self):
         pgd = PGD(self.logger, self.config, self.model)

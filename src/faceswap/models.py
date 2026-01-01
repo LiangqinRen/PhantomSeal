@@ -1,8 +1,6 @@
 import math
 import torch
-import torch.utils.data
 from torch import nn
-import torch.utils.data
 from torch.nn import functional as F
 from torch.nn.parameter import Parameter
 from torch.nn.functional import pad

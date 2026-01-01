@@ -1,6 +1,6 @@
-import utils
-from faceswap.defense import Defense
-from faceswap.worker import Worker
+from src import utils
+from src.faceswap.defense import Defense
+from src.faceswap.worker import Worker
 
 import hydra
 import sys

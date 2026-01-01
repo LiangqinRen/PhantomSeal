@@ -1,5 +1,5 @@
-from faceswap.umeyama import umeyama
-from faceswap.models import Autoencoder
+from src.faceswap.umeyama import umeyama
+from src.faceswap.models import Autoencoder
 
 import cv2
 import os
@@ -17,17 +17,24 @@ class Worker:
         self.logger = logger
         self.config = config
 
+        self.image_dir = Path(self.config.image_dir)
+        self.image_dir.mkdir(parents=True, exist_ok=True)
+
+        notes_path = Path(self.config.notes_path)
+        notes_path.touch(exist_ok=True)
+
         self.IDs = [1, 2, 3, 4, 5]
 
     def extract(self):
         for input in self.IDs:
-            data_dir = self.config.third_party.data_dir
-            source_dir = join(data_dir, f"{input}_256")
-            target_dir = join(data_dir, f"{input}_64")
-            os.makedirs(target_dir, exist_ok=True)
-            imgs_name = os.listdir(source_dir)
-            for _, name in enumerate(imgs_name):
-                img = cv2.imread(join(source_dir, name)) / 255.0
+            data_dir = Path(self.config.third_party.dataset.data_dir)
+            source_dir = data_dir / f"{input}_256"
+            target_dir = data_dir / f"{input}_64"
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            imgs_path = list(source_dir.iterdir())
+            for image_path in imgs_path:
+                img = cv2.imread(source_dir / image_path.name) / 255.0
 
                 # 🤣 magic!
                 range_ = np.linspace(128 - 80, 128 + 80, 5)
@@ -42,7 +49,7 @@ class Worker:
                 mat = umeyama(src_points, dst_points, True)[0:2]
                 target_img = cv2.warpAffine(img, mat, (64, 64))
 
-                cv2.imwrite(join(target_dir, name), target_img * 255)
+                cv2.imwrite(target_dir / image_path.name, target_img * 255)
 
     def train(self):
         model = self._load_model(len(self.IDs))
@@ -56,8 +63,8 @@ class Worker:
 
         l2_loss = nn.MSELoss().cuda()
         best_model, best_loss = None, float("inf")
-        checkpoint_dir = join(self.config.log_dir, "checkpoints")
-        os.makedirs(checkpoint_dir, exist_ok=True)
+        checkpoint_dir = Path(self.config.log_dir) / "checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
         for epoch in range(1, self.config.third_party.worker.epochs + 1):
             losses = {}
             id_target_imgs = {}
@@ -78,7 +85,7 @@ class Worker:
             if loss < best_loss:
                 best_loss = loss
                 best_model = model.state_dict()
-                torch.save(best_model, join(checkpoint_dir, "faceswap.pth"))
+                torch.save(best_model, checkpoint_dir / "faceswap.pth")
                 self.logger.info(
                     f"Save the model at epoch {epoch} with loss {loss:.5f}"
                 )
@@ -105,7 +112,7 @@ class Worker:
                 )
                 save_image(
                     summary,
-                    join(self.config.log_dir, "image", f"summary_{epoch}.png"),
+                    self.image_dir / f"summary_{epoch}.png",
                     nrow=len(id_target_imgs[1][:16]),
                 )
 
@@ -125,7 +132,7 @@ class Worker:
     def _load_model(self, id_count: int) -> Autoencoder:
         model = Autoencoder(id_count).cuda()
         if self.config.third_party.function == "test":
-            model_path = self.config.third_party.model_path
+            model_path = self.config.third_party.defense.model_path
             try:
                 model.load_state_dict(torch.load(model_path))
                 self.logger.info(f"load the model {model_path}")
@@ -149,46 +156,36 @@ class Worker:
     def _load_train_imgs(
         self, identity: int
     ) -> tuple[list[np.ndarray], list[np.ndarray]]:
-        imgs_256_dir = join(self.config.third_party.data_dir, f"{identity}_256")
-        imgs_name = os.listdir(imgs_256_dir)
+        data_path = Path(self.config.third_party.dataset.data_dir)
+        imgs_256_dir = data_path / f"{identity}_256"
+        imgs_path = imgs_256_dir.iterdir()
+        imgs_256 = [cv2.imread(path) / 255.0 for path in imgs_path]
 
-        imgs_256 = [cv2.imread(join(imgs_256_dir, name)) / 255.0 for name in imgs_name]
-
-        clean_imgs_64_dir = join(self.config.third_party.data_dir, f"{identity}_64")
-        clean_imgs_name = os.listdir(clean_imgs_64_dir)
+        clean_imgs_64_dir = data_path / f"{identity}_64"
+        clean_imgs_path = clean_imgs_64_dir.iterdir()
         if self.config.third_party.worker.pert_prefix is None:
-            imgs_64 = [
-                cv2.imread(join(clean_imgs_64_dir, name)) / 255.0
-                for name in clean_imgs_name
-            ]
+            imgs_64 = [cv2.imread(path) / 255.0 for path in clean_imgs_path]
         else:
-            poison_imgs_64_dir = join(
-                self.config.third_party.data_dir,
-                f"{self.config.third_party.worker.pert_prefix}_{identity}_64",
+            poison_imgs_64_dir = (
+                data_path
+                / f"{self.config.third_party.worker.pert_prefix}_{identity}_64"
             )
-            poison_imgs_name = os.listdir(poison_imgs_64_dir)
-            poison_imgs_name = random.sample(
-                poison_imgs_name,
+            poison_imgs_path = list(poison_imgs_64_dir.iterdir())
+            poison_imgs_path = random.sample(
+                poison_imgs_path,
                 int(
-                    len(poison_imgs_name)
+                    len(poison_imgs_path)
                     * self.config.third_party.worker.poison_percent
                     / 100
                 ),
             )
-            imgs_64 = [
-                cv2.imread(join(poison_imgs_64_dir, name)) / 255.0
-                for name in poison_imgs_name
-            ]
+            imgs_64 = [cv2.imread(path) / 255.0 for path in poison_imgs_path]
 
-            clean_imgs_name = random.sample(
-                clean_imgs_name, len(clean_imgs_name) - len(poison_imgs_name)
+            clean_imgs_path = random.sample(
+                list(clean_imgs_path),
+                len(list(clean_imgs_path)) - len(list(poison_imgs_path)),
             )
-            imgs_64.extend(
-                [
-                    cv2.imread(join(clean_imgs_64_dir, name)) / 255.0
-                    for name in clean_imgs_name
-                ]
-            )
+            imgs_64.extend([cv2.imread(path) / 255.0 for path in clean_imgs_path])
 
         return imgs_256, imgs_64
 
@@ -265,7 +262,9 @@ class Worker:
         return imgs[:, [2, 1, 0], :, :]
 
     def _load_test_imgs(self, identity: int, img_size: int = 64) -> Tensor:
-        imgs_64_dir = join(self.config.third_party.data_dir, f"{identity}_{img_size}")
+        imgs_64_dir = join(
+            self.config.third_party.dataset.data_dir, f"{identity}_{img_size}"
+        )
         imgs_name = os.listdir(imgs_64_dir)
         imgs_64 = [cv2.imread(join(imgs_64_dir, name)) / 255.0 for name in imgs_name]
 

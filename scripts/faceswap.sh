@@ -3,14 +3,12 @@
 set -e
 
 function=$1
-function=$(echo "$function" | tr '[:upper:]' '[:lower:]')
+function=`echo $function | tr '[:upper:]' '[:lower:]'`
 
+log_level="info"
+suffix=""
 if [ $# == 2 ] && [ "$2" == "debug" ]; then
     suffix="-debug"
-    log_level="debug"
-else
-    suffix=""
-    log_level="info"
 fi
 
 ROOT=$(dirname "$(dirname "$(realpath "$0")")")
@@ -18,7 +16,7 @@ ROOT=$(dirname "$(dirname "$(realpath "$0")")")
 valid_functions=("extract" "train" "test" "metric")
 
 if [[ " ${valid_functions[@]} " =~ " ${function} " ]]; then
-    PYTHONPATH="$ROOT/src" python "$ROOT/src/faceswap/main.py" \
+    PYTHONPATH="$ROOT" python -m src.faceswap.main \
         third_party=faceswap \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
