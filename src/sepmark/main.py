@@ -1,5 +1,5 @@
-import utils
-from sepmark.base import Base
+from src import utils
+from src.sepmark.defense import Defense
 
 import sys
 import hydra
@@ -11,17 +11,16 @@ def main(config: DictConfig):
     logger = utils.get_customized_logger(config.log.record_level)
 
     utils.check_cuda_availability(logger)
-    utils.fix_random_seed(logger, config.random_seed)
     timer = utils.Timer("main", logger)
 
-    base = Base(logger, config)
-    base_function_list = ["sepmark"]
-    base_functions = {name: getattr(base, name) for name in base_function_list}
+    defense = Defense(logger, config)
+    defense_function_list = ["forensics_robustness_metric"]
+    defense_functions = {name: getattr(defense, name) for name in defense_function_list}
 
-    if config.third_party.function in base_functions:
-        base_functions[config.third_party.function]()
+    if config.third_party.function in defense_functions:
+        defense_functions[config.third_party.function]()
     else:
-        sys.exit(f"⚠️ Oops! Fail to find {config.third_party.function}")
+        sys.exit(f"⚠️ Oops! That function doesn't exist.")
 
 
 if __name__ == "__main__":

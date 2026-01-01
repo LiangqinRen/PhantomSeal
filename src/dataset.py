@@ -96,38 +96,6 @@ class MetricDataset(Dataset):
         return img_A, img_B
 
 
-class AFDataset(Dataset):
-    def __init__(self, config):
-        self.config = config
-        self.root_dir = Path(config.third_party.dataset.metric_512_dir)
-        self.transform = transforms.Compose(
-            [
-                transforms.Resize(config.third_party.origin.image_resolution),
-                transforms.ToTensor(),
-            ]
-        )
-
-        self.images_path = self._get_images_list()
-
-    def _get_images_list(self) -> list[Path]:
-        image_path = sorted(
-            p
-            for p in self.root_dir.rglob("*")
-            if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-        )
-
-        return image_path
-
-    def __len__(self):
-        return len(self.images_path)
-
-    def __getitem__(self, idx):
-        image_path = self.images_path[random.randint(0, len(self.images_path) - 1)]
-        image = self.transform(Image.open(image_path).convert("RGB"))
-
-        return image
-
-
 class AdaptiveMetricDataset(Dataset):
     def __init__(self, config):
         self.config = config
@@ -229,6 +197,79 @@ class FFHQDataset(Dataset):
                 transforms.Resize((image_size, image_size)),
                 transforms.ToTensor(),
             ]
+        )
+
+        self.images = self._get_images_list()
+        self.index_pairs = self._get_random_pairs()
+
+    def _get_images_list(self) -> list[Path]:
+        images = sorted([f for f in self.root_dir.iterdir() if f.is_file()])
+        return images
+
+    def _get_random_pairs(self) -> list[tuple[int, int]]:
+        metric_pairs = self.config.third_party.dataset.metric_pairs
+        image_count = len(self.images)
+        index_pairs = []
+        for _ in range(metric_pairs):
+            i = random.randrange(image_count)
+            j = random.randrange(image_count)
+            while j == i:
+                j = random.randrange(image_count)
+            index_pairs.append((i, j))
+
+        return index_pairs
+
+    def __len__(self):
+        return self.config.third_party.dataset.metric_pairs
+
+    def __getitem__(self, idx):
+        idx_a, idx_b = self.index_pairs[idx]
+        img_A_path, img_B_path = self.images[idx_a], self.images[idx_b]
+
+        img_A = self.transform(Image.open(img_A_path).convert("RGB"))
+        img_B = self.transform(Image.open(img_B_path).convert("RGB"))
+
+        return img_A, img_B
+
+
+class AFDataset(Dataset):
+    def __init__(self, config):
+        self.config = config
+        self.root_dir = Path(config.third_party.dataset.metric_512_dir)
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize(config.third_party.origin.image_resolution),
+                transforms.ToTensor(),
+            ]
+        )
+
+        self.images_path = self._get_images_list()
+
+    def _get_images_list(self) -> list[Path]:
+        image_path = sorted(
+            p
+            for p in self.root_dir.rglob("*")
+            if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+        )
+
+        return image_path
+
+    def __len__(self):
+        return len(self.images_path)
+
+    def __getitem__(self, idx):
+        image_path = self.images_path[random.randint(0, len(self.images_path) - 1)]
+        image = self.transform(Image.open(image_path).convert("RGB"))
+
+        return image
+
+
+class SepMarkDataset(Dataset):
+    def __init__(self, config):
+        self.config = config
+        self.root_dir = Path(config.third_party.dataset.metric_dir)
+        self.transform = transforms.Compose(
+            [transforms.Resize(256), transforms.ToTensor()]
         )
 
         self.images = self._get_images_list()

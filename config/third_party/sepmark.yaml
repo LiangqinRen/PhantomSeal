@@ -1,47 +1,36 @@
 name: sepmark
-function: metric
+function: forensics_robustness_metric
+project_root: ${root_dir}/third_party/SepMark
+simswap_root: ${root_dir}/third_party/SimSwap
 
-project_name: Dual_watermark
-epoch_number: 100
-lr: 0.0002
-beta1: 0.5
-image_size: 256
-message_length: 128
-message_range: 0.1
-attention_encoder: se
-attention_decoder: se
-weight:
-  - 1 # encoder
-  - 10 # decoder_C
-  - 10 # decoder_R
-  - 10 # decoder_F
-  - 0.1 # discriminator
-dataset_path: data/dual_watermark/
-save_images_number: 8
-noise_layers:
-  pool_R:
-    - Identity()
-    - JpegTest()
-    - Resize()
-    - GaussianBlur()
-    - MedianBlur()
-    - Brightness()
-    - Contrast()
-    - Saturation()
-    - Hue()
-    - Dropout()
-    - SaltPepper()
-    - GaussianNoise()
-  pool_F:
-    - SimSwap()
+origin:
+  image_size: 256
+  message_length: 128
+  message_range: 0.038
+  batch_size: 1
+  lr: 0.0002
+  beta1: 0.5
+  attention_encoder: se
+  attention_decoder: se
+  weight:
+    - 1 # encoder
+    - 10 # decoder_C
+    - 10 # decoder_R
+    - 10 # decoder_F
+    - 0.1 # discriminator
 
-result_folder: simswap
-model_epoch: 90
-batch_size: 1
-with_mask: true
-strength_factor: 1
-noise_layer: Identity()
+dataset:
+  metric_dir: data/sepmark_test
+  use_224: false
+  metric_pairs: 3000
+  cloak_dir: data/vggface2_cloak
+  cloak_mix: true
 
-model_path: third_party/SepMark/checkpoints/EC_90.pth
-test_dir: data/vggface2_224
-dataset_path: third_party/SepMark/data/dual_watermark/test_256
+defense:
+  batch_size: 100
+  max_wrong_bits: 13
+  only_save_summary: true
+  model_path: ${root_dir}/checkpoints/sepmark/EC_90.pth
+
+robustness:
+  logo_img_path: data/vggface2_samples_224/ccs.png
