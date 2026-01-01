@@ -21,11 +21,11 @@ class Defense(Base):
         self.image_dir = Path(self.config.image_dir)
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
-        self.robustness = Robustness(logger, config)
-        self.score_calculator = ScoreCalculator(logger, config)
-
         notes_path = Path(self.config.notes_path)
         notes_path.touch(exist_ok=True)
+
+        self.robustness = Robustness(logger, config)
+        self.score_calculator = ScoreCalculator(logger, config)
 
         if self.config.third_party.robustness.ai_beauty:
             logger.info(
