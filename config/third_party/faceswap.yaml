@@ -13,7 +13,7 @@ worker:
   identity: null
 
 defense:
-  model_path: checkpoints/faceswap.pth
+  model_path: checkpoints/faceswap/faceswap.pth
   batch_size: 128
   epochs: 1000
   epsilon: 0.005
