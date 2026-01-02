@@ -35,9 +35,7 @@ if [[ $function == 'forensics_robustness_metric' ]]
 then
     # random_seed is set by SepMark paper
     run \
-    random_seed=42 
-    # third_party.dataset.metric_dir=/home/liangqinren/PhantomSeal/data/vggface2_512_test
-    # third_party.defense.batch_size=1
+    random_seed=42
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi
