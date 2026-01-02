@@ -19,7 +19,7 @@ echo -e "\033[1;34mPreparing dependencies for HifiFace...\033[0m"
 
 echo -e "\033[1;34mDownloading pre-trained models and datasets...\033[0m"
 (
-    gdown 1NwZW8iV9wBPKUQFzZ18EfgDhm8HcyWX4 -O data.tar
+    gdown 1sy2ya78ASyK5-CUrmsgnJy3wvNcVsJsf -O data.tar
     tar -xf data.tar
     rm data.tar
 )
