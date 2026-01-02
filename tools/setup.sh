@@ -77,12 +77,17 @@ echo -e "\033[1;34mDownloading pre-trained models...\033[0m"
     done
 )
 
-echo -e "\033[1;34mUpdating DiffFace\033[0m"
+echo -e "\033[1;34mCreating local evaluation file...\033[0m"
+(
+    cp config/evaluate/evaluate.yaml config/evaluate/evaluate_local.yaml
+)
+
+echo -e "\033[1;34mUpdating DiffFace...\033[0m"
 (
     cp src/diffface/patches/gaussian_diffusion.py third_party/DiffFace/models/guided_diffusion/gaussian_diffusion.py
 )
 
-echo -e "\033[1;34mUpdating SepMark\033[0m"
+echo -e "\033[1;34mUpdating SepMark...\033[0m"
 (
     if [ -f third_party/SepMark/network/noise_layers/__init__.py ]; then
         : > third_party/SepMark/network/noise_layers/__init__.py
