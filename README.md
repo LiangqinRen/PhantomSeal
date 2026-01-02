@@ -38,7 +38,8 @@ We implemented PhantomSeal using Python 3.10.19, PyTorch 2.8, and CUDA 12.8. We 
 
 #### repository
 
->git clone --recurse-submodules git@github.com:LiangqinRen/PhantomSeal.git
+Please download the anonymous GitHub repository from the following link:
+https://anonymous.4open.science/r/PhantomSeal/
 
 #### dataset and pre-trained models
 
@@ -46,7 +47,7 @@ PhantomSeal evaluates defense performance against five face-swapping models acro
 
 >bash tools/setup.sh
 
-If the automatic download fails, please visit the [Google Drive](https://drive.google.com/drive/folders/1caHioBnA1478FR15W3JzNuHu36zxopJv?usp=drive_link), download the required files manually, and place them in the corresponding directories.
+If the automatic download fails, please visit the [Google Drive](https://drive.google.com/drive/folders/1JyQyoEGDsxYamP915gq-aZPpj7jd9BHh?usp=drive_link), download the required files manually, and place them in the corresponding directories.
 
 #### PyTorch environment
 
