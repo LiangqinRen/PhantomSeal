@@ -46,7 +46,7 @@ then
     third_party.robustness.ai_beauty_tool=ai_lab_tools # ai_lab_tools or tencent_cloud
 elif [[ $function == 'failure_tracing' ]]
 then
-    run \ 
+    run \
     third_party.defense.failure_defense_tracing=true
 elif [[ $function == 'protection_robustness_sample' ]]
 then
@@ -65,12 +65,14 @@ then
     run \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
+    evaluate.effectiveness.ASRp=false \
     third_party.defense.epochs=335
 elif [[ $function == 'forensics_robustness_metric' ]]
 then
     run \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
+    evaluate.effectiveness.ASRp=false \
     third_party.defense.epochs=335
 elif [[ $function == 'image_robustness_metric' ]]
 then
