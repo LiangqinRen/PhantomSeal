@@ -1,0 +1,57 @@
+name: cross
+function: metric
+simswap_dir: ${root_dir}/third_party/SimSwap
+hififace_dir: ${root_dir}/third_party/HifiFace
+faceshifter_dir: ${root_dir}/third_party/FaceShifter/ModelC
+diffface_dir: ${root_dir}/third_party/DiffFace
+
+origin:
+  hififace:
+    config_path: config/model.yaml
+    checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
+  faceshifter:
+    model_path: face_modules/model_ir_se50.pth
+    G_path: saved_models/G_latest.pth
+  diffface:
+    skip_timesteps: 25
+    model: ddpm # ddim or ddpm
+    timestep_respacing: 100
+    aug_num: 8
+    iterations_num: 4
+    masking_threshold: 30
+
+dataset:
+  metric_dir: data/FFHQ_test
+  cloak_dir: data/FFHQ_cloak
+  metric_pairs: 3000
+  input_size: 256
+  cloak_mix: true
+  cloak_count: full
+  cloak_min_distance: 1.04
+  cloak_distance: 1.31
+
+defense:
+  batch_size: 10
+  epochs: 1000
+  epsilon: 0.003
+  limit:
+    R: 0.075
+    G: 0.030
+    B: 0.075
+    simswap: 0.003
+    faceshifter: 0.003
+    hififace_3d: 0.03
+    hififace_id: 0.0003
+  weight:
+    perturb: 1000
+    simswap_id: 10000
+    simswap_cloak: 10000
+    hififace_self_3d: 500
+    hififace_cloak_3d: 5000
+    hififace_self_id: 150
+    hififace_cloak_id: 15000
+    faceshifter_id: 35000
+    faceshifter_cloak: 1000000
+  silent_perturb: false
+  only_save_summary: true
+  log_interval: 100

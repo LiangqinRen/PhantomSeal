@@ -99,7 +99,7 @@ def get_defense_metric(
     imgs_B: Tensor,
     pert_imgs: Tensor,
     cloak_imgs: Tensor | None,
-    source_swap: Tensor,
+    source_swap: Tensor | None,
     pert_source_swap: Tensor,
     target_swap: Tensor | None,
     pert_target_swap: Tensor | None,
@@ -184,18 +184,19 @@ def merge_metric(
             ),
         )
     )
-    metrics["pert_source_utility"] = tuple(
-        x + y
-        for x, y in zip(
-            metrics["pert_source_utility"],
-            (
-                source_utility["mse"],
-                source_utility["psnr"],
-                source_utility["ssim"],
-                source_utility["lpips"],
-            ),
+    if source_utility is not None:
+        metrics["pert_source_utility"] = tuple(
+            x + y
+            for x, y in zip(
+                metrics["pert_source_utility"],
+                (
+                    source_utility["mse"],
+                    source_utility["psnr"],
+                    source_utility["ssim"],
+                    source_utility["lpips"],
+                ),
+            )
         )
-    )
     if target_utility is not None:
         metrics["pert_target_utility"] = tuple(
             x + y
@@ -229,6 +230,9 @@ def merge_metric(
 
 
 def generate_iter_utility_log(utilities: dict) -> str:
+    if utilities is None:
+        return "()"
+
     return f"({', '.join(f'{v:.3f}' for v in utilities.values())})"
 
 

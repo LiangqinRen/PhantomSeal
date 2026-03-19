@@ -16,3 +16,6 @@
 [submodule "third_party/DiffFace"]
 	path = third_party/DiffFace
 	url = https://github.com/hxngiee/DiffFace.git
+[submodule "third_party/InstantID"]
+	path = third_party/InstantID
+	url = https://github.com/instantX-research/InstantID.git
