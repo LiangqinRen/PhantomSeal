@@ -88,7 +88,7 @@ class Base:
         imgs_downsample = F.interpolate(imgs, size=(112, 112))
         netArc = cast(nn.Module, self.target.netArc)
         prior = netArc(imgs_downsample)
-        prior = prior / torch.norm(prior, p=2, dim=1)[0]
+        prior = F.normalize(prior, p=2, dim=1)
 
         return prior.cuda()
 

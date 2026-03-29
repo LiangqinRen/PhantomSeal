@@ -19,3 +19,12 @@
 [submodule "third_party/InstantID"]
 	path = third_party/InstantID
 	url = https://github.com/instantX-research/InstantID.git
+[submodule "third_party/REFace"]
+	path = third_party/REFace
+	url = https://github.com/Sanoojan/REFace.git
+[submodule "third_party/sd-webui-faceswaplab"]
+	path = third_party/sd-webui-faceswaplab
+	url = https://github.com/glucauze/sd-webui-faceswaplab.git
+[submodule "third_party/DiffSwap"]
+	path = third_party/DiffSwap
+	url = https://github.com/wl-zhao/DiffSwap.git
