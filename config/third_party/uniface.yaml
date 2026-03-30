@@ -1,0 +1,18 @@
+name: uniface
+function: metric
+project_root: ${root_dir}/third_party/UniFace
+
+origin:
+  checkpoint_path: ${root_dir}/checkpoints/uniface/500000.pt
+  size: 256
+  latent_channel_size: 512
+  latent_spatial_size: 8
+  lr_mul: 1
+  channel_multiplier: 2
+  normalize_mode: LayerNorm
+  small_generator: False
+
+dataset:
+  metric_512_dir: data/vggface2_512_test
+  metric_pairs: 10
+  batch_size: 10

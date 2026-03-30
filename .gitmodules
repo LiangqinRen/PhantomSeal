@@ -28,3 +28,12 @@
 [submodule "third_party/DiffSwap"]
 	path = third_party/DiffSwap
 	url = https://github.com/wl-zhao/DiffSwap.git
+[submodule "third_party/InfoSwap"]
+	path = third_party/InfoSwap
+	url = https://github.com/GGGHSL/InfoSwap-master.git
+[submodule "third_party/UniFace"]
+	path = third_party/UniFace
+	url = https://github.com/xc-csc101/UniFace.git
+[submodule "third_party/E4S"]
+	path = third_party/E4S
+	url = https://github.com/e4s2022/e4s.git

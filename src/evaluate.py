@@ -1,3 +1,8 @@
+import warnings
+
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API")
+
+
 import torch
 import lpips
 import math
@@ -5,7 +10,6 @@ import requests
 import base64
 import time
 import random
-import warnings
 import urllib3
 import traceback
 import hmac

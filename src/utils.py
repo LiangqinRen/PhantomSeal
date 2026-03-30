@@ -83,9 +83,9 @@ def fix_random_seed(logger, random_seed: int) -> None:
 
 def save_tensor_imgs(
     image_dir: Path,
-    idx: int | str,
-    img_labels: list[str],
-    img_tensors: list[Tensor],
+    idx: int | str | None,
+    image_labels: list[str],
+    image_tensors: list[Tensor],
     image_name: str = "summary",
     only_save_summary: bool = True,
 ) -> None:
@@ -99,35 +99,76 @@ def save_tensor_imgs(
         white_img = torch.ones((1, C, H, W), device=imgs.device, dtype=imgs.dtype)
         return torch.cat([white_img, imgs], dim=0)
 
-    index_row = prepend_white_row(img_tensors[0])
+    save_image_tensors = []
+    for image in image_tensors:
+        if image.min() < -1.05 or image.max() > 1.05:
+            raise ValueError("Tensor value out of expected [-1, 1] range")
+
+        if image.min() < -0.5:
+            image_to_save = (image + 1) / 2
+        else:
+            image_to_save = image
+
+        save_image_tensors.append(image_to_save)
+
+    index_row = prepend_white_row(save_image_tensors[0])
     summary_imgs = torch.cat(
-        [prepend_white_column(img) for img in img_tensors],
+        [prepend_white_column(img) for img in save_image_tensors],
         dim=0,
     )
     summary_imgs = torch.cat([index_row, summary_imgs], dim=0)
 
-    nrow = len(img_tensors[0]) + 1
+    nrow = len(save_image_tensors[0]) + 1
     grid = make_grid(summary_imgs, nrow=nrow, padding=2)
     grid = to_pil_image(torch.clamp(grid, 0, 1))
 
     draw = ImageDraw.Draw(grid)
-    font = ImageFont.load_default().font_variant(size=40)
+    index_font = ImageFont.truetype(
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 100
+    )
+    label_font = ImageFont.truetype(
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50
+    )
 
     cell_w = cell_h = grid.height // (len(summary_imgs) // nrow)
-    for i in range(1, index_row.shape[0]):
-        x = i * cell_w
-        draw.text((x + 5, 5), str(i), fill="black", font=font)
-    for i, label in enumerate(img_labels, start=1):  # skip the first line
-        y = i * cell_h
-        draw.text((5, y + 5), label, fill="black", font=font)
 
-    grid.save(image_dir / f"{image_name}_{idx}.png")
+    def draw_center_text(
+        x0: int, y0: int, w: int, h: int, text: str, font: ImageFont.ImageFont
+    ):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+
+        draw.text(
+            (x0 + (w - text_w) / 2, y0 + (h - text_h) / 2),
+            text,
+            fill="black",
+            font=font,
+        )
+
+    for i in range(1, index_row.shape[0]):
+        x0 = i * cell_w
+        y0 = 0
+        draw_center_text(x0, y0, cell_w, cell_h, str(i), index_font)  # type: ignore
+
+    for i, label in enumerate(image_labels, start=1):
+        x0 = 0
+        y0 = i * cell_h
+        label = label.replace("_", "\n")
+        draw_center_text(x0, y0, cell_w, cell_h, label, label_font)  # type: ignore
+
+    if idx is None or (isinstance(idx, str) and len(idx) == 0):
+        grid.save(image_dir / f"{image_name}.png")
+    else:
+        grid.save(image_dir / f"{image_name}_{idx}.png")
 
     if not only_save_summary:
-        for label, imgs in zip(img_labels, img_tensors):
+        for label, imgs in zip(image_labels, save_image_tensors):
             for i, img in enumerate(imgs, start=1):
-                title_label = label.replace("\n", "_")
-                save_image(img, image_dir / f"{title_label}_{idx}_{i}.png")
+                if idx is None or (isinstance(idx, str) and len(idx) == 0):
+                    save_image(img, image_dir / f"{label}_{i}.png")
+                else:
+                    save_image(img, image_dir / f"{label}_{idx}_{i}.png")
 
 
 def check_tensor_info(logger, x: Tensor, name: str = "tensor") -> None:
