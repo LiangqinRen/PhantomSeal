@@ -1,0 +1,19 @@
+name: infoswap
+function: metric
+project_root: ${root_dir}/third_party/InfoSwap
+
+origin:
+  smooth: True
+  encoder_path: ${root_dir}/checkpoints/infoswap/model_128_ir_se50.pth
+  smooth_kernel_dir: ${root_dir}/checkpoints/infoswap/w_kernel_smooth
+  smooth_kernel_name: ckpt_ks_*.pth
+  no_smooth_kernel_dir: ${root_dir}/checkpoints/infoswap/wo_kernel_smooth
+  no_smooth_kernel_name: ckpt_*.pth
+  module_weights_dir: ${third_party.project_root}/modules/weights128
+
+dataset:
+  metric_512_dir: data/FFHQ_test
+  metric_dir: data/FFHQ_test
+  metric_pairs: 10
+  batch_size: 10
+  input_size: 512
