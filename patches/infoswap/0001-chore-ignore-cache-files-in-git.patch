@@ -1,0 +1,20 @@
+From 525da5b530e563ffb6693517796b7f247d55c6a9 Mon Sep 17 00:00:00 2001
+From: LiangqinRen <liangqinren@gmail.com>
+Date: Fri, 3 Apr 2026 14:57:17 -0500
+Subject: [PATCH] chore: ignore cache files in git
+
+---
+ .gitignore | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 .gitignore
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..59ee0a5
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1 @@
++**/__pycache__/**
+-- 
+2.43.0
+

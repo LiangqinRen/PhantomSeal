@@ -1,0 +1,27 @@
+From a27a7435793268b30d5029a2050b950aee37a715 Mon Sep 17 00:00:00 2001
+From: LiangqinRen <liangqinren@gmail.com>
+Date: Sat, 28 Mar 2026 23:42:28 -0500
+Subject: [PATCH] fix(e4s): fix mask shape mismatch in tensor indexing
+
+---
+ scripts/face_swap.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/face_swap.py b/scripts/face_swap.py
+index c7fd305..8f83875 100644
+--- a/scripts/face_swap.py
++++ b/scripts/face_swap.py
+@@ -279,8 +279,8 @@ def faceSwapping_pipeline(source, target, opts, save_dir, target_mask=None, need
+     outer_dilation = 5  
+     mask_bg = logical_or_reduce(*[swapped_msk == clz for clz in [0,11, 4    ]])   #For face swapping in video，condisder 4,8,7 as part of background.  11 earings 4 hair 8 neck 7 ear
+     is_foreground = torch.logical_not(mask_bg)
+-    hole_index = hole_map[None][None] == 255
+-    is_foreground[hole_index[None]] = True
++    hole_index = hole_map[None, None] == 255
++    is_foreground[hole_index] = True
+     foreground_mask = is_foreground.float()
+     
+     if opts.lap_bld:
+-- 
+2.43.0
+
