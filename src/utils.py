@@ -11,16 +11,19 @@ from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Iterable
+from typing import Iterable, Iterator, TypeAlias
+
+
+FontLike: TypeAlias = ImageFont.ImageFont | ImageFont.FreeTypeFont
 
 
 class Timer:
-    def __init__(self, function_name, logger):
+    def __init__(self, function_name: str, logger: logging.Logger):
         self.function_name = function_name
         self.begin_time = time.time()
         self.logger = logger
 
-    def __del__(self):
+    def __del__(self) -> None:
         elapsed = time.time() - self.begin_time
         self.logger.info(
             f"{self.function_name} took {self.format_seconds(elapsed)} ({elapsed:.3f} seconds)"
@@ -65,14 +68,14 @@ def get_customized_logger(log_level: str) -> logging.Logger:
     return logger
 
 
-def check_cuda_availability(logger):
+def check_cuda_availability(logger: logging.Logger) -> None:
     if torch.cuda.is_available():
         logger.info(f"Use GPU {torch.cuda.get_device_name()}")
     else:
         raise SystemExit("CUDA is not available!")
 
 
-def fix_random_seed(logger, random_seed: int) -> None:
+def fix_random_seed(logger: logging.Logger, random_seed: int) -> None:
     random.seed(random_seed)
     np.random.seed(random_seed)
     torch.manual_seed(random_seed)
@@ -99,7 +102,7 @@ def save_tensor_imgs(
         white_img = torch.ones((1, C, H, W), device=imgs.device, dtype=imgs.dtype)
         return torch.cat([white_img, imgs], dim=0)
 
-    save_image_tensors = []
+    save_image_tensors: list[Tensor] = []
     for image in image_tensors:
         if image.min() < -1.05 or image.max() > 1.05:
             raise ValueError("Tensor value out of expected [-1, 1] range")
@@ -118,44 +121,77 @@ def save_tensor_imgs(
     )
     summary_imgs = torch.cat([index_row, summary_imgs], dim=0)
 
-    nrow = len(save_image_tensors[0]) + 1
-    grid = make_grid(summary_imgs, nrow=nrow, padding=2)
+    nrow = save_image_tensors[0].shape[0] + 1
+    padding = 2
+    grid = make_grid(summary_imgs, nrow=nrow, padding=padding)
     grid = to_pil_image(torch.clamp(grid, 0, 1))
 
     draw = ImageDraw.Draw(grid)
-    index_font = ImageFont.truetype(
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 100
-    )
-    label_font = ImageFont.truetype(
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50
-    )
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    _, _, cell_h, cell_w = summary_imgs.shape
 
-    cell_w = cell_h = grid.height // (len(summary_imgs) // nrow)
+    def get_cell_box(row: int, col: int) -> tuple[int, int, int, int]:
+        x0 = padding + col * (cell_w + padding)
+        y0 = padding + row * (cell_h + padding)
+        return x0, y0, cell_w, cell_h
 
-    def draw_center_text(
-        x0: int, y0: int, w: int, h: int, text: str, font: ImageFont.ImageFont
-    ):
-        bbox = draw.textbbox((0, 0), text, font=font)
+    def get_text_bbox(
+        text: str, font: FontLike, spacing: int
+    ) -> tuple[float, float, float, float]:
+        if "\n" in text:
+            return draw.multiline_textbbox((0, 0), text, font=font, spacing=spacing)
+        return draw.textbbox((0, 0), text, font=font)
+
+    def fit_font(
+        text: str,
+        box_w: int,
+        box_h: int,
+        target_ratio: float,
+        min_size: int = 10,
+    ) -> tuple[FontLike, int]:
+        max_size = max(min_size, int(min(box_w, box_h) * target_ratio))
+        for size in range(max_size, min_size - 1, -1):
+            spacing = max(2, size // 6)
+            try:
+                font = ImageFont.truetype(font_path, size)
+            except OSError:
+                return ImageFont.load_default(), spacing
+
+            bbox = get_text_bbox(text, font, spacing)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            if text_w <= box_w * 0.82 and text_h <= box_h * 0.82:
+                return font, spacing
+
+        return ImageFont.load_default(), max(2, min_size // 6)
+
+    def draw_center_text(row: int, col: int, text: str, target_ratio: float) -> None:
+        x0, y0, w, h = get_cell_box(row, col)
+        font, spacing = fit_font(text, w, h, target_ratio)
+        bbox = get_text_bbox(text, font, spacing)
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
+        text_x = x0 + (w - text_w) / 2 - bbox[0]
+        text_y = y0 + (h - text_h) / 2 - bbox[1]
 
-        draw.text(
-            (x0 + (w - text_w) / 2, y0 + (h - text_h) / 2),
-            text,
-            fill="black",
-            font=font,
-        )
+        if "\n" in text:
+            draw.multiline_text(
+                (text_x, text_y),
+                text,
+                fill="black",
+                font=font,
+                spacing=spacing,
+                align="center",
+            )
+        else:
+            draw.text((text_x, text_y), text, fill="black", font=font)
 
     for i in range(1, index_row.shape[0]):
-        x0 = i * cell_w
-        y0 = 0
-        draw_center_text(x0, y0, cell_w, cell_h, str(i), index_font)  # type: ignore
+        draw_center_text(0, i, str(i), target_ratio=0.55)
 
     for i, label in enumerate(image_labels, start=1):
-        x0 = 0
-        y0 = i * cell_h
         label = label.replace("_", "\n")
-        draw_center_text(x0, y0, cell_w, cell_h, label, label_font)  # type: ignore
+        draw_center_text(i, 0, label, target_ratio=0.32)
 
     if idx is None or (isinstance(idx, str) and len(idx) == 0):
         grid.save(image_dir / f"{image_name}.png")
@@ -171,7 +207,7 @@ def save_tensor_imgs(
                     save_image(img, image_dir / f"{label}_{idx}_{i}.png")
 
 
-def check_tensor_info(logger, x: Tensor, name: str = "tensor") -> None:
+def check_tensor_info(logger: logging.Logger, x: Tensor, name: str = "tensor") -> None:
     logger.info(
         f"{name}: "
         f"shape={tuple(x.shape)}, "
@@ -185,7 +221,7 @@ def check_tensor_info(logger, x: Tensor, name: str = "tensor") -> None:
 
 
 @contextmanager
-def cd(path):
+def cd(path: str | os.PathLike[str]) -> Iterator[None]:
     prev = os.getcwd()
     os.chdir(path)
     try:
@@ -224,7 +260,9 @@ def _infer_prefixes_from_project_roots(
 
 
 @contextmanager
-def use_project(project_paths: list[Path], purge_prefixes: Iterable[str] | None = None):
+def use_project(
+    project_paths: list[Path], purge_prefixes: Iterable[str] | None = None
+) -> Iterator[None]:
     abs_paths = [str(p.resolve()) for p in project_paths]
     old_sys_path = list(sys.path)
     for path in reversed(abs_paths):

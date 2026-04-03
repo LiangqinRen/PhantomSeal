@@ -1,0 +1,17 @@
+name: e4s
+function: metric
+project_root: ${root_dir}/third_party/E4S
+
+origin:
+  face_vid2vid_cfg_path: ${root_dir}/config/origin/e4s/vox-256.yaml
+  face_vid2vid_ckpt_path: ${root_dir}/checkpoints/e4s/00000189-checkpoint.pth.tar
+  face_parser_ckpt_path: ${root_dir}/checkpoints/e4s/79999_iter.pth
+  gpen_base_dir: ${third_party.project_root}/pretrained_ckpts/gpen/
+  checkpoint_path: ${root_dir}/checkpoints/e4s/iteration_300000.pt
+
+dataset:
+  metric_512_dir: data/FFHQ_test
+  metric_dir: data/FFHQ_test
+  metric_pairs: 10
+  batch_size: 10
+  input_size: 1024
