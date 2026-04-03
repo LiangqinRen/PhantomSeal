@@ -2,7 +2,7 @@ from src import metric
 from src.cross.base import Base
 from src.dataset import FFHQDataset
 from src.evaluate import ScoreCalculator
-from src.utils import save_tensor_imgs
+from src.common_utils import save_tensor_imgs
 
 import torch
 import textwrap

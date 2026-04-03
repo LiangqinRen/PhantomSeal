@@ -1,4 +1,4 @@
-from src import utils
+from src import common_utils
 from src.diffface.defense import Defense
 
 import sys
@@ -9,11 +9,11 @@ from pathlib import Path
 
 @hydra.main(config_path="../../config", config_name="config", version_base=None)
 def main(config: DictConfig):
-    logger = utils.get_customized_logger(config.log.record_level)
+    logger = common_utils.get_customized_logger(config.log.record_level)
 
-    utils.check_cuda_availability(logger)
-    utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer(f"Diffface {config.third_party.function}", logger)
+    common_utils.check_cuda_availability(logger)
+    common_utils.fix_random_seed(logger, config.random_seed)
+    timer = common_utils.Timer(f"Diffface {config.third_party.function}", logger)
 
     defense = Defense(logger, config)
     defense_functions = {"sample": defense.sample, "metric": defense.metric}

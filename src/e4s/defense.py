@@ -2,7 +2,7 @@ from src import metric
 from src.e4s.base import Base
 from src.dataset import FFHQDataset
 from src.evaluate import ScoreCalculator
-from src.utils import check_tensor_info, save_tensor_imgs
+from src.common_utils import check_tensor_info, save_tensor_imgs
 
 import torch
 import textwrap

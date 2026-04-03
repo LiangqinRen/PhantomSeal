@@ -1,6 +1,6 @@
 from src.diffface.base import Base
 from src.dataset import FFHQSample, FFHQDataset
-from src.utils import save_tensor_imgs
+from src.common_utils import save_tensor_imgs
 from src.evaluate import ScoreCalculator
 import src.metric as metric
 

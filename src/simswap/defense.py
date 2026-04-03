@@ -3,7 +3,7 @@ from src.simswap.base import Base
 from src.dataset import SampleDataset, MetricDataset, AdaptiveMetricDataset
 from src.simswap.robustness import Robustness
 from src.evaluate import ScoreCalculator
-from src.utils import save_tensor_imgs
+from src.common_utils import save_tensor_imgs
 
 
 import textwrap

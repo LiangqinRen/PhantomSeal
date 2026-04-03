@@ -1,4 +1,4 @@
-from src import utils
+from src import common_utils
 from src.faceswap.defense import Defense
 from src.faceswap.worker import Worker
 
@@ -9,11 +9,11 @@ from omegaconf import DictConfig
 
 @hydra.main(config_path="../../config", config_name="config", version_base=None)
 def main(config: DictConfig):
-    logger = utils.get_customized_logger(config.log.record_level)
+    logger = common_utils.get_customized_logger(config.log.record_level)
 
-    utils.check_cuda_availability(logger)
-    utils.fix_random_seed(logger, config.random_seed)
-    timer = utils.Timer("main", logger)
+    common_utils.check_cuda_availability(logger)
+    common_utils.fix_random_seed(logger, config.random_seed)
+    timer = common_utils.Timer("main", logger)
 
     worker = Worker(logger, config)
     worker_function_list = ["extract", "train", "test"]

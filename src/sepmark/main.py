@@ -1,4 +1,4 @@
-from src import utils
+from src import common_utils
 from src.sepmark.defense import Defense
 
 import sys
@@ -8,10 +8,10 @@ from omegaconf import DictConfig
 
 @hydra.main(config_path="../../config", config_name="config", version_base=None)
 def main(config: DictConfig):
-    logger = utils.get_customized_logger(config.log.record_level)
+    logger = common_utils.get_customized_logger(config.log.record_level)
 
-    utils.check_cuda_availability(logger)
-    timer = utils.Timer("main", logger)
+    common_utils.check_cuda_availability(logger)
+    timer = common_utils.Timer("main", logger)
 
     defense = Defense(logger, config)
     defense_function_list = ["forensics_robustness_metric"]

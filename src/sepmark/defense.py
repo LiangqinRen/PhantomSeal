@@ -1,7 +1,7 @@
 from src.sepmark.base import Base
 from src.simswap.robustness import Robustness
 from src.dataset import SepMarkDataset
-from src.utils import save_tensor_imgs
+from src.common_utils import save_tensor_imgs
 
 import copy
 import torch

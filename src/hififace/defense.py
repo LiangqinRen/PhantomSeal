@@ -1,7 +1,7 @@
 from src import metric
 from src.hififace.base import Base
 from src.dataset import MetricDataset
-from src.utils import save_tensor_imgs
+from src.common_utils import save_tensor_imgs
 from src.evaluate import ScoreCalculator
 
 import torch
