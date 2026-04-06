@@ -6,9 +6,11 @@ from src.common_utils import save_tensor_imgs
 
 import torch
 import textwrap
+import torch.nn.functional as F
 from torch import tensor, Tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
+from torchvision import transforms
 
 
 class Defense(Base):
@@ -47,9 +49,14 @@ class Defense(Base):
                 torch.ones_like(pert_imgs)
             )
 
+            if self.config.evaluate.effectiveness.ASRo:
+                with torch.no_grad():
+                    source_swap = self.swap_face(imgs_A, imgs_B)
+                    target_swap = self.swap_face(imgs_B, imgs_A)
             if self.config.evaluate.effectiveness.ASRp:
-                pert_source_swap = self._face_swap_per_image(pert_imgs, imgs_B)
-                pert_target_swap = self._face_swap_per_image(imgs_B, pert_imgs)
+                with torch.no_grad():
+                    pert_source_swap = self.swap_face(pert_imgs, imgs_B)
+                    pert_target_swap = self.swap_face(imgs_B, pert_imgs)
 
             (
                 utility,
@@ -64,9 +71,9 @@ class Defense(Base):
                 imgs_B,
                 pert_imgs,
                 cloak_imgs,
-                None,
+                source_swap,
                 pert_source_swap,
-                None,
+                target_swap,
                 pert_target_swap,
             )
 
@@ -143,24 +150,53 @@ class Defense(Base):
             self.logger.info(textwrap.indent(iter_log_str, "    "))
             self.logger.info(textwrap.indent(summary_log_str, "    "))
 
-    def _face_swap_per_image(self, imgs_A: Tensor, imgs_B: Tensor) -> Tensor:
-        assert imgs_A.shape[0] == imgs_B.shape[0]
+    def swap_face(self, imgs_A: Tensor, imgs_B: Tensor) -> Tensor:
+        if self.config.third_party.defense.target == "diffface":
+            assert imgs_A.shape[0] == imgs_B.shape[0]
 
-        source_swap = []
-        imgs_A = imgs_A.cpu()
-        imgs_B = imgs_B.cpu()
+            source_swap = []
+            imgs_A = imgs_A.cpu()
+            imgs_B = imgs_B.cpu()
 
-        for i in range(imgs_A.size(0)):
-            a = imgs_A[i : i + 1].contiguous().to(self.device, non_blocking=True)
-            b = imgs_B[i : i + 1].contiguous().to(self.device, non_blocking=True)
-            with torch.no_grad():
-                out = self.swap_face(a, b)
+            for i in range(imgs_A.size(0)):
+                a = imgs_A[i : i + 1].contiguous().to(self.device, non_blocking=True)
+                b = imgs_B[i : i + 1].contiguous().to(self.device, non_blocking=True)
+                out = self.defense_target.swap_face(a, b)
 
-            source_swap.append(out.detach().cpu())
+                source_swap.append(out.detach().cpu())
 
-            del a, b, out
+                del a, b, out
 
-        return torch.cat(source_swap, dim=0).cuda()
+            return torch.cat(source_swap, dim=0).cuda()
+        elif self.config.third_party.defense.target == "uniface":
+            pass
+        elif self.config.third_party.defense.target == "infoswap":
+            imgs_A = F.interpolate(
+                imgs_A, size=(512, 512), mode="bilinear", align_corners=False
+            )
+            imgs_B = F.interpolate(
+                imgs_B, size=(512, 512), mode="bilinear", align_corners=False
+            )
+        elif self.config.third_party.defense.target == "e4s":
+            imgs_A = F.interpolate(
+                imgs_A, size=(1024, 1024), mode="bilinear", align_corners=False
+            )
+            imgs_B = F.interpolate(
+                imgs_B, size=(1024, 1024), mode="bilinear", align_corners=False
+            )
+        else:
+            raise ValueError(
+                f"Unsupported defense target: {self.config.third_party.defense.target}"
+            )
+
+        imgs_A = imgs_A * 2 - 1
+        imgs_B = imgs_B * 2 - 1
+
+        out = self.defense_target.swap_face(imgs_A, imgs_B)
+        out = ((out + 1) / 2).clamp(0, 1)
+        out = F.interpolate(out, size=(256, 256), mode="bilinear", align_corners=False)
+
+        return out
 
     def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor) -> Tensor:
         def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
