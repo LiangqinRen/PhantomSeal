@@ -14,4 +14,4 @@ dataset:
   metric_dir: data/FFHQ_test
   metric_pairs: 10
   batch_size: 10
-  input_size: 1024
+  image_size: 1024

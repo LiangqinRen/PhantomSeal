@@ -1,15 +1,12 @@
-from src import metric
 from src.e4s.base import Base
-from src.dataset import FFHQDataset
+from src.dataset import FFHQMetric
 from src.evaluate import ScoreCalculator
 from src.common_utils import check_tensor_info, save_tensor_imgs
 
 import torch
-import textwrap
-import torch.nn.functional as F
-from torch import Tensor, tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
+from torchvision import transforms
 
 
 class Defense(Base):
@@ -27,7 +24,17 @@ class Defense(Base):
     @torch.no_grad()
     def swap(self) -> None:
         config = self.config.third_party
-        dataset = FFHQDataset(self.config)
+        transform = transforms.Compose(
+            [
+                transforms.Resize(
+                    (config.dataset.image_size, config.dataset.image_size)
+                ),
+                transforms.ToTensor(),
+            ]
+        )
+        dataset = FFHQMetric(
+            config.dataset.metric_dir, config.dataset.metric_pairs, transform
+        )
         dataloader = DataLoader(dataset, batch_size=config.dataset.batch_size)
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()

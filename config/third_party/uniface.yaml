@@ -16,3 +16,4 @@ dataset:
   metric_512_dir: data/vggface2_512_test
   metric_pairs: 10
   batch_size: 10
+  image_size: 256

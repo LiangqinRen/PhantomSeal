@@ -8,32 +8,32 @@ diffface_dir: ${root_dir}/third_party/DiffFace
 origin:
   hififace:
     config_path: config/model.yaml
-    checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
+    checkpoint_path: checkpoints/hififace_opensource_299999.ckpt
   faceshifter:
     model_path: face_modules/model_ir_se50.pth
     G_path: saved_models/G_latest.pth
-  diffface:
-    skip_timesteps: 25
-    model: ddpm # ddim or ddpm
-    timestep_respacing: 100
-    aug_num: 8
-    iterations_num: 4
-    masking_threshold: 30
 
 dataset:
   metric_dir: data/FFHQ_test
   cloak_dir: data/FFHQ_cloak
   metric_pairs: 3000
-  input_size: 256
+  image_size: 256
   cloak_mix: true
   cloak_count: full
   cloak_min_distance: 1.04
   cloak_distance: 1.31
 
 defense:
-  batch_size: 5
+  batch_size: 50
   epochs: 1000
   epsilon: 0.003
+  utility_mse_lower_bound: 75
+  utility_mse_upper_bound: 140
+  utility_mse_ema_decay: 0.9
+  utility_mse_smoothness: 8
+  dynamic_weight_epsilon: 1.0e-6
+  dynamic_weight_progress_ema_decay: 0.9
+  dynamic_weight_variance_weight: 0.5
   limit:
     R: 0.075
     G: 0.030
@@ -48,10 +48,10 @@ defense:
     simswap_cloak: 10000
     hififace_self_3d: 500
     hififace_cloak_3d: 5000
-    hififace_self_id: 150
-    hififace_cloak_id: 15000
-    faceshifter_id: 35000
-    faceshifter_cloak: 1000000
+    hififace_self_id: 180
+    hififace_cloak_id: 18000
+    faceshifter_id: 22000
+    faceshifter_cloak: 600000
   silent_perturb: false
   only_save_summary: true
   log_interval: 100

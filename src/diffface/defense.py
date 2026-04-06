@@ -1,5 +1,5 @@
 from src.diffface.base import Base
-from src.dataset import FFHQSample, FFHQDataset
+from src.dataset import FFHQSample, FFHQMetric
 from src.common_utils import save_tensor_imgs
 from src.evaluate import ScoreCalculator
 import src.metric as metric
@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from pathlib import Path
 from torch.utils.data import DataLoader
 from torch import Tensor
+from torchvision import transforms
 
 
 class Defense(Base):
@@ -28,7 +29,18 @@ class Defense(Base):
         self.target_nonface_id = 0
 
     def sample(self) -> None:
-        dataset = FFHQSample(self.config)
+        config = self.config.third_party
+        transform = transforms.Compose(
+            [
+                transforms.Resize(
+                    (config.dataset.image_size, config.dataset.image_size)
+                ),
+                transforms.ToTensor(),
+            ]
+        )
+        dataset = FFHQSample(
+            config.dataset.sample_dir, config.dataset.metric_pairs, transform
+        )
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
         )
@@ -112,7 +124,18 @@ class Defense(Base):
     def metric(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
 
-        dataset = FFHQDataset(self.config)
+        config = self.config.third_party
+        transform = transforms.Compose(
+            [
+                transforms.Resize(
+                    (config.dataset.image_size, config.dataset.image_size)
+                ),
+                transforms.ToTensor(),
+            ]
+        )
+        dataset = FFHQMetric(
+            config.dataset.metric_dir, config.dataset.metric_pairs, transform
+        )
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
         )

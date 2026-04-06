@@ -1,13 +1,9 @@
-from src import metric
 from src.uniface.base import Base
 from src.dataset import VGGFace2Dataset
 from src.evaluate import ScoreCalculator
 from src.common_utils import check_tensor_info, save_tensor_imgs
 
-import torch
-import textwrap
 import torch.nn.functional as F
-from torch import Tensor, tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
 
