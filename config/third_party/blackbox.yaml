@@ -1,4 +1,4 @@
-name: cross
+name: blackbox
 function: metric
 simswap_dir: ${root_dir}/third_party/SimSwap
 hififace_dir: ${root_dir}/third_party/HifiFace

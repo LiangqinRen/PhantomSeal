@@ -1,5 +1,5 @@
 from src import common_utils
-from src.cross.defense import Defense
+from src.blackbox.defense import Defense
 
 import hydra
 import sys
@@ -13,7 +13,7 @@ def main(config: DictConfig):
     common_utils.check_cuda_availability(logger)
     common_utils.fix_random_seed(logger, config.random_seed)
     timer = common_utils.Timer(
-        f"Cross protection from GAN to DM {config.third_party.function}", logger
+        f"Blackbox protection from GAN to DM {config.third_party.function}", logger
     )
 
     defense = Defense(logger, config)

@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
+from collections.abc import Callable
 
 
 class SampleDataset(Dataset):
@@ -256,6 +257,49 @@ class DiffFaceFFHQSample(Dataset):
 
     def __getitem__(self, idx):
         img_A_path, img_B_path = self.A[idx], self.B[idx]
+
+        img_A = self.transform(Image.open(img_A_path).convert("RGB"))
+        img_B = self.transform(Image.open(img_B_path).convert("RGB"))
+
+        return img_A, img_B
+
+
+class FFHQMetric(Dataset):
+    def __init__(
+        self,
+        root_dir: Path,
+        metric_pairs: int,
+        transform: Callable,
+    ):
+        self.root_dir = root_dir
+        self.metric_pairs = metric_pairs
+        self.transform = transform
+
+        self.images = self._get_images_list()
+        self.index_pairs = self._get_random_pairs()
+
+    def _get_images_list(self) -> list[Path]:
+        images = sorted([f for f in self.root_dir.iterdir() if f.is_file()])
+        return images
+
+    def _get_random_pairs(self) -> list[tuple[int, int]]:
+        image_count = len(self.images)
+        index_pairs = []
+        for _ in range(self.metric_pairs):
+            i = random.randrange(image_count)
+            j = random.randrange(image_count)
+            while j == i:
+                j = random.randrange(image_count)
+            index_pairs.append((i, j))
+
+        return index_pairs
+
+    def __len__(self):
+        return self.metric_pairs
+
+    def __getitem__(self, idx):
+        idx_a, idx_b = self.index_pairs[idx]
+        img_A_path, img_B_path = self.images[idx_a], self.images[idx_b]
 
         img_A = self.transform(Image.open(img_A_path).convert("RGB"))
         img_B = self.transform(Image.open(img_B_path).convert("RGB"))

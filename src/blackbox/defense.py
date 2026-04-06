@@ -1,6 +1,6 @@
 from src import metric
-from src.cross.base import Base
-from src.dataset import FFHQDataset
+from src.blackbox.base import Base
+from src.dataset import FFHQMetric
 from src.evaluate import ScoreCalculator
 from src.common_utils import save_tensor_imgs
 
@@ -31,7 +31,18 @@ class Defense(Base):
     def metric(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
 
-        dataset = FFHQDataset(self.config)
+        dataset_config = self.config.third_party.dataset
+        transform = transforms.Compose(
+            [
+                transforms.Resize(
+                    (dataset_config.image_size, dataset_config.image_size)
+                ),
+                transforms.ToTensor(),
+            ]
+        )
+        dataset = FFHQMetric(
+            dataset_config.metric_dir, dataset_config.metric_pairs, transform
+        )
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
         )

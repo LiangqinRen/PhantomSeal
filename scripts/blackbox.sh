@@ -14,8 +14,8 @@ fi
 ROOT=$(dirname $(dirname $(realpath "$0")))
 
 run() {
-    PYTHONPATH="$ROOT" python -m src.cross.main \
-        third_party=cross \
+    PYTHONPATH="$ROOT" python -m src.blackbox.main \
+        third_party=blackbox \
         evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
@@ -24,8 +24,8 @@ run() {
 }
 
 multirun() {
-    PYTHONPATH="$ROOT" python -m src.cross.main -m \
-        third_party=cross \
+    PYTHONPATH="$ROOT" python -m src.blackbox.main -m \
+        third_party=blackbox \
         evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
