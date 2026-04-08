@@ -1,0 +1,27 @@
+name: diffswap
+function: swap
+project_root: ${root_dir}/third_party/DiffSwap
+checkpoint_dir: ${root_dir}/checkpoints/diffswap
+checkpoint_path: ${third_party.checkpoint_dir}/diffswap.pth
+face_recognition_checkpoint_path: ${third_party.checkpoint_dir}/glint360k_r100.pth
+shape_predictor_path: ${third_party.checkpoint_dir}/shape_predictor_68_face_landmarks.dat
+
+origin:
+  ddim_steps: 200
+  ddim_eta: 0.0
+  tgt_scale: 0.01
+  quiet_third_party: true
+  detector_upsample: 1
+  detector_resize_scales: [1.0, 1.25, 1.5, 2.0]
+  detection_failure_fallback: target
+
+model:
+  image_size: 256
+  crop_size: 112
+
+dataset:
+  metric_dir: data/FFHQ_test
+  sample_dir: data/FFHQ_sample
+  metric_pairs: 10
+  image_size: 256
+  batch_size: 10

@@ -1,0 +1,148 @@
+From 039e5f4c18630cc28337508a3072f462d89023c0 Mon Sep 17 00:00:00 2001
+From: LiangqinRen <liangqinren@gmail.com>
+Date: Wed, 8 Apr 2026 14:37:43 -0500
+Subject: [PATCH 2/2] feat(diffswap): suppress noisy third-party startup and
+ sampling logs
+
+---
+ ldm/models/autoencoder.py                   | 20 +++++++++++++++-
+ ldm/models/diffusion/ddpm.py                |  5 +++-
+ ldm/modules/diffusionmodules/openaimodel.py |  6 +++--
+ ldm/modules/encoders/modules.py             | 26 +++++++++++++++++----
+ 4 files changed, 49 insertions(+), 8 deletions(-)
+
+diff --git a/ldm/models/autoencoder.py b/ldm/models/autoencoder.py
+index 6a9c4f4..8acae38 100644
+--- a/ldm/models/autoencoder.py
++++ b/ldm/models/autoencoder.py
+@@ -3,7 +3,25 @@ import pytorch_lightning as pl
+ import torch.nn.functional as F
+ from contextlib import contextmanager
+ 
+-from taming.modules.vqvae.quantize import VectorQuantizer2 as VectorQuantizer
++try:
++    from taming.modules.vqvae.quantize import VectorQuantizer2 as VectorQuantizer
++except ImportError:
++    # Some taming-transformers builds expose only VectorQuantizer.
++    from taming.modules.vqvae.quantize import VectorQuantizer as _VectorQuantizer
++
++    class VectorQuantizer(_VectorQuantizer):
++        def __init__(
++            self,
++            n_e,
++            e_dim,
++            beta,
++            remap=None,
++            sane_index_shape=False,
++            *args,
++            **kwargs,
++        ):
++            # Older taming builds do not accept `remap` or `sane_index_shape`.
++            super().__init__(n_e, e_dim, beta, *args, **kwargs)
+ 
+ from ldm.modules.diffusionmodules.model import Encoder, Decoder
+ from ldm.modules.distributions.distributions import DiagonalGaussianDistribution
+diff --git a/ldm/models/diffusion/ddpm.py b/ldm/models/diffusion/ddpm.py
+index 9eeee89..7c294e6 100644
+--- a/ldm/models/diffusion/ddpm.py
++++ b/ldm/models/diffusion/ddpm.py
+@@ -26,7 +26,10 @@ from ldm.modules.distributions.distributions import normal_kl, DiagonalGaussianD
+ from ldm.models.autoencoder import VQModelInterface, IdentityFirstStage, AutoencoderKL
+ from ldm.modules.diffusionmodules.util import make_beta_schedule, extract_into_tensor, noise_like
+ from ldm.models.diffusion.ddim import DDIMSampler
+-from IPython import embed
++try:
++    from IPython import embed
++except ImportError:
++    embed = None
+ 
+ 
+ __conditioning_keys__ = {'concat': 'c_concat',
+diff --git a/ldm/modules/diffusionmodules/openaimodel.py b/ldm/modules/diffusionmodules/openaimodel.py
+index 912b22e..aeba05e 100644
+--- a/ldm/modules/diffusionmodules/openaimodel.py
++++ b/ldm/modules/diffusionmodules/openaimodel.py
+@@ -18,7 +18,10 @@ from ldm.modules.diffusionmodules.util import (
+     timestep_embedding,
+ )
+ from ldm.modules.attention import SpatialTransformer
+-from IPython import embed
++try:
++    from IPython import embed
++except ImportError:
++    embed = None
+ 
+ 
+ # dummy replace
+@@ -959,4 +962,3 @@ class EncoderUNetModel(nn.Module):
+         else:
+             h = h.type(x.dtype)
+             return self.out(h)
+-
+diff --git a/ldm/modules/encoders/modules.py b/ldm/modules/encoders/modules.py
+index 861b4a8..9130e35 100644
+--- a/ldm/modules/encoders/modules.py
++++ b/ldm/modules/encoders/modules.py
+@@ -1,10 +1,20 @@
+ import torch
+ import torch.nn as nn
+ from functools import partial
+-import clip
++try:
++    import clip
++except ImportError:
++    clip = None
+ from einops import rearrange, repeat
+-from transformers import CLIPTokenizer, CLIPTextModel
+-import kornia
++try:
++    from transformers import CLIPTokenizer, CLIPTextModel
++except ImportError:
++    CLIPTokenizer = None
++    CLIPTextModel = None
++try:
++    import kornia
++except ImportError:
++    kornia = None
+ 
+ from ldm.modules.x_transformer import Encoder, TransformerWrapper  # TODO: can we directly rely on lucidrains code and simply add this as a reuirement? --> test
+ from .face_embedder import FaceEmbedder
+@@ -137,6 +147,8 @@ class FrozenCLIPEmbedder(AbstractEncoder):
+     """Uses the CLIP transformer encoder for text (from Hugging Face)"""
+     def __init__(self, version="openai/clip-vit-large-patch14", device="cuda", max_length=77):
+         super().__init__()
++        if CLIPTokenizer is None or CLIPTextModel is None:
++            raise ImportError("transformers is required for FrozenCLIPEmbedder")
+         self.tokenizer = CLIPTokenizer.from_pretrained(version)
+         self.transformer = CLIPTextModel.from_pretrained(version)
+         self.device = device
+@@ -167,6 +179,8 @@ class FrozenCLIPTextEmbedder(nn.Module):
+     """
+     def __init__(self, version='ViT-L/14', device="cuda", max_length=77, n_repeat=1, normalize=True):
+         super().__init__()
++        if clip is None:
++            raise ImportError("openai-clip is required for FrozenCLIPTextEmbedder")
+         self.model, _ = clip.load(version, jit=False, device="cpu")
+         self.device = device
+         self.max_length = max_length
+@@ -205,6 +219,10 @@ class FrozenClipImageEmbedder(nn.Module):
+             antialias=False,
+         ):
+         super().__init__()
++        if clip is None:
++            raise ImportError("openai-clip is required for FrozenClipImageEmbedder")
++        if kornia is None:
++            raise ImportError("kornia is required for FrozenClipImageEmbedder")
+         self.model, _ = clip.load(name=model, device=device, jit=jit)
+ 
+         self.antialias = antialias
+@@ -230,4 +248,4 @@ class FrozenClipImageEmbedder(nn.Module):
+ if __name__ == "__main__":
+     from ldm.util import count_params
+     model = FrozenCLIPEmbedder()
+-    count_params(model, verbose=True)
+\ No newline at end of file
++    count_params(model, verbose=True)
+-- 
+2.43.0
+

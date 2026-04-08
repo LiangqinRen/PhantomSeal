@@ -4,13 +4,14 @@ import torch
 import random
 import os
 import sys
+import warnings
 import numpy as np
 from torch import Tensor
 from torchvision.utils import save_image, make_grid
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 from pathlib import Path
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from typing import Iterable, Iterator, TypeAlias
 
 
@@ -282,3 +283,33 @@ def use_project(
         yield
     finally:
         sys.path[:] = old_sys_path
+
+
+@contextmanager
+def suppress_third_party_noise(enabled: bool = True) -> Iterator[None]:
+    if not enabled:
+        yield
+        return
+
+    devnull = open(os.devnull, "w")
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Default grid_sample and affine_grid behavior has changed.*",
+                category=UserWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                message="`torch.cuda.amp.autocast\\(args\\.\\.\\.\\)` is deprecated.*",
+                category=FutureWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                message=".*GPU device discovery failed.*",
+                category=UserWarning,
+            )
+            with redirect_stdout(devnull), redirect_stderr(devnull):
+                yield
+    finally:
+        devnull.close()
