@@ -1,0 +1,68 @@
+name: nullswap
+function: train
+simswap_dir: ${root_dir}/third_party/SimSwap
+faceshifter_dir: ${root_dir}/third_party/FaceShifter/ModelC
+
+origin:
+  faceshifter:
+    model_path: face_modules/model_ir_se50.pth
+
+dataset:
+  metric_dir: data/FFHQ
+  sample_dir: data/FFHQ_sample
+  metric_pairs: 100000
+  image_size: 256
+
+model:
+  image_channels: 3
+  image_size: 256
+  epsilon: 0.03137254901960784 # 8 / 255
+  id_base_channels: 64
+  id_bottleneck_channels: 64
+  id_num_blocks: 4
+  feature_conv_channels: [32, 64, 64]
+  feature_bottleneck_channels: 64
+  feature_num_blocks: 5
+  perturb_refine_channels: 64
+  perturb_bottleneck_channels: 64
+  perturb_num_blocks: 3
+  perturb_feature_size: [128, 128]
+  cloak_hidden_channels: 128
+  cloak_bottleneck_channels: 64
+  cloak_num_blocks: 3
+  discriminator_base_channels: 32
+  reduction: 16
+  alpha_init: 3.0
+  beta_init: 0.5
+  beta_target: 2.0
+
+defense:
+  batch_size: 2
+  epochs: 60
+  num_workers: 8
+  lr_generator: 0.0005
+  lr_discriminator: 0.0001
+  betas: [0.9, 0.999]
+  checkpoint_interval: 500
+  log_interval: 100
+  eval_interval_batches: 500
+  eval_pairs: 32
+  eval_batch_size: 8
+  metric_batch_size: 8
+  metric_targets: [simswap, infoswap, uniface, e4s]
+  checkpoint_path: ${root_dir}/checkpoints/nullswap/epoch_0001_step_012000.pth
+  only_save_summary: true
+  utility_mse_lower_bound: 75
+  utility_mse_upper_bound: 140
+  utility_mse_ema_decay: 0.9
+  utility_mse_smoothness: 8
+  dynamic_weight_k: 30
+  dynamic_weight_epsilon: 1.0e-6
+  dynamic_weight_variance_weight: 0.1
+  weight:
+    perturb: 1.0
+  loss_weight:
+    mse: 1.8
+    lpips: 1.2
+    adv: 0.1
+    identity: 0.08
