@@ -28,6 +28,45 @@ class Defense(Base):
         self.face_ids = [1, 2, 3, 4, 5, 10, 11, 12, 13]
         self.target_nonface_id = 0
 
+    @torch.no_grad()
+    def swap(self) -> None:
+        config = self.config.third_party
+        transform = transforms.Compose(
+            [
+                transforms.Resize(
+                    (config.dataset.image_size, config.dataset.image_size)
+                ),
+                transforms.ToTensor(),
+            ]
+        )
+        dataset = FFHQMetric(
+            Path(config.dataset.metric_dir), config.dataset.metric_pairs, transform
+        )
+        dataloader = DataLoader(dataset, batch_size=config.dataset.batch_size)
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            source_swap = self._face_swap_per_image(imgs_A, imgs_B)
+            target_swap = self._face_swap_per_image(imgs_B, imgs_A)
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "source\nswap",
+                    "target\nswap",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    source_swap,
+                    target_swap,
+                ],
+                only_save_summary=True,
+            )
+            self._free_gpu()
+
     def sample(self) -> None:
         config = self.config.third_party
         transform = transforms.Compose(
@@ -39,7 +78,7 @@ class Defense(Base):
             ]
         )
         dataset = FFHQSample(
-            config.dataset.sample_dir, config.dataset.metric_pairs, transform
+            Path(config.dataset.sample_dir), config.dataset.metric_pairs, transform
         )
         dataloader = DataLoader(
             dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True

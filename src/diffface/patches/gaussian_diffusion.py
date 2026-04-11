@@ -7,6 +7,7 @@ Docstrings have been added, as well as DDIM sampling and a new collection of bet
 
 import enum
 import math
+import os
 
 import numpy as np
 import torch as th
@@ -175,7 +176,11 @@ class GaussianDiffusion:
         )
 
         netArc_checkpoint = torch.load(
-            "./checkpoints/Arcface_model_only.tar", weights_only=False
+            os.environ.get(
+                "PHANTOMSEAL_DIFFFACE_ARCFACE_CHECKPOINT",
+                "./checkpoints/Arcface_model_only.tar",
+            ),
+            weights_only=False,
         )
         netArc = netArc_checkpoint["model"].module
         self.netArc = netArc.to("cuda").eval()

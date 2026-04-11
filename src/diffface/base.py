@@ -1,6 +1,7 @@
 from src.common_utils import cd, use_project
 from src.evaluate import Utility, Effectiveness, Cloak, DistanceCloakSelector
 
+import os
 import torch
 import warnings
 import face_alignment
@@ -27,6 +28,10 @@ class Base:
 
         root_dir = Path(self.config.third_party.project_root)
         with cd(root_dir), use_project([root_dir]):
+            origin_config = self.config.third_party.origin
+            os.environ["PHANTOMSEAL_DIFFFACE_ARCFACE_CHECKPOINT"] = str(
+                Path(origin_config.checkpoint_path).resolve()
+            )
             from models.guided_diffusion.script_util import (
                 create_model_and_diffusion,
                 model_and_diffusion_defaults,
@@ -44,7 +49,7 @@ class Base:
                     super().__init__()
                     self.device = torch.device("cpu")
                     self.checkpoint = torch.load(
-                        "checkpoints/GazeEstimator.pt",
+                        origin_config.gaze_estimator_path,
                         map_location=self.device,
                         weights_only=False,
                     )
@@ -91,7 +96,7 @@ class Base:
             self.model, self.diffusion = create_model_and_diffusion(**self.model_config)
 
             self.model.load_state_dict(
-                torch.load(f"{root_dir}/checkpoints/Model.pt", map_location=self.device)
+                torch.load(origin_config.model_path, map_location=self.device)
             )
             self.model.requires_grad_(False).eval().to(self.device)
             for name, param in self.model.named_parameters():
@@ -105,7 +110,7 @@ class Base:
             )
 
             netArc_checkpoint = torch.load(
-                f"checkpoints/Arcface_model_only.tar",
+                origin_config.checkpoint_path,
                 map_location="cpu",
                 weights_only=False,
             )
@@ -116,7 +121,7 @@ class Base:
             self.netSeg = BiSeNet(n_classes=19).to(self.device)
             self.netSeg.load_state_dict(
                 torch.load(
-                    f"checkpoints/FaceParser.pth",
+                    origin_config.face_parser_path,
                     map_location="cpu",
                     weights_only=False,
                 )

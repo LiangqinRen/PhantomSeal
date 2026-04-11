@@ -16,7 +16,11 @@ def main(config: DictConfig):
     timer = common_utils.Timer(f"Diffface {config.third_party.function}", logger)
 
     defense = Defense(logger, config)
-    defense_functions = {"sample": defense.sample, "metric": defense.metric}
+    defense_functions = {
+        "swap": defense.swap,
+        "sample": defense.sample,
+        "metric": defense.metric,
+    }
 
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()

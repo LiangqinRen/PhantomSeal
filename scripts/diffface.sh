@@ -33,9 +33,13 @@ multirun() {
         "$@"
 }
 
-if [[ $function == 'sample' || $function == 'metric' ]]
+if [[ $function == 'swap' || $function == 'sample' || $function == 'metric' ]]
 then
-    run
+    if [[ $function == 'swap' ]]; then
+        run third_party.dataset.metric_pairs=10
+    else
+        run
+    fi
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi
