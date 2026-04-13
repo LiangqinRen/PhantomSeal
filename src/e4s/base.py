@@ -1,4 +1,5 @@
 from src.common_utils import cd, use_project
+from src.evaluate import Utility, Effectiveness, DistanceCloakSelector
 
 import os
 import copy
@@ -27,6 +28,9 @@ class Base:
         self.config = config
 
         self.device: str = "cuda:0"
+        self.utility = Utility(logger, config)
+        self.effectiveness = Effectiveness(logger, config)
+        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
         origin_config = config.third_party.origin
         root_dir = Path(self.config.third_party.project_root)
@@ -164,6 +168,11 @@ class Base:
 
         Returns:
             swapped_imgs: [B, 3, H_out, W_out], float tensor in [-1, 1]
+
+        Notes:
+            The public E4S swap interface consumes tensors in [-1, 1], converts
+            each image to PIL internally, runs the original E4S pipeline, and
+            returns results normalized to [-1, 1].
         """
         if source_imgs.ndim != 4 or target_imgs.ndim != 4:
             raise ValueError(
