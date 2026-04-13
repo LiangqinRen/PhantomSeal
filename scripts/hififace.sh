@@ -33,7 +33,16 @@ multirun() {
         "$@"
 }
 
-if [[ $function == 'metric' ]]
+if [[ $function == 'swap' ]]
+then
+    run \
+    third_party.dataset.swap_batch_size=30 \
+    third_party.dataset.metric_pairs=30 \
+    evaluate.effectiveness.perturb=false \
+    evaluate.effectiveness.ASRo=true \
+    evaluate.effectiveness.ASRp=false \
+    evaluate.effectiveness.TSR=false
+elif [[ $function == 'metric' ]]
 then
     run
 else

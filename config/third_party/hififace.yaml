@@ -4,12 +4,13 @@ project_root: ${root_dir}/third_party/HifiFace
 
 origin:
   config_path: config/model.yaml
-  checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
+  checkpoint_path: checkpoints/hififace_opensource_299999.ckpt
 
 dataset:
   metric_512_dir: data/vggface2_512_test
   use_224: false
   metric_pairs: 3000
+  swap_batch_size: 30
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
   cloak_count: full
