@@ -14,8 +14,8 @@ fi
 ROOT=$(dirname $(dirname $(realpath "$0")))
 
 run() {
-    PYTHONPATH="$ROOT" python -m src.blackbox.main \
-        third_party=blackbox \
+    PYTHONPATH="$ROOT" python -m src.cross.main \
+        third_party=cross \
         evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
@@ -24,8 +24,8 @@ run() {
 }
 
 multirun() {
-    PYTHONPATH="$ROOT" python -m src.blackbox.main -m \
-        third_party=blackbox \
+    PYTHONPATH="$ROOT" python -m src.cross.main -m \
+        third_party=cross \
         evaluate=evaluate_local \
         third_party.function="$function" \
         log.file_suffix="$suffix" \
@@ -35,21 +35,7 @@ multirun() {
 
 if [[ $function == 'metric' ]]
 then
-    # run \
-    # third_party.defense.target=uniface \
-    # third_party.defense.batch_size=60
-
-    # run \
-    # third_party.defense.target=infoswap \
-    # third_party.defense.batch_size=20
-
-    # run \
-    # third_party.defense.target=diffswap \
-    # third_party.defense.batch_size=20
-
-    run \
-    third_party.defense.target=e4s \
-    third_party.defense.batch_size=20
+    run
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi

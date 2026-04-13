@@ -179,6 +179,32 @@ class Defense(Base):
                 del a, b, out
 
             return torch.cat(source_swap, dim=0).cuda()
+        elif self.config.third_party.defense.target == "diffswap":
+            diffswap_size = int(self.defense_target.model_input_size)
+            imgs_A = F.interpolate(
+                imgs_A,
+                size=(diffswap_size, diffswap_size),
+                mode="bilinear",
+                align_corners=False,
+            )
+            imgs_B = F.interpolate(
+                imgs_B,
+                size=(diffswap_size, diffswap_size),
+                mode="bilinear",
+                align_corners=False,
+            )
+            out = self.defense_target.swap_face(imgs_A, imgs_B)
+            out = F.interpolate(
+                out,
+                size=(
+                    self.config.third_party.dataset.image_size,
+                    self.config.third_party.dataset.image_size,
+                ),
+                mode="bilinear",
+                align_corners=False,
+            )
+
+            return out
         elif self.config.third_party.defense.target == "uniface":
             pass
         elif self.config.third_party.defense.target == "infoswap":

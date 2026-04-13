@@ -159,6 +159,10 @@ class Base:
             from src.diffface.base import Base as DiffFace
 
             self.defense_target = build_defense_target("diffface", DiffFace)
+        elif self.config.third_party.defense.target == "diffswap":
+            from src.diffswap.base import Base as DiffSwap
+
+            self.defense_target = build_defense_target("diffswap", DiffSwap)
         elif self.config.third_party.defense.target == "uniface":
             from src.uniface.base import Base as UniFace
 
