@@ -8,6 +8,7 @@ dataset:
   metric_512_dir: data/vggface2_512_test
   use_224: true
   metric_pairs: 3000
+  swap_batch_size: 30
   cloak_dir: data/vggface2_cloak
   cloak_mix: true
   cloak_count: full

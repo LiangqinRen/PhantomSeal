@@ -16,6 +16,7 @@ def main(config: DictConfig):
 
     defense = Defense(logger, config)
     defense_functions = {
+        "swap": defense.swap,
         "sample": defense.sample,
         "metric": defense.metric,
         "ai_beauty": defense.metric,

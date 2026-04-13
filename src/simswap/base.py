@@ -5,7 +5,7 @@ from src.evaluate import (
     Cloak,
     DistanceCloakSelector,
 )
-from src.common_utils import cd, use_project
+from src.common_utils import cd, use_project, check_tensor_info
 
 import torch
 import inspect
@@ -91,6 +91,28 @@ class Base:
         prior = F.normalize(prior, p=2, dim=1)
 
         return prior.cuda()
+
+    def swap_face(self, source_imgs: Tensor, target_imgs: Tensor) -> Tensor:
+        """
+        Standard SimSwap swap interface.
+
+        Args:
+            source_imgs:
+                [B, 3, H, W] float tensor in [0, 1]. Identity is extracted from these images and injected into the target images.
+            target_imgs:
+                [B, 3, H, W] float tensor in [0, 1]. Face/content comes from these
+                images.
+
+        Returns:
+            [B, 3, H, W] float tensor in [0, 1].
+        """
+
+        source_identity = self._get_imgs_identity(source_imgs)
+        return torch.clamp(
+            self.target(None, target_imgs, source_identity, None, True),
+            min=0.0,
+            max=1.0,
+        )
 
     @staticmethod
     def encoder(this, input: Tensor) -> Tensor:
