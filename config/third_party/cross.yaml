@@ -12,6 +12,7 @@ origin:
   faceshifter:
     model_path: face_modules/model_ir_se50.pth
     G_path: saved_models/G_latest.pth
+  face_parser_path: ${root_dir}/checkpoints/diffface/FaceParser.pth
   diffface:
     skip_timesteps: 25
     model: ddpm # ddim or ddpm
@@ -34,25 +35,27 @@ defense:
   batch_size: 10
   epochs: 1000
   epsilon: 0.003
-  target: infoswap
+  target: e4s
+  targets: [uniface, e4s, infoswap, diffswap, diffface, simswap, faceshifter, hififace]
+  landmark_radius: 7
+  region_weight_outside: 3.0
+  region_weight_face: 1.5
+  region_weight_landmark: 0.75
   limit:
-    R: 0.075
-    G: 0.030
-    B: 0.075
-    simswap: 0.003
-    faceshifter: 0.003
-    hififace_3d: 0.03
-    hififace_id: 0.0003
+    R: 0.1
+    G: 0.06
+    B: 0.1
+    arcface: 0.005
+    facenet: 0.005
   weight:
-    perturb: 1000
-    simswap_id: 10000
-    simswap_cloak: 10000
-    hififace_self_3d: 500
-    hififace_cloak_3d: 5000
-    hififace_self_id: 0
-    hififace_cloak_id: 0
-    faceshifter_id: 35000
-    faceshifter_cloak: 1000000
+    perturb: 750
+    background: 1500
+    arcface_push: 12000
+    arcface_cloak: 24000
+    facenet_push: 8000
+    facenet_cloak: 16000
+    parsing: 400
+    landmark: 250
   silent_perturb: false
   only_save_summary: true
   log_interval: 100

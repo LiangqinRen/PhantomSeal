@@ -56,9 +56,9 @@ class Base:
         self.logger = logger
         self.config = config
 
-        # self.utility = Utility(logger, config)
-        # self.effectiveness = Effectiveness(logger, config)
-        # self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
+        self.utility = Utility(logger, config)
+        self.effectiveness = Effectiveness(logger, config)
+        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
         self.device = "cuda:0"
 
@@ -78,6 +78,21 @@ class Base:
             self.model.eval()
 
     def swap_face(self, source_imgs: Tensor, target_imgs: Tensor) -> Tensor:
-        _, _, results = self.model([target_imgs, source_imgs])
+        """
+        Standard UniFace swap interface.
+
+        Args:
+            source_imgs:
+                [B, 3, H, W] float tensor in [-1, 1]. Identity comes from these
+                images.
+            target_imgs:
+                [B, 3, H, W] float tensor in [-1, 1]. Pose/expression/background come
+                from these images.
+
+        Returns:
+            [B, 3, H, W] float tensor in [-1, 1].
+        """
+        with torch.no_grad():
+            _, _, results = self.model([target_imgs, source_imgs])
 
         return results.clamp(-1, 1)

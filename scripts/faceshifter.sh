@@ -33,7 +33,10 @@ multirun() {
         "$@"
 }
 
-if [[ $function == 'metric' ]]
+if [[ $function == 'swap' ]]
+then
+    run
+elif [[ $function == 'metric' ]]
 then
     run
 else

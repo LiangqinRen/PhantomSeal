@@ -14,6 +14,12 @@ origin:
 
 dataset:
   metric_512_dir: data/vggface2_512_test
-  metric_pairs: 10
-  batch_size: 10
+  metric_pairs: 30
+  batch_size: 30
   image_size: 256
+  cloak_dir: data/vggface2_cloak
+  cloak_mix: true
+  cloak_count: full
+  cloak_index: 0
+  cloak_min_distance: 1.04
+  cloak_distance: 1.20
