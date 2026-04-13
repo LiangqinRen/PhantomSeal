@@ -1,4 +1,5 @@
 from src.common_utils import cd, use_project
+from src.evaluate import Utility, Effectiveness, DistanceCloakSelector
 
 import cv2
 import torch
@@ -17,6 +18,9 @@ class Base:
         self.config = config
 
         self.device = "cuda:0"
+        self.utility = Utility(logger, config)
+        self.effectiveness = Effectiveness(logger, config)
+        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
 
         origin_config = config.third_party.origin
         root_dir = Path(self.config.third_party.project_root)
@@ -93,6 +97,22 @@ class Base:
         source_imgs: Tensor,
         target_imgs: Tensor,
     ) -> Tensor:
+        """
+        Standard InfoSwap swap interface.
+
+        Args:
+            source_imgs:
+                [B, 3, H, W] float tensor in [0, 1].
+            target_imgs:
+                [B, 3, H, W] float tensor in [0, 1].
+
+        Returns:
+            [B, 3, H, W] float tensor in [-1, 1].
+
+        Notes:
+            InfoSwap aligns faces in image space, runs the model in its native
+            normalized space, then returns blended results normalized to [-1, 1].
+        """
         aligned_source_imgs = self.align_batch_faces(source_imgs)
         aligned_target_imgs, original_targets, tfm_invs = (
             self.align_batch_targets_with_inverse(target_imgs)

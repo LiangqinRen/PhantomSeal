@@ -17,3 +17,9 @@ dataset:
   metric_pairs: 10
   batch_size: 10
   image_size: 512
+  cloak_dir: data/FFHQ_cloak
+  cloak_mix: true
+  cloak_count: full
+  cloak_index: 0
+  cloak_min_distance: 1.04
+  cloak_distance: 1.20
