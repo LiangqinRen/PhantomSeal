@@ -36,7 +36,13 @@ multirun() {
 if [[ $function == 'swap' || $function == 'sample' || $function == 'metric' ]]
 then
     if [[ $function == 'swap' ]]; then
-        run third_party.dataset.metric_pairs=10
+        run \
+        third_party.dataset.batch_size=10 \
+        third_party.dataset.metric_pairs=10 \
+        evaluate.effectiveness.perturb=false \
+        evaluate.effectiveness.ASRo=true \
+        evaluate.effectiveness.ASRp=false \
+        evaluate.effectiveness.TSR=false
     else
         run
     fi

@@ -157,6 +157,25 @@ class Base:
         return id_loss
 
     def swap_face(self, src_img: Tensor, tgt_img: Tensor) -> Tensor:
+        """
+        Standard DiffFace swap interface.
+
+        Args:
+            src_img:
+                [1, 3, H, W] float tensor in [0, 1]. Only batch size 1 is supported
+                by the current DiffFace wrapper.
+            tgt_img:
+                [1, 3, H, W] float tensor in [0, 1]. Only batch size 1 is supported
+                by the current DiffFace wrapper.
+
+        Returns:
+            [1, 3, H, W] float tensor in [0, 1].
+
+        Notes:
+            DiffFace consumes the public interface in [0, 1], converts tensors to
+            [-1, 1] internally for diffusion, and clamps the final prediction back
+            to [0, 1] before returning.
+        """
         def cond_fn(x, t, img_id, y=None):
             with torch.enable_grad():
                 x = x.detach().requires_grad_()
