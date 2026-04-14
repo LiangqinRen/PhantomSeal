@@ -24,6 +24,147 @@ class Defense(Base):
 
         self.score_calculator = ScoreCalculator(logger, config)
 
+    @torch.no_grad()
+    def swap(self) -> None:
+        dataset = MetricDataset(self.config)
+        swap_batch_size = self.config.third_party.dataset.swap_batch_size
+        dataloader = DataLoader(dataset, batch_size=swap_batch_size, shuffle=False)
+        metrics = self._get_swap_success_metric_data_template(self.effectiveness)
+        total_count = 0
+
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            total_count += len(imgs_A)
+            source_swap_list = []
+            target_swap_list = []
+
+            for pair_idx, (img_A, img_B) in enumerate(
+                zip(
+                    torch.chunk(imgs_A, imgs_A.size(0), dim=0),
+                    torch.chunk(imgs_B, imgs_B.size(0), dim=0),
+                ),
+                start=1,
+            ):
+                try:
+                    source_swap = self.swap_face(img_A, img_B).cuda()
+                except Exception as exc:
+                    self.logger.warning(
+                        "FaceShifter swap fallback on batch %d pair %d (A->B): %s",
+                        idx,
+                        pair_idx,
+                        exc,
+                    )
+                    source_swap = self._denormalize(img_B).detach()
+
+                try:
+                    target_swap = self.swap_face(img_B, img_A).cuda()
+                except Exception as exc:
+                    self.logger.warning(
+                        "FaceShifter swap fallback on batch %d pair %d (B->A): %s",
+                        idx,
+                        pair_idx,
+                        exc,
+                    )
+                    target_swap = self._denormalize(img_A).detach()
+
+                source_swap_list.append(source_swap)
+                target_swap_list.append(target_swap)
+
+            source_swap = torch.cat(source_swap_list, dim=0).float()
+            target_swap = torch.cat(target_swap_list, dim=0).float()
+            denorm_imgs_A = self._denormalize(imgs_A)
+            denorm_imgs_B = self._denormalize(imgs_B)
+
+            source_effectiveness = self.effectiveness.calculate_effectiveness(
+                denorm_imgs_A, None, source_swap, None, None
+            )
+            target_effectiveness = self.effectiveness.calculate_effectiveness(
+                denorm_imgs_B, None, target_swap, None, None
+            )
+            self._merge_swap_success_metric(
+                metrics, source_effectiveness, target_effectiveness
+            )
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "source\nswap",
+                    "target\nswap",
+                ],
+                [
+                    denorm_imgs_A,
+                    denorm_imgs_B,
+                    source_swap,
+                    target_swap,
+                ],
+                only_save_summary=True,
+            )
+
+            iter_log_str = textwrap.dedent(
+                f"""
+            effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())})
+            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
+            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            """
+            )
+            summary_log_str = textwrap.dedent(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'source_effectiveness')}
+            target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'target_effectiveness')}
+            """
+            )
+
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
+
+            del (
+                imgs_A,
+                imgs_B,
+                source_swap_list,
+                target_swap_list,
+                source_swap,
+                target_swap,
+                denorm_imgs_A,
+                denorm_imgs_B,
+            )
+            self._free_gpu()
+
+    @staticmethod
+    def _get_swap_success_metric_data_template(effectiveness) -> dict:
+        data = {
+            "source_effectiveness": {},
+            "target_effectiveness": {},
+        }
+
+        for function in effectiveness.candi_funcs.keys():
+            data["source_effectiveness"][function] = {"swap": (0, 0)}
+            data["target_effectiveness"][function] = {"swap": (0, 0)}
+
+        return data
+
+    @staticmethod
+    def _merge_swap_success_metric(
+        metrics: dict, source_effectiveness: dict, target_effectiveness: dict
+    ) -> None:
+        for effec in source_effectiveness.keys():
+            source_prev = metrics["source_effectiveness"][effec]["swap"]
+            source_cur = source_effectiveness[effec]["swap"]
+            metrics["source_effectiveness"][effec]["swap"] = (
+                source_prev[0] + source_cur[0],
+                source_prev[1] + source_cur[1],
+            )
+
+            target_prev = metrics["target_effectiveness"][effec]["swap"]
+            target_cur = target_effectiveness[effec]["swap"]
+            metrics["target_effectiveness"][effec]["swap"] = (
+                target_prev[0] + target_cur[0],
+                target_prev[1] + target_cur[1],
+            )
+
     def metric(
         self,
     ) -> None:
@@ -54,8 +195,8 @@ class Defense(Base):
             valid_indexes = []
             for i in range(batch_size):
                 try:
-                    source_swap = self.swapface(imgs_A_list[i], imgs_B_list[i]).cuda()
-                    pert_source_swap = self.swapface(
+                    source_swap = self.swap_face(imgs_A_list[i], imgs_B_list[i]).cuda()
+                    pert_source_swap = self.swap_face(
                         pert_imgs_list[i], imgs_B_list[i]
                     ).cuda()
 
@@ -65,6 +206,12 @@ class Defense(Base):
                     valid_indexes.append(i)
                     total_count += 1
                 except Exception as e:
+                    self.logger.warning(
+                        "FaceShifter metric swap failed on batch %d pair %d: %s",
+                        idx,
+                        i + 1,
+                        e,
+                    )
                     for imgs_list in [
                         source_swap_list,
                         pert_source_swap_list,

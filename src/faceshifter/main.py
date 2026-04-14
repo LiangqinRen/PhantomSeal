@@ -15,7 +15,7 @@ def main(config: DictConfig):
     timer = common_utils.Timer(f"FaceShifter {config.third_party.function}", logger)
 
     defense = Defense(logger, config)
-    defense_function_list = ["metric"]
+    defense_function_list = ["swap", "metric"]
     defense_functions = {name: getattr(defense, name) for name in defense_function_list}
 
     if config.third_party.function in defense_functions:

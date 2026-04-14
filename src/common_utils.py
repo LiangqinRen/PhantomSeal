@@ -257,6 +257,11 @@ def _infer_prefixes_from_project_roots(
                 prefixes.add(p.name)
                 continue
 
+            # top-level namespace-style package: xxx/*.py without __init__.py
+            if p.is_dir() and any(child.suffix == ".py" for child in p.iterdir()):
+                prefixes.add(p.name)
+                continue
+
     return tuple(sorted(prefixes))
 
 
