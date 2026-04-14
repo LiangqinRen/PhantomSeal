@@ -1,8 +1,8 @@
 from src import common_utils
 from src.diffswap.defense import Defense
 
-import hydra
 import sys
+import hydra
 from omegaconf import DictConfig
 
 
@@ -15,8 +15,11 @@ def main(config: DictConfig):
     timer = common_utils.Timer(f"DiffSwap {config.third_party.function}", logger)
 
     defense = Defense(logger, config)
-    defense_function_list = ["swap", "sample", "metric"]
-    defense_functions = {name: getattr(defense, name) for name in defense_function_list}
+    defense_functions = {
+        "swap": defense.swap,
+        "sample": defense.sample,
+        "metric": defense.metric,
+    }
 
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()

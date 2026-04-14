@@ -25,3 +25,26 @@ dataset:
   metric_pairs: 10
   image_size: 256
   batch_size: 10
+  cloak_dir: data/FFHQ_cloak
+  cloak_mix: true
+  cloak_count: full
+  cloak_index: 0
+  cloak_min_distance: 1.04
+  cloak_distance: 1.20
+
+defense:
+  batch_size: 10
+  epochs: 200
+  epsilon: 0.005
+  limit:
+    R: 0.10
+    G: 0.10
+    B: 0.10
+    identity: 0.003
+  weight:
+    perturb: 30
+    identity: 10000
+    cloak: 10000
+  silent_perturb: false
+  only_save_summary: true
+  log_interval: 20

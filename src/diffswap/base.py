@@ -1,4 +1,5 @@
 from src.common_utils import cd, suppress_third_party_noise, use_project
+from src.evaluate import Effectiveness
 
 import cv2
 import dlib
@@ -71,6 +72,8 @@ class Base:
         self._load_diffswap_modules()
         self._build_runtime_helpers()
         self._build_model()
+
+        self.effectiveness = Effectiveness(logger, config)
 
     def _check_required_files(self) -> None:
         required_paths = [
@@ -189,6 +192,15 @@ class Base:
             sys.modules.update(original_src_modules)
 
     @staticmethod
+    def _identity_theta(batch_size: int, device: torch.device) -> Tensor:
+        theta = torch.tensor(
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            dtype=torch.float32,
+            device=device,
+        )
+        return theta.unsqueeze(0).repeat(batch_size, 1, 1)
+
+    @staticmethod
     def _largest_face(rects) -> dlib.rectangle:
         return max(rects, key=lambda rect: rect.width() * rect.height())
 
@@ -257,6 +269,57 @@ class Base:
             return_tfm=True,
         )
         return self._transform_to_theta(tfm)
+
+    def _build_face_affine_theta_batch(self, imgs: Tensor) -> Tensor:
+        imgs = self._prepare_image_batch(imgs)
+        theta_list = []
+
+        for index in range(imgs.shape[0]):
+            img_np = (
+                imgs[index]
+                .permute(1, 2, 0)
+                .mul(255)
+                .round()
+                .clamp(0, 255)
+                .byte()
+                .cpu()
+                .numpy()
+            )
+            landmarks = self._predict_landmarks(img_np)
+            if landmarks is None:
+                self.logger.warning(
+                    "DiffSwap face detection failed for identity crop %s; "
+                    "falling back to the full-image crop.",
+                    index,
+                )
+                theta_list.append(self._identity_theta(1, imgs.device)[0])
+                continue
+
+            theta_list.append(
+                torch.from_numpy(self._build_affine_theta(landmarks)).to(imgs.device)
+            )
+
+        return torch.stack(theta_list, dim=0)
+
+    def _crop_face_with_theta(self, imgs: Tensor, theta: Tensor) -> Tensor:
+        grid = F.affine_grid(
+            theta,
+            size=(imgs.shape[0], 3, self.crop_size, self.crop_size),
+            align_corners=False,
+        )
+        return F.grid_sample(
+            imgs,
+            grid,
+            mode="bilinear",
+            padding_mode="border",
+            align_corners=False,
+        )
+
+    @staticmethod
+    def _free_gpu() -> None:
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
 
     def _polygon_mask(
         self,
