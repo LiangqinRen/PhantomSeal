@@ -35,15 +35,7 @@ multirun() {
 
 if [[ $function == 'swap' || $function == 'sample' || $function == 'metric' ]]
 then
-    if [[ $function == 'swap' ]]; then
-        run \
-        evaluate.effectiveness.perturb=false \
-        evaluate.effectiveness.ASRo=true \
-        evaluate.effectiveness.ASRp=false \
-        evaluate.effectiveness.TSR=false
-    else
-        run
-    fi
+    run
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi
