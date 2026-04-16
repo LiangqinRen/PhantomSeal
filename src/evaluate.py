@@ -72,6 +72,24 @@ class Utility:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             self.lpips_distance = lpips.LPIPS(net="vgg", verbose=False).cuda()
+            self.lpips_distance.eval()
+
+    @staticmethod
+    def _prepare_lpips_input(img: Tensor) -> Tensor:
+        if img.ndim == 3:
+            img = img.unsqueeze(0)
+        if img.ndim != 4:
+            raise ValueError(f"Expected LPIPS input to be 3D or 4D, got {img.ndim}D")
+
+        img_min = float(img.min().item())
+        img_max = float(img.max().item())
+        if 0.0 <= img_min and img_max <= 1.0:
+            return img * 2 - 1
+        if -1.0 <= img_min and img_max <= 1.0:
+            return img
+        raise ValueError(
+            f"LPIPS input expected in [0, 1] or [-1, 1], got range [{img_min:.4f}, {img_max:.4f}]"
+        )
 
     def calculate_utility(self, imgs1: Tensor, imgs2: Tensor) -> dict | None:
         if imgs1 is None or imgs2 is None:
@@ -100,7 +118,10 @@ class Utility:
                 )
             )
 
-            lpips_score = self.lpips_distance(imgs1[i], imgs2[i])
+            lpips_score = self.lpips_distance(
+                self._prepare_lpips_input(imgs1[i]),
+                self._prepare_lpips_input(imgs2[i]),
+            )
             utilities["lpips"].append(lpips_score.detach().cpu().numpy())
 
         average_utilities = {}

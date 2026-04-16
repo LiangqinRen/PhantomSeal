@@ -35,21 +35,14 @@ multirun() {
 
 if [[ $function == 'metric' ]]
 then
-    # run \
-    # third_party.defense.target=uniface \
-    # third_party.defense.batch_size=60
-
-    # run \
-    # third_party.defense.target=infoswap \
-    # third_party.defense.batch_size=20
-
-    # run \
-    # third_party.defense.target=diffswap \
-    # third_party.defense.batch_size=20
-
     run \
-    third_party.defense.target=e4s \
-    third_party.defense.batch_size=20
+    third_party.dataset.metric_pairs=150 \
+    third_party.defense.batch_size=30 \
+    evaluate.facepp.enable=true \
+    evaluate.effectiveness.perturb=false \
+    evaluate.effectiveness.ASRo=false \
+    evaluate.effectiveness.ASRp=true \
+    evaluate.effectiveness.TSR=true
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi

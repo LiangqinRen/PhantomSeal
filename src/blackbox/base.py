@@ -1,18 +1,15 @@
 from src.common_utils import cd, use_project
 from src.evaluate import Utility, Effectiveness, DistanceCloakSelector
 
-import cv2
 import torch
 import inspect
 import warnings
-import face_alignment
 import torch.nn.functional as F
-import numpy as np
 import torch.nn as nn
 from torch import Tensor
 from argparse import Namespace
 from types import MethodType
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, ListConfig
 from pathlib import Path
 from torchvision import transforms
 from torch.serialization import add_safe_globals, SourceChangeWarning
@@ -114,14 +111,12 @@ class Base:
             self.net.load_state_dict(checkpoint["state_dict"])
             self.net = self.net.eval().to(self.device)
 
-        # faceshifter
         faceshifter_root = Path(self.config.third_party.faceshifter_dir)
         with use_project([faceshifter_root, faceshifter_root / "face_modules"]), cd(
             faceshifter_root
         ):
             from face_modules.model import Backbone
-            from face_modules.mtcnn import MTCNN
-            from network.AEI_Net import AEI_Net
+            from facenet_pytorch import InceptionResnetV1
 
             self.arcface = Backbone(50, 0.6, "ir_se").cuda()
             self.arcface.load_state_dict(
@@ -132,16 +127,36 @@ class Base:
                 strict=False,
             )
             self.arcface = self.arcface.eval().cuda()
-            self.detector = MTCNN()
+            for param in self.arcface.parameters():
+                param.requires_grad_(False)
 
-            self.G = AEI_Net(c_id=512)
-            self.G.load_state_dict(
+            self.facenet = InceptionResnetV1(
+                classify=False,
+                pretrained="vggface2",
+            ).cuda()
+            self.facenet = self.facenet.eval().cuda()
+            for param in self.facenet.parameters():
+                param.requires_grad_(False)
+
+        diffface_root = Path(self.config.third_party.diffface_dir)
+        with use_project([diffface_root]), cd(diffface_root):
+            from models.parsing import BiSeNet
+            from utils.module import SpecificNorm
+
+            self.spNorm = SpecificNorm()
+            self.netSeg = BiSeNet(n_classes=19).cuda()
+            self.netSeg.load_state_dict(
                 torch.load(
-                    config.third_party.origin.faceshifter.G_path,
-                    weights_only=True,
+                    self.config.third_party.origin.face_parser_path,
+                    map_location="cpu",
+                    weights_only=False,
                 )
             )
-            self.G = self.G.eval().cuda()
+            self.netSeg = self.netSeg.eval().cuda()
+            for param in self.netSeg.parameters():
+                param.requires_grad_(False)
+
+        self.defense_targets: dict[str, object] = {}
 
         def build_defense_target(config_name: str, model_class):
             target_config = OmegaConf.create(
@@ -155,30 +170,64 @@ class Base:
                 OmegaConf.create(OmegaConf.to_container(target_config, resolve=True)),
             )
 
-        if self.config.third_party.defense.target == "diffface":
-            from src.diffface.base import Base as DiffFace
+        for target_name in self.get_eval_target_names():
+            if target_name == "simswap":
+                from src.simswap.base import Base as SimSwap
 
-            self.defense_target = build_defense_target("diffface", DiffFace)
-        elif self.config.third_party.defense.target == "diffswap":
-            from src.diffswap.base import Base as DiffSwap
+                self.defense_targets["simswap"] = build_defense_target(
+                    "simswap", SimSwap
+                )
+            elif target_name == "faceshifter":
+                from src.faceshifter.base import Base as FaceShifter
 
-            self.defense_target = build_defense_target("diffswap", DiffSwap)
-        elif self.config.third_party.defense.target == "uniface":
-            from src.uniface.base import Base as UniFace
+                self.defense_targets["faceshifter"] = build_defense_target(
+                    "faceshifter", FaceShifter
+                )
+            elif target_name == "diffface":
+                from src.diffface.base import Base as DiffFace
 
-            self.defense_target = build_defense_target("uniface", UniFace)
-        elif self.config.third_party.defense.target == "e4s":
-            from src.e4s.base import Base as E4S
+                self.defense_targets["diffface"] = build_defense_target(
+                    "diffface", DiffFace
+                )
+            elif target_name == "diffswap":
+                from src.diffswap.base import Base as DiffSwap
 
-            self.defense_target = build_defense_target("e4s", E4S)
-        elif self.config.third_party.defense.target == "infoswap":
-            from src.infoswap.base import Base as InfoSwap
+                self.defense_targets["diffswap"] = build_defense_target(
+                    "diffswap", DiffSwap
+                )
+            elif target_name == "uniface":
+                from src.uniface.base import Base as UniFace
 
-            self.defense_target = build_defense_target("infoswap", InfoSwap)
-        else:
-            raise ValueError(
-                f"Unsupported defense target: {self.config.third_party.defense.target}"
-            )
+                self.defense_targets["uniface"] = build_defense_target(
+                    "uniface", UniFace
+                )
+            elif target_name == "e4s":
+                from src.e4s.base import Base as E4S
+
+                self.defense_targets["e4s"] = build_defense_target("e4s", E4S)
+            elif target_name == "infoswap":
+                from src.infoswap.base import Base as InfoSwap
+
+                self.defense_targets["infoswap"] = build_defense_target(
+                    "infoswap", InfoSwap
+                )
+            elif target_name == "hififace":
+                from src.hififace.base import Base as HifiFace
+
+                self.defense_targets["hififace"] = build_defense_target(
+                    "hififace", HifiFace
+                )
+            else:
+                raise ValueError(f"Unsupported defense target: {target_name}")
+
+        self._normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        self._transform = transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
 
         # common
         self.utility = Utility(logger, config)
@@ -198,29 +247,153 @@ class Base:
 
         return x
 
-    def get_simswap_identity(self, imgs: Tensor) -> Tensor:
-        imgs = self._simswap_normalize(imgs)
-        imgs_downsample = F.interpolate(imgs, size=(112, 112))
-        prior = self.target.netArc(imgs_downsample)
-        prior = prior / torch.norm(prior, p=2, dim=1)[0]
-
-        return prior.cuda()
-
-    def get_faceshifter_identity(self, imgs: Tensor) -> Tensor:
-        return self.arcface(
-            F.interpolate(
-                imgs[:, :, 19:237, 19:237],
-                (112, 112),
-                mode="bilinear",
-                align_corners=True,
-            )
-        )
-
-    def get_hififace_identity(self, imgs: Tensor) -> Tensor:
+    def get_arcface_embedding(self, imgs: Tensor) -> Tensor:
         return F.normalize(
-            self.net.generator.id_extractor.f_id(
-                F.interpolate((imgs - 0.5) / 0.5, size=112, mode="bilinear")
+            self.arcface(
+                F.interpolate(
+                    imgs[:, :, 19:237, 19:237],
+                    (112, 112),
+                    mode="bilinear",
+                    align_corners=True,
+                )
             ),
             dim=-1,
             p=2,
         )
+
+    def get_facenet_embedding(self, imgs: Tensor) -> Tensor:
+        imgs = F.interpolate(imgs, size=(160, 160), mode="bilinear", align_corners=False)
+        imgs = (imgs - 0.5) / 0.5
+        return F.normalize(self.facenet(imgs), dim=-1, p=2)
+
+    def get_face_parse_logits(self, imgs: Tensor) -> Tensor:
+        parser_in = F.interpolate(imgs, size=(512, 512), mode="bilinear", align_corners=False)
+        parser_in = self._normalize(parser_in)
+        logits = self.netSeg(self.spNorm(parser_in))[0]
+        return F.interpolate(
+            logits,
+            size=imgs.shape[-2:],
+            mode="bilinear",
+            align_corners=False,
+        )
+
+    def get_face_region_mask(self, parse_logits: Tensor) -> Tensor:
+        parsing = parse_logits.argmax(dim=1, keepdim=True)
+        mask = torch.zeros_like(parsing, dtype=torch.float32)
+        for face_id in (1, 2, 3, 4, 5, 10, 11, 12, 13):
+            mask = torch.where(
+                parsing == face_id,
+                torch.ones_like(mask),
+                mask,
+            )
+        return mask
+
+    def get_feature_region_mask(self, parse_logits: Tensor) -> Tensor:
+        parsing = parse_logits.argmax(dim=1, keepdim=True)
+        mask = torch.zeros_like(parsing, dtype=torch.float32)
+        for face_id in (2, 3, 4, 5, 10, 11, 12, 13):
+            mask = torch.where(
+                parsing == face_id,
+                torch.ones_like(mask),
+                mask,
+            )
+        return mask
+
+    def get_eval_target_names(self) -> list[str]:
+        targets = getattr(self.config.third_party.defense, "targets", None)
+        if targets is None:
+            return [self.config.third_party.defense.target]
+        if isinstance(targets, ListConfig):
+            return list(targets)
+        if isinstance(targets, (list, tuple)):
+            return list(targets)
+        return [targets]
+
+    def swap_face(self, src_img: Tensor, tgt_img: Tensor, target_name: str | None = None) -> Tensor:
+        target_name = target_name or self.config.third_party.defense.target
+        if target_name == "diffface":
+            assert src_img.shape[0] == tgt_img.shape[0]
+
+            source_swap = []
+            src_img = src_img.cpu()
+            tgt_img = tgt_img.cpu()
+
+            for i in range(src_img.size(0)):
+                a = src_img[i : i + 1].contiguous().to(self.device, non_blocking=True)
+                b = tgt_img[i : i + 1].contiguous().to(self.device, non_blocking=True)
+                out = self.defense_targets[target_name].swap_face(a, b)
+                source_swap.append(out.detach().cpu())
+                del a, b, out
+
+            return torch.cat(source_swap, dim=0).cuda().float()
+        if target_name == "simswap":
+            return self.defense_targets[target_name].swap_face(src_img, tgt_img).float()
+        if target_name == "faceshifter":
+            assert src_img.shape[0] == tgt_img.shape[0]
+            results = []
+            src_img = src_img.cpu()
+            tgt_img = tgt_img.cpu()
+            for i in range(src_img.size(0)):
+                a = src_img[i : i + 1].contiguous().to(self.device, non_blocking=True)
+                b = tgt_img[i : i + 1].contiguous().to(self.device, non_blocking=True)
+                out = self.defense_targets[target_name].swap_face(a * 2 - 1, b * 2 - 1)
+                results.append(out.detach().cpu())
+                del a, b, out
+            return torch.cat(results, dim=0).cuda().float()
+        if target_name == "hififace":
+            return self.defense_targets[target_name].swap_face(src_img, tgt_img).float()
+        if target_name == "diffswap":
+            diffswap_size = int(self.defense_targets[target_name].model_input_size)
+            src_img = F.interpolate(
+                src_img,
+                size=(diffswap_size, diffswap_size),
+                mode="bilinear",
+                align_corners=False,
+            )
+            tgt_img = F.interpolate(
+                tgt_img,
+                size=(diffswap_size, diffswap_size),
+                mode="bilinear",
+                align_corners=False,
+            )
+            out = self.defense_targets[target_name].swap_face(src_img, tgt_img)
+            return F.interpolate(
+                out,
+                size=(
+                    self.config.third_party.dataset.image_size,
+                    self.config.third_party.dataset.image_size,
+                ),
+                mode="bilinear",
+                align_corners=False,
+            ).float()
+        if target_name == "uniface":
+            pass
+        elif target_name == "infoswap":
+            src_img = F.interpolate(
+                src_img, size=(512, 512), mode="bilinear", align_corners=False
+            )
+            tgt_img = F.interpolate(
+                tgt_img, size=(512, 512), mode="bilinear", align_corners=False
+            )
+        elif target_name == "e4s":
+            src_img = F.interpolate(
+                src_img, size=(1024, 1024), mode="bilinear", align_corners=False
+            )
+            tgt_img = F.interpolate(
+                tgt_img, size=(1024, 1024), mode="bilinear", align_corners=False
+            )
+
+        src_img = src_img * 2 - 1
+        tgt_img = tgt_img * 2 - 1
+        out = self.defense_targets[target_name].swap_face(src_img, tgt_img)
+        if target_name != "uniface":
+            out = ((out + 1) / 2).clamp(0, 1)
+        return F.interpolate(
+            out,
+            size=(256, 256),
+            mode="bilinear",
+            align_corners=False,
+        ).float()
+
+    def _normalize(self, image: Tensor) -> Tensor:
+        return transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(image)

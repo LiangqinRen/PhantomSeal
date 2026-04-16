@@ -1,3 +1,5 @@
+.cache/
+.history/
 .vscode/
 
 **/__pycache__/**

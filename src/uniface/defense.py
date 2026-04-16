@@ -39,14 +39,14 @@ class Defense(Base):
             source_effectiveness = self.effectiveness.calculate_effectiveness(
                 self._denormalize(imgs_A),
                 None,
-                self._denormalize(source_swap),
+                source_swap,
                 None,
                 None,
             )
             target_effectiveness = self.effectiveness.calculate_effectiveness(
                 self._denormalize(imgs_B),
                 None,
-                self._denormalize(target_swap),
+                target_swap,
                 None,
                 None,
             )

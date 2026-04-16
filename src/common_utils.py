@@ -71,6 +71,9 @@ def get_customized_logger(log_level: str) -> logging.Logger:
 
 def check_cuda_availability(logger: logging.Logger) -> None:
     if torch.cuda.is_available():
+        if "TORCH_CUDA_ARCH_LIST" not in os.environ:
+            major, minor = torch.cuda.get_device_capability()
+            os.environ["TORCH_CUDA_ARCH_LIST"] = f"{major}.{minor}"
         logger.info(f"Use GPU {torch.cuda.get_device_name()}")
     else:
         raise SystemExit("CUDA is not available!")

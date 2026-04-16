@@ -90,9 +90,9 @@ class Base:
                 from these images.
 
         Returns:
-            [B, 3, H, W] float tensor in [-1, 1].
+            [B, 3, H, W] float tensor in [0, 1].
         """
         with torch.no_grad():
             _, _, results = self.model([target_imgs, source_imgs])
 
-        return results.clamp(-1, 1)
+        return ((results.clamp(-1, 1) + 1) / 2).clamp(0, 1)

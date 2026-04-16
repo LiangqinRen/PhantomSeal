@@ -14,6 +14,7 @@ origin:
   detector_upsample: 1
   detector_resize_scales: [1.0, 1.25, 1.5, 2.0]
   detection_failure_fallback: target
+  runtime_cache_dir: ${root_dir}/.cache/diffswap_runtime
 
 model:
   image_size: 256

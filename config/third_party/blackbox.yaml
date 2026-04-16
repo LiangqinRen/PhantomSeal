@@ -12,6 +12,14 @@ origin:
   faceshifter:
     model_path: face_modules/model_ir_se50.pth
     G_path: saved_models/G_latest.pth
+  face_parser_path: ${root_dir}/checkpoints/diffface/FaceParser.pth
+  diffface:
+    skip_timesteps: 25
+    model: ddpm # ddim or ddpm
+    timestep_respacing: 100
+    aug_num: 8
+    iterations_num: 4
+    masking_threshold: 30
 
 dataset:
   metric_dir: data/FFHQ_test
@@ -24,35 +32,33 @@ dataset:
   cloak_distance: 1.31
 
 defense:
-  batch_size: 50
+  batch_size: 30
   epochs: 1000
   epsilon: 0.003
-  utility_mse_lower_bound: 75
-  utility_mse_upper_bound: 140
-  utility_mse_ema_decay: 0.9
-  utility_mse_smoothness: 8
+  targets: [simswap,faceshifter,hififace,infoswap,e4s,uniface,diffface] # 
+  region_weight_outside: 3.0
+  region_weight_face: 1.5
+  region_weight_feature: 0.9
+  dynamic_weight_strength: 1.0
   dynamic_weight_epsilon: 1.0e-6
   dynamic_weight_progress_ema_decay: 0.9
   dynamic_weight_variance_weight: 0.5
+  cloak_target_ratio: 0.4
   limit:
-    R: 0.075
+    R: 0.085
     G: 0.030
-    B: 0.075
-    simswap: 0.003
-    faceshifter: 0.003
-    hififace_3d: 0.03
-    hififace_id: 0.0003
+    B: 0.100
+    arcface: 0.006
+    facenet: 0.006
   weight:
-    perturb: 1000
-    simswap_id: 10000
-    simswap_cloak: 10000
-    hififace_self_3d: 500
-    hififace_cloak_3d: 5000
-    hififace_self_id: 180
-    hififace_cloak_id: 18000
-    faceshifter_id: 22000
-    faceshifter_cloak: 600000
+    perturb: 750
+    background: 1500
+    structure: 1200
+    tv: 250
+    arcface_push: 16000
+    arcface_cloak: 18000
+    facenet_push: 16000
+    facenet_cloak: 18000
   silent_perturb: false
   only_save_summary: true
   log_interval: 100
-  target: diffface

@@ -166,24 +166,25 @@ def merge_single_robustness_metric(
 def merge_metric(
     effectiveness,
     metrics: dict,
-    utility: dict,
+    utility: dict | None,
     source_utility: dict,
     target_utility: dict | None,
     source_effectiveness: dict,
     target_effectiveness: dict | None,
 ) -> None:
-    metrics["utility"] = tuple(
-        x + y
-        for x, y in zip(
-            metrics["utility"],
-            (
-                utility["mse"],
-                utility["psnr"],
-                utility["ssim"],
-                utility["lpips"],
-            ),
+    if utility is not None:
+        metrics["utility"] = tuple(
+            x + y
+            for x, y in zip(
+                metrics["utility"],
+                (
+                    utility["mse"],
+                    utility["psnr"],
+                    utility["ssim"],
+                    utility["lpips"],
+                ),
+            )
         )
-    )
     if source_utility is not None:
         metrics["pert_source_utility"] = tuple(
             x + y
