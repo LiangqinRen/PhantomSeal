@@ -1,5 +1,6 @@
 defaults:
   - evaluate: evaluate
+  - protection: phantomseal
   - third_party: simswap
   - _self_
 

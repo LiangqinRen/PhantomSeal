@@ -21,6 +21,7 @@ class Base:
         super(Base, self).__init__()
         self.logger = logger
         self.config = config
+        self.protection_method = self._get_protection_method()
 
         warnings.filterwarnings("ignore", category=SourceChangeWarning)
         warnings.filterwarnings("ignore", category=UserWarning)
@@ -159,16 +160,7 @@ class Base:
         self.defense_targets: dict[str, object] = {}
 
         def build_defense_target(config_name: str, model_class):
-            target_config = OmegaConf.create(
-                OmegaConf.to_container(self.config, resolve=False)
-            )
-            target_config.third_party = OmegaConf.load(
-                Path(self.config.root_dir) / f"config/third_party/{config_name}.yaml"
-            )
-            return model_class(
-                self.logger,
-                OmegaConf.create(OmegaConf.to_container(target_config, resolve=True)),
-            )
+            return model_class(self.logger, self._resolve_third_party_config(config_name))
 
         for target_name in self.get_eval_target_names():
             if target_name == "simswap":
@@ -232,7 +224,86 @@ class Base:
         # common
         self.utility = Utility(logger, config)
         self.effectiveness = Effectiveness(logger, config)
-        self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
+        self.cloak = None
+        if self.protection_method == "phantomseal":
+            self.cloak = DistanceCloakSelector(logger, config, self.effectiveness)
+
+        self.nullswap_generator = None
+        if self.protection_method == "nullswap":
+            self.nullswap_generator = self._build_nullswap_generator()
+
+    def _get_protection_method(self) -> str:
+        protection_config = getattr(self.config, "protection", None)
+        method = str(getattr(protection_config, "method", "phantomseal")).lower()
+        if method not in {"phantomseal", "nullswap"}:
+            raise ValueError(f"Unsupported blackbox protection method: {method}")
+        return method
+
+    def _resolve_third_party_config(self, config_name: str):
+        target_config = OmegaConf.create(
+            OmegaConf.to_container(self.config, resolve=False)
+        )
+        target_config.third_party = OmegaConf.load(
+            Path(self.config.root_dir) / f"config/third_party/{config_name}.yaml"
+        )
+        return OmegaConf.create(OmegaConf.to_container(target_config, resolve=True))
+
+    def _build_nullswap_generator(self):
+        from src.nullswap.model import NullSwap
+
+        nullswap_config = self._resolve_third_party_config("nullswap")
+        model_config = nullswap_config.third_party.model
+
+        generator = NullSwap(
+            image_channels=model_config.image_channels,
+            epsilon=model_config.epsilon,
+            id_base_channels=model_config.id_base_channels,
+            id_bottleneck_channels=model_config.id_bottleneck_channels,
+            id_num_blocks=model_config.id_num_blocks,
+            feature_conv_channels=tuple(model_config.feature_conv_channels),
+            feature_bottleneck_channels=model_config.feature_bottleneck_channels,
+            feature_num_blocks=model_config.feature_num_blocks,
+            perturb_refine_channels=model_config.perturb_refine_channels,
+            perturb_bottleneck_channels=model_config.perturb_bottleneck_channels,
+            perturb_num_blocks=model_config.perturb_num_blocks,
+            perturb_feature_size=tuple(model_config.perturb_feature_size),
+            cloak_hidden_channels=model_config.cloak_hidden_channels,
+            cloak_bottleneck_channels=model_config.cloak_bottleneck_channels,
+            cloak_num_blocks=model_config.cloak_num_blocks,
+            reduction=model_config.reduction,
+            alpha_init=model_config.alpha_init,
+            beta_init=model_config.beta_init,
+        ).to(self.device)
+
+        checkpoint_path = Path(nullswap_config.third_party.defense.checkpoint_path)
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"NullSwap checkpoint not found: {checkpoint_path}")
+
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        generator_state_dict = checkpoint.get("generator", checkpoint)
+        generator.load_state_dict(generator_state_dict)
+        generator.eval()
+        for param in generator.parameters():
+            param.requires_grad_(False)
+
+        return generator
+
+    def protect_with_nullswap(self, imgs: Tensor) -> Tensor:
+        if self.nullswap_generator is None:
+            raise RuntimeError("NullSwap generator is not initialized")
+
+        noise_scale = float(
+            getattr(getattr(self.config, "protection", None), "nullswap_noise_scale", 1.0)
+        )
+        if noise_scale < 0:
+            raise ValueError("protection.nullswap_noise_scale must be non-negative")
+
+        with torch.no_grad():
+            outputs = self.nullswap_generator(imgs)
+            nullswap_cloak = outputs["cloak"]
+
+        perturbation = nullswap_cloak - imgs
+        return torch.clamp(imgs + perturbation * noise_scale, 0.0, 1.0)
 
     @staticmethod
     def encoder(this, input):

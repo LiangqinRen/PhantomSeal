@@ -1098,6 +1098,18 @@ class ScoreCalculator:
         self.logger = logger
         self.config = config
 
+    @staticmethod
+    def _safe_rate(metric_dict: dict, metric_name: str, default: float) -> float:
+        metric_item = metric_dict.get(metric_name)
+        if metric_item is None:
+            return default
+
+        numerator, denominator = metric_item
+        if denominator == 0:
+            return default
+
+        return numerator / denominator
+
     def calculate_score(
         self,
         iter_source_metric: dict,
@@ -1109,19 +1121,14 @@ class ScoreCalculator:
         context_weight = self.config.evaluate.score.context
         trace_weight = self.config.evaluate.score.trace
         for key in scores.keys():
-            iter_source_swap = (
-                iter_source_metric[key]["pert_swap"][0]
-                / iter_source_metric[key]["pert_swap"][1]
+            iter_source_swap = self._safe_rate(
+                iter_source_metric[key], "pert_swap", 1.0
             )
-            iter_trace = (
-                iter_source_metric[key]["cloak"][0]
-                / iter_source_metric[key]["cloak"][1]
-            )
+            iter_trace = self._safe_rate(iter_source_metric[key], "cloak", 0.0)
 
             if iter_context_metric is not None:
-                iter_context_swap = (
-                    iter_context_metric[key]["pert_swap"][0]
-                    / iter_context_metric[key]["pert_swap"][1]
+                iter_context_swap = self._safe_rate(
+                    iter_context_metric[key], "pert_swap", 1.0
                 )
             else:
                 iter_context_swap = 1
@@ -1133,19 +1140,16 @@ class ScoreCalculator:
             )
 
             if metric is not None:
-                total_source_swap = (
-                    metric["pert_source_effectiveness"][key]["pert_swap"][0]
-                    / metric["pert_source_effectiveness"][key]["pert_swap"][1]
+                total_source_swap = self._safe_rate(
+                    metric["pert_source_effectiveness"][key], "pert_swap", 1.0
                 )
-                total_trace = (
-                    metric["pert_source_effectiveness"][key]["cloak"][0]
-                    / metric["pert_source_effectiveness"][key]["cloak"][1]
+                total_trace = self._safe_rate(
+                    metric["pert_source_effectiveness"][key], "cloak", 0.0
                 )
 
                 if iter_context_metric is not None:
-                    total_context_swap = (
-                        metric["pert_target_effectiveness"][key]["pert_swap"][0]
-                        / metric["pert_target_effectiveness"][key]["pert_swap"][1]
+                    total_context_swap = self._safe_rate(
+                        metric["pert_target_effectiveness"][key], "pert_swap", 1.0
                     )
                 else:
                     total_context_swap = 1

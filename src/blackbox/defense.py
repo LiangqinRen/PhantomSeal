@@ -55,9 +55,23 @@ class Defense(Base):
             total_count += len(imgs_A)
             torch.set_grad_enabled(True)
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            enable_tsr = (
+                self.protection_method == "phantomseal"
+                and self.config.evaluate.effectiveness.TSR
+            )
 
-            cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            if self.protection_method == "phantomseal":
+                cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+                pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+                cloak_label = "cloak\nimgs"
+            elif self.protection_method == "nullswap":
+                pert_imgs = self._perturb_imgs(imgs_A, None)
+                cloak_imgs = pert_imgs
+                cloak_label = "metric\ncloak\nimgs"
+            else:
+                raise ValueError(
+                    f"Unsupported blackbox protection method: {self.protection_method}"
+                )
             torch.set_grad_enabled(False)
             utility = self.utility.calculate_utility(imgs_A, pert_imgs)
 
@@ -65,7 +79,7 @@ class Defense(Base):
                 "imgs_A",
                 "imgs_B",
                 "perturb\nimgs",
-                "cloak\nimgs",
+                cloak_label,
             ]
             summary_image_tensors = [
                 imgs_A,
@@ -93,7 +107,7 @@ class Defense(Base):
                     pert_imgs,
                     source_swap if self.config.evaluate.effectiveness.ASRo else None,
                     pert_source_swap,
-                    cloak_imgs if self.config.evaluate.effectiveness.TSR else None,
+                    cloak_imgs if enable_tsr else None,
                 )
 
                 metric.merge_metric(
@@ -166,7 +180,7 @@ class Defense(Base):
                     effect_labels.append("swap")
                 if self.config.evaluate.effectiveness.ASRp:
                     effect_labels.append("pert_swap")
-                if self.config.evaluate.effectiveness.TSR:
+                if enable_tsr:
                     effect_labels.append("cloak")
                 effect_tools = []
                 if self.config.evaluate.facenet_512.enable:
@@ -181,12 +195,14 @@ class Defense(Base):
                     effect_tools.append("aws_rekognition")
                 if effect_labels:
                     effect_explain = (
+                        f"protection: {self.protection_method}, "
                         "effectiveness tuple order: "
                         f"({', '.join(effect_labels)}), "
                         f"tool: {', '.join(effect_tools) if effect_tools else 'none'}"
                     )
                 else:
                     effect_explain = (
+                        f"protection: {self.protection_method}, "
                         "effectiveness tuple order: (), "
                         f"tool: {', '.join(effect_tools) if effect_tools else 'none'}"
                     )
@@ -230,7 +246,17 @@ class Defense(Base):
 
         return torch.cat(source_swap, dim=0).cuda()
 
-    def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor) -> Tensor:
+    def _perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor | None) -> Tensor:
+        if self.protection_method == "nullswap":
+            return self.protect_with_nullswap(imgs)
+
+        if self.protection_method != "phantomseal":
+            raise ValueError(
+                f"Unsupported blackbox protection method: {self.protection_method}"
+            )
+        if cloak_imgs is None:
+            raise ValueError("PhantomSeal protection requires cloak images")
+
         def l2_per_image(x: Tensor, y: Tensor) -> Tensor:
             return ((x - y) ** 2).view(x.size(0), -1).mean(dim=1)
 
