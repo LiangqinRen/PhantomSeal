@@ -1,5 +1,6 @@
 from src import common_utils
 from src.hififace.defense import Defense
+from src.hififace.lowkey import Lowkey
 
 import hydra
 import sys
@@ -14,9 +15,16 @@ def main(config: DictConfig):
     common_utils.fix_random_seed(logger, config.random_seed)
     timer = common_utils.Timer(f"HifiFace {config.third_party.function}", logger)
 
-    defense = Defense(logger, config)
-    defense_function_list = ["swap", "metric"]
-    defense_functions = {name: getattr(defense, name) for name in defense_function_list}
+    if config.third_party.function == "lowkey":
+        defense = Lowkey(logger, config)
+    else:
+        defense = Defense(logger, config)
+
+    defense_functions = {
+        "swap": defense.swap,
+        "metric": defense.metric,
+        "lowkey": defense.metric,
+    }
 
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()

@@ -45,6 +45,14 @@ then
 elif [[ $function == 'metric' ]]
 then
     run
+elif [[ $function == 'lowkey' ]]
+then
+    run \
+    evaluate.effectiveness.perturb=false \
+    evaluate.effectiveness.ASRo=false \
+    evaluate.effectiveness.ASRp=true \
+    evaluate.effectiveness.TSR=false \
+    evaluate.facepp.enable=true
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi

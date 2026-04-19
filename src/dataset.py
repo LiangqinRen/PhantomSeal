@@ -204,7 +204,7 @@ class FFHQSample(Dataset):
         metric_pairs: int,
         transform: Callable,
     ):
-        self.root_dir = root_dir
+        self.root_dir = Path(root_dir)
         self.metric_pairs = metric_pairs
         self.transform = transform
 
@@ -237,7 +237,7 @@ class FFHQMetric(Dataset):
         metric_pairs: int,
         transform: Callable,
     ):
-        self.root_dir = root_dir
+        self.root_dir = Path(root_dir)
         self.metric_pairs = metric_pairs
         self.transform = transform
 

@@ -36,3 +36,14 @@ defense:
   silent_perturb: false
   only_save_summary: true
   log_interval: 100
+
+lowkey:
+  batch_size: 30
+  epochs: 1000
+  epsilon: 0.005
+  silent_perturb: false
+  log_interval: 100
+  weight:
+    perturb: 1000
+    identity_3d: 20
+    identity_id: 200
