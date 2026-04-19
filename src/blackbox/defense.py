@@ -67,7 +67,7 @@ class Defense(Base):
             elif self.protection_method == "nullswap":
                 pert_imgs = self._perturb_imgs(imgs_A, None)
                 cloak_imgs = pert_imgs
-                cloak_label = "metric\ncloak\nimgs"
+                cloak_label = "nullswap\nimgs"
             else:
                 raise ValueError(
                     f"Unsupported blackbox protection method: {self.protection_method}"

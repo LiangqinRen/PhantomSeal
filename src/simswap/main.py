@@ -1,5 +1,6 @@
 from src import common_utils
 from src.simswap.defense import Defense
+from src.simswap.lowkey import Lowkey
 
 import sys
 import hydra
@@ -14,20 +15,25 @@ def main(config: DictConfig):
     common_utils.fix_random_seed(logger, config.random_seed)
     timer = common_utils.Timer(f"SimSwap {config.third_party.function}", logger)
 
-    defense = Defense(logger, config)
-    defense_functions = {
-        "swap": defense.swap,
-        "sample": defense.sample,
-        "metric": defense.metric,
-        "ai_beauty": defense.metric,
-        "protection_robustness_sample": defense.protection_robustness_sample,
-        "protection_robustness_metric": defense.protection_robustness_metric,
-        "forensics_robustness_sample": defense.forensics_robustness_sample,
-        "forensics_robustness_metric": defense.forensics_robustness_metric,
-        "image_robustness_metric": defense.image_robustness_metric,
-        "adaptive_attack_with_self_image": defense.adaptive_attack_with_self_image,
-        "adaptive_attack_with_other_image": defense.adaptive_attack_with_other_image,
-    }
+    if config.third_party.function == "lowkey":
+        defense_functions = {
+            "lowkey": Lowkey(logger, config).metric,
+        }
+    else:
+        defense = Defense(logger, config)
+        defense_functions = {
+            "swap": defense.swap,
+            "sample": defense.sample,
+            "metric": defense.metric,
+            "ai_beauty": defense.metric,
+            "protection_robustness_sample": defense.protection_robustness_sample,
+            "protection_robustness_metric": defense.protection_robustness_metric,
+            "forensics_robustness_sample": defense.forensics_robustness_sample,
+            "forensics_robustness_metric": defense.forensics_robustness_metric,
+            "image_robustness_metric": defense.image_robustness_metric,
+            "adaptive_attack_with_self_image": defense.adaptive_attack_with_self_image,
+            "adaptive_attack_with_other_image": defense.adaptive_attack_with_other_image,
+        }
 
     if config.third_party.function in defense_functions:
         defense_functions[config.third_party.function]()

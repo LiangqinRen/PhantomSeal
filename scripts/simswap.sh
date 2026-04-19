@@ -47,7 +47,21 @@ then
     run
 elif [[ $function == 'metric' ]]
 then
-    run
+    run \
+    third_party.defense.weight.context=0 \
+    evaluate.effectiveness.perturb=false \
+    evaluate.effectiveness.ASRo=false \
+    evaluate.effectiveness.ASRp=true \
+    evaluate.effectiveness.TSR=true \
+    evaluate.facepp.enable=true
+elif [[ $function == 'lowkey' ]]
+then
+    run \
+    evaluate.effectiveness.perturb=false \
+    evaluate.effectiveness.ASRo=false \
+    evaluate.effectiveness.ASRp=true \
+    evaluate.effectiveness.TSR=false \
+    evaluate.facepp.enable=true
 elif [[ $function == 'ai_beauty' ]]
 then
     run \

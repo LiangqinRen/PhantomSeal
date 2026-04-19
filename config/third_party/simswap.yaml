@@ -37,6 +37,16 @@ defense:
   only_save_summary: true
   log_interval: 100
 
+lowkey:
+  batch_size: 60
+  epochs: 1000
+  epsilon: 0.005
+  silent_perturb: false
+  log_interval: 100
+  weight:
+    perturb: 1000
+    identity: 1800
+
 robustness:
   ai_beauty: false
   ai_beauty_tool: null # ai_lab_tools or tencent_cloud
