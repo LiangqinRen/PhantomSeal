@@ -1,5 +1,6 @@
 from src import common_utils
 from src.diffface.defense import Defense
+from src.diffface.lowkey import Lowkey
 
 import sys
 import hydra
@@ -15,11 +16,16 @@ def main(config: DictConfig):
     common_utils.fix_random_seed(logger, config.random_seed)
     timer = common_utils.Timer(f"Diffface {config.third_party.function}", logger)
 
-    defense = Defense(logger, config)
+    if config.third_party.function == "lowkey":
+        defense = Lowkey(logger, config)
+    else:
+        defense = Defense(logger, config)
+
     defense_functions = {
         "swap": defense.swap,
         "sample": defense.sample,
         "metric": defense.metric,
+        "lowkey": defense.metric,
     }
 
     if config.third_party.function in defense_functions:

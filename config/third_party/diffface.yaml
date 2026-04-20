@@ -29,7 +29,7 @@ dataset:
   cloak_distance: 1.31
 
 defense:
-  batch_size: 60 # cloak selection
+  batch_size: 30 # cloak selection
   epochs: 1000
   epsilon: 0.005
   limit:
@@ -45,3 +45,13 @@ defense:
   silent_perturb: false
   only_save_summary: true
   log_interval: 100
+
+lowkey:
+  batch_size: 30
+  epochs: 1000
+  epsilon: 0.005
+  silent_perturb: false
+  log_interval: 100
+  weight:
+    perturb: 1000
+    identity: 1800

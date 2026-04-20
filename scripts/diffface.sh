@@ -3,7 +3,7 @@
 set -e
 
 function=$1
-function=`echo $function | tr '[:upper:]' '[:lower:]'`
+function=$(echo "$function" | tr '[:upper:]' '[:lower:]')
 
 log_level="info"
 suffix=""
@@ -33,7 +33,7 @@ multirun() {
         "$@"
 }
 
-if [[ $function == 'swap' || $function == 'sample' || $function == 'metric' ]]
+if [[ $function == 'swap' || $function == 'sample' || $function == 'metric' || $function == 'lowkey' ]]
 then
     if [[ $function == 'swap' ]]; then
         run \
@@ -44,8 +44,12 @@ then
         evaluate.effectiveness.ASRp=false \
         evaluate.effectiveness.TSR=false
     else
-        run
+        run \
+        evaluate.effectiveness.perturb=false \
+        evaluate.effectiveness.ASRo=true \
+        evaluate.effectiveness.ASRp=true \
+        evaluate.effectiveness.TSR=true
     fi
 else
-    echo "⚠️ Oops! Function '$function' is not supported."
+    echo "Oops! Function '$function' is not supported."
 fi
