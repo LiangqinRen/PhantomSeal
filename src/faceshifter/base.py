@@ -182,8 +182,58 @@ class Base:
             transforms.ToTensor()(Yt_trans_inv).unsqueeze(0), min=0.0, max=1.0
         )
 
-    def swapface(self, src_img: Tensor, tgt_img: Tensor) -> Tensor:
-        return self.swap_face(src_img, tgt_img)
+    def swap_face_whitebox(self, src_img: Tensor, tgt_img: Tensor) -> Tensor:
+        """
+        White-box FaceShifter swap path used by the metric / low-key pipeline.
+
+        This keeps the historical source identity behavior, but now shares the
+        same retry-based target alignment helper as `swap_face` so low-key does
+        not regress to the brittle `detector.align(...) -> None` failure mode.
+        If target alignment still fails after retries, raise a clear error so
+        the caller can decide whether to skip the pair.
+        """
+        with torch.no_grad():
+            embeds = self.arcface(
+                F.interpolate(
+                    src_img[:, :, 19:237, 19:237],
+                    (112, 112),
+                    mode="bilinear",
+                    align_corners=True,
+                )
+            )
+
+        tgt_img_raw = self._to_ndarray(tgt_img)
+        aligned = self._align_single_face(
+            Image.fromarray(tgt_img_raw),
+            crop_size=(256, 256),
+            return_trans_inv=True,
+            role="target",
+        )
+        if aligned is None:
+            raise ValueError("FaceShifter whitebox target alignment failed")
+        tgt_pil, trans_inv = aligned
+        tgt_img_raw = tgt_img_raw.astype(np.float32) / 255.0
+        tgt_tensor = self._transform(tgt_pil).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            Yt, _ = self.G(tgt_tensor, embeds)
+            Yt = Yt.squeeze().detach().cpu().numpy().transpose([1, 2, 0]) * 0.5 + 0.5
+            Yt_trans_inv = cv2.warpAffine(
+                Yt,
+                trans_inv,
+                (np.size(tgt_img_raw, 1), np.size(tgt_img_raw, 0)),
+                borderValue=(0, 0, 0),
+            )
+            mask_ = cv2.warpAffine(
+                self._blend_mask,
+                trans_inv,
+                (np.size(tgt_img_raw, 1), np.size(tgt_img_raw, 0)),
+                borderValue=(0, 0, 0),
+            )
+            mask_ = np.expand_dims(mask_, 2)
+            Yt_trans_inv = mask_ * Yt_trans_inv + (1 - mask_) * tgt_img_raw
+
+        return transforms.ToTensor()(Yt_trans_inv).unsqueeze(0)
 
     def _to_ndarray(self, img: Tensor) -> np.ndarray:
         # Wrapper boundary conversion: tensor input is expected in [-1, 1],

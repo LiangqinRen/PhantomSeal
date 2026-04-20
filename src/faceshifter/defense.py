@@ -195,8 +195,10 @@ class Defense(Base):
             valid_indexes = []
             for i in range(batch_size):
                 try:
-                    source_swap = self.swap_face(imgs_A_list[i], imgs_B_list[i]).cuda()
-                    pert_source_swap = self.swap_face(
+                    source_swap = self.swap_face_whitebox(
+                        imgs_A_list[i], imgs_B_list[i]
+                    ).cuda()
+                    pert_source_swap = self.swap_face_whitebox(
                         pert_imgs_list[i], imgs_B_list[i]
                     ).cuda()
 
@@ -206,12 +208,6 @@ class Defense(Base):
                     valid_indexes.append(i)
                     total_count += 1
                 except Exception as e:
-                    self.logger.warning(
-                        "FaceShifter metric swap failed on batch %d pair %d: %s",
-                        idx,
-                        i + 1,
-                        e,
-                    )
                     for imgs_list in [
                         source_swap_list,
                         pert_source_swap_list,
@@ -353,6 +349,39 @@ class Defense(Base):
         B = imgs.size(0)
         best_imgs = imgs.clone()
         best_loss = torch.full((B,), float("inf"), device=imgs.device)
+
+        if not self.config.third_party.defense.silent_perturb:
+            with torch.no_grad():
+                baseline_perturb_loss = (
+                    self.config.third_party.defense.weight.perturb
+                    * l2_per_image(imgs, imgs.detach())
+                )
+                baseline_identity = get_imgs_identity(imgs)
+                baseline_identity_diff = torch.clamp(
+                    l2_per_image(baseline_identity, self_identity),
+                    0,
+                    self.config.third_party.defense.limit.identity,
+                )
+                baseline_identity_loss = (
+                    -self.config.third_party.defense.weight.identity
+                    * baseline_identity_diff
+                )
+                baseline_cloak_loss = (
+                    self.config.third_party.defense.weight.cloak
+                    * l2_per_image(baseline_identity, cloak_identity)
+                )
+                baseline_loss = (
+                    baseline_perturb_loss
+                    + baseline_identity_loss
+                    + baseline_cloak_loss
+                ).mean()
+                self.logger.info(
+                    f"[Epoch {0:4}/{self.config.third_party.defense.epochs:4}] "
+                    f"loss: {baseline_loss.item():.5f}"
+                    f"({baseline_perturb_loss.mean().item():.5f}, "
+                    f"{baseline_identity_loss.mean().item():.5f}, "
+                    f"{baseline_cloak_loss.mean().item():.5f})"
+                )
 
         for epoch in range(self.config.third_party.defense.epochs):
             x_imgs = x_imgs.clone().detach().requires_grad_(True)
