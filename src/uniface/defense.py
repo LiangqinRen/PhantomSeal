@@ -60,8 +60,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source\nswap",
-                    "target\nswap",
+                    "source_swap",
+                    "target_swap",
                 ],
                 [
                     imgs_A,

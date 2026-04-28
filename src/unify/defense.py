@@ -64,11 +64,11 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "perturb\nimgs",
-                    "cloak\nimgs",
-                    "simswap\nperturb\nswap",
-                    "hififace\nperturb\nswap",
-                    "faceshifter\nperturb\nswap",
+                    "perturb_imgs",
+                    "cloak_imgs",
+                    "simswap_perturb_swap",
+                    "hififace_perturb_swap",
+                    "faceshifter_perturb_swap",
                 ],
                 [
                     imgs_A,

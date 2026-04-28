@@ -127,7 +127,7 @@ class Base:
                     save_tensor_imgs(
                         self.image_dir,
                         f"{epoch}_{batch_idx}",
-                        ["clean\nimages", "finger\nprinted\nimages"],
+                        ["clean_images", "finger_printed_images"],
                         [clean_images, fingerprinted_images],
                         only_save_summary=self.config.third_party.defense.only_save_summary,
                     )

@@ -91,8 +91,8 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source\nswap",
-                    "target\nswap",
+                    "source_swap",
+                    "target_swap",
                 ],
                 [
                     denorm_imgs_A,
@@ -264,10 +264,10 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "perturb\nimgs",
-                    "cloak\nimgs",
-                    "source\nswap",
-                    "perturb\nsource\nswap",
+                    "perturb_imgs",
+                    "cloak_imgs",
+                    "source_swap",
+                    "perturb_source_swap",
                 ],
                 [
                     imgs_A,

@@ -124,10 +124,10 @@ class Lowkey(Defense):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "perturb\nimgs",
-                    "cloak\nimgs",
-                    "source\nswap",
-                    "perturb\nsource\nswap",
+                    "perturb_imgs",
+                    "cloak_imgs",
+                    "source_swap",
+                    "perturb_source_swap",
                 ],
                 [
                     imgs_A,

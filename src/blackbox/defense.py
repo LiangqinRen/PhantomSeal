@@ -63,11 +63,11 @@ class Defense(Base):
             if self.protection_method == "phantomseal":
                 cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
                 pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-                cloak_label = "cloak\nimgs"
+                cloak_label = "cloak_imgs"
             elif self.protection_method == "nullswap":
                 pert_imgs = self._perturb_imgs(imgs_A, None)
                 cloak_imgs = pert_imgs
-                cloak_label = "nullswap\nimgs"
+                cloak_label = "nullswap_imgs"
             else:
                 raise ValueError(
                     f"Unsupported blackbox protection method: {self.protection_method}"
@@ -78,7 +78,7 @@ class Defense(Base):
             summary_image_labels = [
                 "imgs_A",
                 "imgs_B",
-                "perturb\nimgs",
+                "perturb_imgs",
                 cloak_label,
             ]
             summary_image_tensors = [
@@ -124,8 +124,8 @@ class Defense(Base):
                 )
                 summary_image_labels.extend(
                     [
-                        f"{target_name}\nsource\nswap",
-                        f"{target_name}\nperturb\nsource\nswap",
+                        f"{target_name}_source_swap",
+                        f"{target_name}_perturb_source_swap",
                     ]
                 )
                 summary_image_tensors.extend(

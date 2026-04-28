@@ -16,6 +16,10 @@ class Robustness(Base):
     def __init__(self, logger, config):
         super().__init__(logger, config)
 
+    @staticmethod
+    def _clamp_imgs(imgs: Tensor) -> Tensor:
+        return torch.clamp(imgs, 0.0, 1.0)
+
     def load_logo(self) -> Tensor:
         logo = self._load_imgs([self.config.third_party.robustness.logo_img_path])
         return logo
@@ -23,10 +27,10 @@ class Robustness(Base):
     def gauss_noise(
         self, pert: Tensor, gauss_mean: float = 0, gauss_std: float = 0.1
     ) -> Tensor:
-        gauss_noise = gauss_mean + gauss_std * torch.randn(pert.shape).cuda()
+        gauss_noise = gauss_mean + gauss_std * torch.randn_like(pert)
         noise_pert = pert + gauss_noise
 
-        return noise_pert
+        return self._clamp_imgs(noise_pert)
 
     def webp_compress(self, imgs: Tensor, quality: float = 80):
         compressed_imgs = []
@@ -43,7 +47,7 @@ class Robustness(Base):
 
             compressed_imgs.append(compressed_img)
 
-        return torch.stack(compressed_imgs).cuda()
+        return self._clamp_imgs(torch.stack(compressed_imgs).to(imgs.device))
 
     def crop(self, imgs: Tensor, thickness: float = 20) -> Tensor:
         crop_imgs = imgs.clone()
@@ -52,7 +56,7 @@ class Robustness(Base):
         crop_imgs[:, :, :, :thickness] = 0
         crop_imgs[:, :, :, -thickness:] = 0
 
-        return crop_imgs
+        return self._clamp_imgs(crop_imgs)
 
     def logo(self, imgs: Tensor, logo: Tensor) -> Tensor:
         alpha = 0.75
@@ -78,13 +82,11 @@ class Robustness(Base):
             + logo * alpha
         )
 
-        return logo_imgs
+        return self._clamp_imgs(logo_imgs)
 
     def brightness(self, imgs, brightness_factor: float):
         adjusted_tensor = imgs * brightness_factor
-        adjusted_tensor = torch.clamp(adjusted_tensor, 0, 1)
-
-        return adjusted_tensor
+        return self._clamp_imgs(adjusted_tensor)
 
     def get_gauss_noise_metrics(
         self,
@@ -103,13 +105,17 @@ class Robustness(Base):
         noise_pert_identity = self._get_imgs_identity(noise_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        noise_source_swap = self.target(None, imgs_B, noise_identity, None, True)
-        noise_target_swap = self.target(None, noise_imgs, imgs_B_identity, None, True)
-        noise_pert_source_swap = self.target(
-            None, imgs_B, noise_pert_identity, None, True
+        noise_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, noise_identity, None, True)
         )
-        noise_pert_target_swap = self.target(
-            None, noise_pert_imgs, imgs_B_identity, None, True
+        noise_target_swap = self._clamp_imgs(
+            self.target(None, noise_imgs, imgs_B_identity, None, True)
+        )
+        noise_pert_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, noise_pert_identity, None, True)
+        )
+        noise_pert_target_swap = self._clamp_imgs(
+            self.target(None, noise_pert_imgs, imgs_B_identity, None, True)
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
@@ -130,12 +136,12 @@ class Robustness(Base):
                 "imgs_A",
                 "imgs_B",
                 "noise_imgs",
-                "noise\nsource\nswap",
-                "noise\ntarget\nswap",
-                "perturb\nimgs",
-                "noise\nperturb\nimgs",
-                "noise\nperturb\nsource\nswap",
-                "noise\nperturb\ntarget\nswap",
+                "noise_source_swap",
+                "noise_target_swap",
+                "perturb_imgs",
+                "noise_perturb_imgs",
+                "noise_perturb_source_swap",
+                "noise_perturb_target_swap",
             ],
             [
                 imgs_A,
@@ -173,15 +179,17 @@ class Robustness(Base):
         compress_pert_identity = self._get_imgs_identity(compress_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        compress_source_swap = self.target(None, imgs_B, compress_identity, None, True)
-        compress_target_swap = self.target(
-            None, compress_imgs, imgs_B_identity, None, True
+        compress_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, compress_identity, None, True)
         )
-        compress_pert_source_swap = self.target(
-            None, imgs_B, compress_pert_identity, None, True
+        compress_target_swap = self._clamp_imgs(
+            self.target(None, compress_imgs, imgs_B_identity, None, True)
         )
-        compress_pert_target_swap = self.target(
-            None, compress_pert_imgs, imgs_B_identity, None, True
+        compress_pert_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, compress_pert_identity, None, True)
+        )
+        compress_pert_target_swap = self._clamp_imgs(
+            self.target(None, compress_pert_imgs, imgs_B_identity, None, True)
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
@@ -205,13 +213,13 @@ class Robustness(Base):
             [
                 "imgs_A",
                 "imgs_B",
-                "compress\nimgs",
-                "compress\nsource\nswap",
-                "compress\ntarget\nswap",
-                "perturb\nimgs",
-                "compress\nperturb\nimgs",
-                "compress\nperturb\nsource\nswap",
-                "compress\nperturb\ntarget\nswap",
+                "compress_imgs",
+                "compress_source_swap",
+                "compress_target_swap",
+                "perturb_imgs",
+                "compress_perturb_imgs",
+                "compress_perturb_source_swap",
+                "compress_perturb_target_swap",
             ],
             [
                 imgs_A,
@@ -250,13 +258,17 @@ class Robustness(Base):
         crop_pert_identity = self._get_imgs_identity(crop_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        crop_source_swap = self.target(None, imgs_B, crop_identity, None, True)
-        crop_target_swap = self.target(None, crop_imgs, imgs_B_identity, None, True)
-        crop_pert_source_swap = self.target(
-            None, imgs_B, crop_pert_identity, None, True
+        crop_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, crop_identity, None, True)
         )
-        crop_pert_target_swap = self.target(
-            None, crop_pert_imgs, imgs_B_identity, None, True
+        crop_target_swap = self._clamp_imgs(
+            self.target(None, crop_imgs, imgs_B_identity, None, True)
+        )
+        crop_pert_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, crop_pert_identity, None, True)
+        )
+        crop_pert_target_swap = self._clamp_imgs(
+            self.target(None, crop_pert_imgs, imgs_B_identity, None, True)
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
@@ -277,12 +289,12 @@ class Robustness(Base):
                 "imgs_A",
                 "imgs_B",
                 "crop_imgs",
-                "crop\nsource\nswap",
-                "crop\ntarget\nswap",
-                "perturb\nimgs",
-                "crop\nperturb\nimgs",
-                "crop\nperturb\nsource\nswap",
-                "crop\nperturb\ntarget\nswap",
+                "crop_source_swap",
+                "crop_target_swap",
+                "perturb_imgs",
+                "crop_perturb_imgs",
+                "crop_perturb_source_swap",
+                "crop_perturb_target_swap",
             ],
             [
                 imgs_A,
@@ -320,13 +332,17 @@ class Robustness(Base):
         logo_pert_identity = self._get_imgs_identity(logo_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        logo_source_swap = self.target(None, imgs_B, logo_identity, None, True)
-        logo_target_swap = self.target(None, logo_imgs, imgs_B_identity, None, True)
-        logo_pert_source_swap = self.target(
-            None, imgs_B, logo_pert_identity, None, True
+        logo_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, logo_identity, None, True)
         )
-        logo_pert_target_swap = self.target(
-            None, logo_pert_imgs, imgs_B_identity, None, True
+        logo_target_swap = self._clamp_imgs(
+            self.target(None, logo_imgs, imgs_B_identity, None, True)
+        )
+        logo_pert_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, logo_pert_identity, None, True)
+        )
+        logo_pert_target_swap = self._clamp_imgs(
+            self.target(None, logo_pert_imgs, imgs_B_identity, None, True)
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
@@ -347,12 +363,12 @@ class Robustness(Base):
                 "imgs_A",
                 "imgs_B",
                 "logo_imgs",
-                "logo\nsource\nswap",
-                "logo\ntarget\nswap",
-                "perturb\nimgs",
-                "logo\nperturb\nimgs",
-                "logo\nperturb\nsource\nswap",
-                "logo\nperturb\ntarget\nswap",
+                "logo_source_swap",
+                "logo_target_swap",
+                "perturb_imgs",
+                "logo_perturb_imgs",
+                "logo_perturb_source_swap",
+                "logo_perturb_target_swap",
             ],
             [
                 imgs_A,
@@ -390,17 +406,17 @@ class Robustness(Base):
         brightness_pert_identity = self._get_imgs_identity(brightness_pert_imgs)
 
         imgs_B_identity = self._get_imgs_identity(imgs_B)
-        brightness_source_swap = self.target(
-            None, imgs_B, brightness_identity, None, True
+        brightness_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, brightness_identity, None, True)
         )
-        brightness_target_swap = self.target(
-            None, brightness_imgs, imgs_B_identity, None, True
+        brightness_target_swap = self._clamp_imgs(
+            self.target(None, brightness_imgs, imgs_B_identity, None, True)
         )
-        brightness_pert_source_swap = self.target(
-            None, imgs_B, brightness_pert_identity, None, True
+        brightness_pert_source_swap = self._clamp_imgs(
+            self.target(None, imgs_B, brightness_pert_identity, None, True)
         )
-        brightness_pert_target_swap = self.target(
-            None, brightness_pert_imgs, imgs_B_identity, None, True
+        brightness_pert_target_swap = self._clamp_imgs(
+            self.target(None, brightness_pert_imgs, imgs_B_identity, None, True)
         )
 
         source_effectivenesses = self.effectiveness.calculate_effectiveness(
@@ -424,13 +440,13 @@ class Robustness(Base):
             [
                 "imgs_A",
                 "imgs_B",
-                f"brightness\n{factor}\nimgs",
-                f"brightness\n{factor}\nsource\nswap",
-                f"brightness\n{factor}\ntarget\nswap",
-                "perturb\nimgs",
-                f"brightness\n{factor}\nperturb\nimgs",
-                f"brightness\n{factor}\nperturb\nsource\nswap",
-                f"brightness\n{factor}\nperturb\ntarget\nswap",
+                f"brightness_{factor}_imgs",
+                f"brightness_{factor}_source_swap",
+                f"brightness_{factor}_target_swap",
+                "perturb_imgs",
+                f"brightness_{factor}_perturb_imgs",
+                f"brightness_{factor}_perturb_source_swap",
+                f"brightness_{factor}_perturb_target_swap",
             ],
             [
                 imgs_A,
