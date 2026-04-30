@@ -112,6 +112,11 @@ then
     run \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false
+elif [[ $function == 'cloak_transfer' ]]
+then
+    run \
+    evaluate.effectiveness.perturb=false \
+    evaluate.effectiveness.ASRo=false
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi

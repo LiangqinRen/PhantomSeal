@@ -33,6 +33,7 @@ def main(config: DictConfig):
             "image_robustness_metric": defense.image_robustness_metric,
             "adaptive_attack_with_self_image": defense.adaptive_attack_with_self_image,
             "adaptive_attack_with_other_image": defense.adaptive_attack_with_other_image,
+            "cloak_transfer": defense.cloak_transfer,
         }
 
     if config.third_party.function in defense_functions:

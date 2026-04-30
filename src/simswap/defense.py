@@ -1097,6 +1097,117 @@ class Defense(Base):
             self.logger.info(textwrap.indent(iter_log_str, "    "))
             self.logger.info(textwrap.indent(summary_log_str, "    "))
 
+    def cloak_transfer(self) -> None:
+        dataset = AdaptiveMetricDataset(self.config)
+        dataloader = DataLoader(
+            dataset, batch_size=self.config.third_party.defense.batch_size, shuffle=True
+        )
+
+        metrics = {
+            effec_name: {
+                "B": (0, 0),
+                "A": (0, 0),
+                "cloak_A": (0, 0),
+            }
+            for effec_name in self.effectiveness.candi_funcs.keys()
+        }
+        total_count = 0
+
+        def merge_matches(matches: dict) -> None:
+            for effec_name, item in matches.items():
+                for key, value in item.items():
+                    prev = metrics[effec_name][key]
+                    metrics[effec_name][key] = (
+                        prev[0] + value[0],
+                        prev[1] + value[1],
+                    )
+
+        def format_matches(matches: dict) -> str:
+            parts = []
+            for effec_name in matches:
+                vals = (
+                    f"{v[0] / v[1] * 100:.3f}/{v[1]:.0f}"
+                    for v in matches[effec_name].values()
+                )
+                parts.append(f"({', '.join(vals)})")
+            return " ".join(parts)
+
+        for idx, (imgs_A, imgs_B, imgs_C) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
+            imgs_A, imgs_B, imgs_C = imgs_A.cuda(), imgs_B.cuda(), imgs_C.cuda()
+            total_count += len(imgs_A)
+
+            cloak_imgs_A = self.cloak.find_best_cloaks(imgs_A)
+            pert_imgs_A = self._perturb_imgs(imgs_A, cloak_imgs_A)
+            pert_imgs_B = self._perturb_imgs(imgs_B, pert_imgs_A.detach())
+
+            torch.set_grad_enabled(False)
+            final_swap = self.swap_face(pert_imgs_B, imgs_C)
+
+            iter_matches = {
+                effec_name: {
+                    "B": func(imgs_B, final_swap),
+                    "A": func(imgs_A, final_swap),
+                    "cloak_A": func(cloak_imgs_A, final_swap),
+                }
+                for effec_name, func in self.effectiveness.candi_funcs.items()
+            }
+            merge_matches(iter_matches)
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "imgs_C",
+                    "cloak_A",
+                    "protected_A",
+                    "protected_B",
+                    "final_swap",
+                    "protected_A_diff",
+                    "protected_B_diff",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    imgs_C,
+                    cloak_imgs_A,
+                    pert_imgs_A,
+                    pert_imgs_B,
+                    final_swap,
+                    (pert_imgs_A - imgs_A) * 10,
+                    (pert_imgs_B - imgs_B) * 10,
+                ],
+                only_save_summary=self.config.third_party.defense.only_save_summary,
+            )
+
+            iter_log_str = textwrap.dedent(
+                f"""
+                [Cloak Transfer][Iter][Batch {idx:4}/{len(dataloader):4}]
+                result matching (B, A, cloak_A): {format_matches(iter_matches)}
+                """
+            )
+            summary_log_str = textwrap.dedent(
+                f"""
+                [Cloak Transfer][Summary][Batch {idx:4}/{len(dataloader):4}, {total_count} triples]
+                result matching (B, A, cloak_A): {format_matches(metrics)}
+                """
+            )
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
+
+            del (
+                imgs_A,
+                imgs_B,
+                imgs_C,
+                cloak_imgs_A,
+                pert_imgs_A,
+                pert_imgs_B,
+                final_swap,
+            )
+            self._free_gpu()
+
     def adaptive_attack_with_self_image(self) -> None:
         metrics = metric.get_metric_data_template(self.effectiveness)
 
