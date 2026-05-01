@@ -32,10 +32,10 @@ dataset:
   cloak_distance: 1.31
 
 defense:
-  batch_size: 30
+  batch_size: 10
   epochs: 1000
   epsilon: 0.003
-  targets: [simswap,faceshifter,hififace,infoswap,e4s,uniface,diffface] # 
+  targets: [simswap,faceshifter,hififace,infoswap,e4s,uniface,diffface,diffswap]
   region_weight_outside: 3.0
   region_weight_face: 1.5
   region_weight_feature: 0.9
