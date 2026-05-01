@@ -34,18 +34,47 @@ class Defense(Base):
         dataloader = DataLoader(dataset, batch_size=config.dataset.batch_size)
         metrics = self._get_swap_success_metric_data_template(self.effectiveness)
         total_count = 0
+        source_eval_count = 0
+        target_eval_count = 0
+        source_skip_count = 0
+        target_skip_count = 0
 
         for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
             total_count += len(imgs_A)
             source_swap = self.swap_face(imgs_A, imgs_B)
+            source_valid_indices = getattr(self, "last_valid_indices", [])
+            source_failed_indices = getattr(self, "last_failed_indices", [])
             target_swap = self.swap_face(imgs_B, imgs_A)
+            target_valid_indices = getattr(self, "last_valid_indices", [])
+            target_failed_indices = getattr(self, "last_failed_indices", [])
 
-            source_effectiveness = self.effectiveness.calculate_effectiveness(
-                imgs_A, None, source_swap, None, None
+            source_eval_count += len(source_valid_indices)
+            target_eval_count += len(target_valid_indices)
+            source_skip_count += len(source_failed_indices)
+            target_skip_count += len(target_failed_indices)
+
+            source_effectiveness = (
+                self.effectiveness.calculate_effectiveness(
+                    imgs_A[source_valid_indices],
+                    None,
+                    source_swap[source_valid_indices],
+                    None,
+                    None,
+                )
+                if source_valid_indices
+                else self._get_empty_effectiveness()
             )
-            target_effectiveness = self.effectiveness.calculate_effectiveness(
-                imgs_B, None, target_swap, None, None
+            target_effectiveness = (
+                self.effectiveness.calculate_effectiveness(
+                    imgs_B[target_valid_indices],
+                    None,
+                    target_swap[target_valid_indices],
+                    None,
+                    None,
+                )
+                if target_valid_indices
+                else self._get_empty_effectiveness()
             )
             self._merge_swap_success_metric(
                 metrics, source_effectiveness, target_effectiveness
@@ -89,6 +118,8 @@ class Defense(Base):
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            evaluated/skipped source: {source_eval_count}/{source_skip_count}
+            evaluated/skipped target: {target_eval_count}/{target_skip_count}
             source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'source_effectiveness')}
             target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'target_effectiveness')}
             """
@@ -97,6 +128,12 @@ class Defense(Base):
             self.logger.info(textwrap.indent(iter_log_str, "    "))
             self.logger.info(textwrap.indent(summary_log_str, "    "))
             self._free_gpu()
+
+    def _get_empty_effectiveness(self) -> dict:
+        data = {}
+        for function in self.effectiveness.candi_funcs.keys():
+            data[function] = {"swap": (0, 0)}
+        return data
 
     @staticmethod
     def _get_swap_success_metric_data_template(effectiveness) -> dict:

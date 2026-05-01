@@ -778,6 +778,11 @@ class Base:
             source_organ_masks.append(src_item["mask_organ"])
             debug_steps["target"].append(tgt_item)
 
+        self.last_valid_indices = valid_indices
+        self.last_failed_indices = [
+            index for index in range(batch_size) if index not in valid_indices
+        ]
+
         if not valid_indices:
             return None, valid_indices
 

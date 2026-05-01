@@ -2,6 +2,12 @@ from torch import Tensor
 from copy import deepcopy
 
 
+def _format_rate(value: tuple) -> str:
+    if value[1] == 0:
+        return "nan/0"
+    return f"{value[0] / value[1] * 100:.3f}/{value[1]:.0f}"
+
+
 def get_metric_data_template(effectiveness) -> dict:
     data = {
         "utility": (0, 0, 0, 0),
@@ -241,9 +247,7 @@ def generate_iter_effectiveness_log(effectiveness: dict) -> str:
     parts = []
 
     for effec in effectiveness:
-        vals = (
-            f"{v[0] / v[1] * 100:.3f}/{v[1]:.0f}" for v in effectiveness[effec].values()
-        )
+        vals = (_format_rate(v) for v in effectiveness[effec].values())
         parts.append(f"({', '.join(vals)})")
 
     return " ".join(parts)
@@ -264,9 +268,7 @@ def generate_summary_effectiveness_log(data: dict, item: str) -> str:
     parts = []
 
     for effec in data[item]:
-        vals = (
-            f"{v[0] / v[1] * 100:.3f}/{v[1]:.0f}" for v in data[item][effec].values()
-        )
+        vals = (_format_rate(v) for v in data[item][effec].values())
         parts.append(f"({', '.join(vals)})")
 
     return " ".join(parts)
@@ -281,11 +283,11 @@ def generate_iter_robustness_log(source: dict, target: dict) -> str:
     parts = []
 
     for effec in source:
-        vals = (f"{v[0] / v[1] * 100:.3f}/{v[1]:.0f}" for v in source[effec].values())
+        vals = (_format_rate(v) for v in source[effec].values())
         parts.append(f"({', '.join(vals)})")
 
     for effec in target:
-        vals = (f"{v[0] / v[1] * 100:.3f}/{v[1]:.0f}" for v in target[effec].values())
+        vals = (_format_rate(v) for v in target[effec].values())
         parts.append(f"({', '.join(vals)})")
 
     return " ".join(parts)
@@ -303,19 +305,16 @@ def generate_summary_robustness_log(data: dict) -> str:
     target = data["pert_target_effectiveness"]
 
     for effec in source:
-        vals = (f"{v[0] / v[1] * 100:.3f}/{v[1]:.0f}" for v in source[effec].values())
+        vals = (_format_rate(v) for v in source[effec].values())
         parts.append(f"({', '.join(vals)})")
 
     for effec in target:
-        vals = (f"{v[0] / v[1] * 100:.3f}/{v[1]:.0f}" for v in target[effec].values())
+        vals = (_format_rate(v) for v in target[effec].values())
         parts.append(f"({', '.join(vals)})")
 
     return " ".join(parts)
 
 
 def generate_forensics_robustness_log(data: dict) -> str:
-    vals = (
-        f"{v['cloak'][0] / v['cloak'][1] * 100:.3f}/{v['cloak'][1]:.0f}"
-        for v in data.values()
-    )
+    vals = (_format_rate(v["cloak"]) for v in data.values())
     return f"({', '.join(vals)})"
