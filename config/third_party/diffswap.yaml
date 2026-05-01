@@ -9,7 +9,9 @@ shape_predictor_path: ${third_party.checkpoint_dir}/shape_predictor_68_face_land
 origin:
   ddim_steps: 200
   ddim_eta: 0.0
-  tgt_scale: 0.01
+  tgt_scale: 0.0
+  face_mask_dilate: 15
+  repair_by_mask: true
   quiet_third_party: true
   detector_upsample: 1
   detector_resize_scales: [1.0, 1.25, 1.5, 2.0]

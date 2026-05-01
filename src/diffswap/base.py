@@ -4,10 +4,13 @@ from src.evaluate import Effectiveness
 import cv2
 import dlib
 import numpy as np
+import scipy.ndimage as ndimage
 import torch
 import torch.nn.functional as F
 import sys
 from pathlib import Path
+from PIL import Image
+from scipy.spatial import ConvexHull
 from torch import Tensor
 
 
@@ -58,6 +61,8 @@ class Base:
         self.ddim_steps = int(third_party_config.origin.ddim_steps)
         self.ddim_eta = float(third_party_config.origin.ddim_eta)
         self.tgt_scale = float(third_party_config.origin.tgt_scale)
+        self.face_mask_dilate = int(third_party_config.origin.face_mask_dilate)
+        self.repair_by_mask = bool(third_party_config.origin.repair_by_mask)
         self.detector_upsample = int(third_party_config.origin.detector_upsample)
         self.quiet_third_party = bool(third_party_config.origin.quiet_third_party)
         self.detector_resize_scales = tuple(
@@ -66,7 +71,6 @@ class Base:
         self.detection_failure_fallback = str(
             third_party_config.origin.detection_failure_fallback
         ).lower()
-
         self._check_required_files()
         self._ensure_project_checkpoint_compatibility()
         self._load_diffswap_modules()
@@ -128,13 +132,24 @@ class Base:
             for name, module in sys.modules.items()
             if name == "src" or name.startswith("src.")
         }
-        purge_prefixes = ("ldm", "utils", "data_preprocessing", "src")
+        purge_prefixes = (
+            "ldm",
+            "utils",
+            "data_preprocessing",
+            "src",
+            "detector",
+            "get_nets",
+            "box_utils",
+            "first_stage",
+        )
 
         try:
             with suppress_third_party_noise(self.quiet_third_party):
-                with use_project([self.root_dir], purge_prefixes=purge_prefixes), cd(
-                    self.root_dir
-                ):
+                with use_project(
+                    [self.root_dir, self.root_dir / "data_preprocessing/align"],
+                    purge_prefixes=purge_prefixes,
+                ), cd(self.root_dir / "data_preprocessing/align"):
+                    import mtcnn
                     from omegaconf import OmegaConf
                     from ldm.models.diffusion.ddim import DDIMSampler
                     from ldm.util import instantiate_from_config
@@ -148,6 +163,7 @@ class Base:
                     self._instantiate_from_config = instantiate_from_config
                     self._get_reference_facial_points = get_reference_facial_points
                     self._warp_and_crop_face = warp_and_crop_face
+                    self._mtcnn_module = mtcnn
         finally:
             for name in list(sys.modules.keys()):
                 if name == "src" or name.startswith("src."):
@@ -192,43 +208,337 @@ class Base:
             sys.modules.update(original_src_modules)
 
     @staticmethod
-    def _identity_theta(batch_size: int, device: torch.device) -> Tensor:
-        theta = torch.tensor(
-            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-            dtype=torch.float32,
-            device=device,
-        )
-        return theta.unsqueeze(0).repeat(batch_size, 1, 1)
-
-    @staticmethod
     def _largest_face(rects) -> dlib.rectangle:
         return max(rects, key=lambda rect: rect.width() * rect.height())
 
-    def _predict_landmarks(self, image_rgb_uint8: np.ndarray) -> np.ndarray | None:
-        for scale in self.detector_resize_scales:
-            if abs(scale - 1.0) < 1e-6:
-                resized = image_rgb_uint8
-            else:
-                resized = cv2.resize(
-                    image_rgb_uint8,
-                    dsize=None,
-                    fx=scale,
-                    fy=scale,
-                    interpolation=cv2.INTER_LINEAR,
-                )
+    def _get_detect(self, gray_image: np.ndarray, max_iter: int = 2):
+        faces = []
+        for upsample in range(max_iter + 1):
+            faces = self.face_detector(gray_image, upsample)
+            if len(faces) >= 1:
+                break
+        return faces
 
-            gray = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
-            faces = self.face_detector(gray, self.detector_upsample)
-            if len(faces) == 0:
-                continue
+    @staticmethod
+    def _shape_to_np(shape) -> np.ndarray:
+        return np.array([[shape.part(i).x, shape.part(i).y] for i in range(68)])
 
-            face = self._largest_face(faces)
-            shape = self.landmark_predictor(resized, face)
-            points = np.array([[shape.part(i).x, shape.part(i).y] for i in range(68)])
-            points = points.astype(np.float32) / scale
-            return points
+    @staticmethod
+    def _tensor_to_rgb_uint8(img: Tensor) -> np.ndarray:
+        return (
+            img.detach()
+            .permute(1, 2, 0)
+            .mul(255)
+            .round()
+            .clamp(0, 255)
+            .byte()
+            .cpu()
+            .numpy()
+        )
 
-        return None
+    def _detect_five_points_mtcnn(self, image_rgb_uint8: np.ndarray) -> np.ndarray | None:
+        keys = ["left_eye", "right_eye", "nose", "mouth_left", "mouth_right"]
+        original_np_load = np.load
+
+        def np_load_allow_pickle(*args, **kwargs):
+            kwargs.setdefault("allow_pickle", True)
+            return original_np_load(*args, **kwargs)
+
+        try:
+            np.load = np_load_allow_pickle
+            with suppress_third_party_noise(self.quiet_third_party):
+                if hasattr(self._mtcnn_module, "MTCNN"):
+                    detector = self._mtcnn_module.MTCNN()
+                    results = detector.detect_faces(image_rgb_uint8)
+                elif hasattr(self._mtcnn_module, "detect_faces"):
+                    boxes, landmarks = self._mtcnn_module.detect_faces(image_rgb_uint8)
+                    if len(boxes) == 0 or len(landmarks) == 0:
+                        results = []
+                    else:
+                        results = []
+                        for box, landmark in zip(boxes, landmarks):
+                            results.append(
+                                {
+                                    "box": [
+                                        float(box[0]),
+                                        float(box[1]),
+                                        float(box[2] - box[0]),
+                                        float(box[3] - box[1]),
+                                    ],
+                                    "keypoints": {
+                                        "left_eye": [float(landmark[0]), float(landmark[5])],
+                                        "right_eye": [float(landmark[1]), float(landmark[6])],
+                                        "nose": [float(landmark[2]), float(landmark[7])],
+                                        "mouth_left": [float(landmark[3]), float(landmark[8])],
+                                        "mouth_right": [float(landmark[4]), float(landmark[9])],
+                                    },
+                                }
+                            )
+                else:
+                    raise ImportError("Unsupported mtcnn package layout.")
+        finally:
+            np.load = original_np_load
+
+        if len(results) == 0:
+            return None
+
+        def compute_area(item: dict) -> float:
+            box = item.get("box", [0, 0, 0, 0])
+            return float(box[-2] * box[-1])
+
+        best = max(results, key=compute_area)
+        keypoints = best.get("keypoints", {})
+        if any(key not in keypoints for key in keys):
+            return None
+        return np.array([keypoints[key] for key in keys], dtype=np.float32)
+
+    def _get_landmark_256_in_memory(self, image_rgb_uint8: np.ndarray) -> np.ndarray | None:
+        faces = self._get_detect(cv2.cvtColor(image_rgb_uint8, cv2.COLOR_RGB2GRAY), 2)
+        if len(faces) == 0:
+            return None
+
+        face = self._largest_face(faces)
+        landmark = self.landmark_predictor(image_rgb_uint8, face)
+        return self._shape_to_np(landmark).astype(np.float32)
+
+    def _get_landmark_ori_in_memory(
+        self, image_rgb_uint8: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        image = image_rgb_uint8
+        while image.shape[0] > 2000 or image.shape[1] > 2000:
+            image = cv2.resize(
+                image,
+                (0, 0),
+                fx=0.5,
+                fy=0.5,
+                interpolation=cv2.INTER_CUBIC,
+            )
+        while image.shape[0] < 400 or image.shape[1] < 400:
+            image = cv2.resize(
+                image,
+                (0, 0),
+                fx=2.0,
+                fy=2.0,
+                interpolation=cv2.INTER_CUBIC,
+            )
+
+        faces = self._get_detect(cv2.cvtColor(image, cv2.COLOR_RGB2GRAY), 2)
+        if len(faces) == 0:
+            return None
+
+        face = self._largest_face(faces)
+        landmark = self.landmark_predictor(image, face)
+        return image, self._shape_to_np(landmark).astype(np.float32)
+
+    def _crop_ffhq_in_memory(
+        self,
+        image_rgb_uint8: np.ndarray,
+        landmark_ori: np.ndarray,
+        output_size: int = 256,
+        transform_size: int = 1024,
+        enable_padding: bool = False,
+        rotate_level: bool = True,
+    ) -> np.ndarray:
+        lm_eye_left = landmark_ori[36:42]
+        lm_eye_right = landmark_ori[42:48]
+        lm_mouth_outer = landmark_ori[48:60]
+
+        eye_left = np.mean(lm_eye_left, axis=0)
+        eye_right = np.mean(lm_eye_right, axis=0)
+        eye_avg = (eye_left + eye_right) * 0.5
+        eye_to_eye = eye_right - eye_left
+        mouth_left = lm_mouth_outer[0]
+        mouth_right = lm_mouth_outer[6]
+        mouth_avg = (mouth_left + mouth_right) * 0.5
+        eye_to_mouth = mouth_avg - eye_avg
+
+        if rotate_level:
+            x = eye_to_eye - np.flipud(eye_to_mouth) * [-1, 1]
+            x /= np.hypot(*x)
+            x *= max(np.hypot(*eye_to_eye) * 2.0, np.hypot(*eye_to_mouth) * 1.8)
+            y = np.flipud(x) * [-1, 1]
+            c0 = eye_avg + eye_to_mouth * 0.1
+        else:
+            x = np.array([1, 0], dtype=np.float64)
+            x *= max(np.hypot(*eye_to_eye) * 2.0, np.hypot(*eye_to_mouth) * 1.8)
+            y = np.flipud(x) * [-1, 1]
+            c0 = eye_avg + eye_to_mouth * 0.1
+
+        image = Image.fromarray(image_rgb_uint8)
+        quad = np.stack([c0 - x - y, c0 - x + y, c0 + x + y, c0 + x - y])
+        qsize = np.hypot(*x) * 2
+
+        shrink = int(np.floor(qsize / output_size * 0.5))
+        if shrink > 1:
+            rsize = (
+                int(np.rint(float(image.size[0]) / shrink)),
+                int(np.rint(float(image.size[1]) / shrink)),
+            )
+            image = image.resize(rsize, Image.BICUBIC)
+            quad /= shrink
+            qsize /= shrink
+
+        border = max(int(np.rint(qsize * 0.1)), 3)
+        crop = (
+            int(np.floor(min(quad[:, 0]))),
+            int(np.floor(min(quad[:, 1]))),
+            int(np.ceil(max(quad[:, 0]))),
+            int(np.ceil(max(quad[:, 1]))),
+        )
+        crop = (
+            max(crop[0] - border, 0),
+            max(crop[1] - border, 0),
+            min(crop[2] + border, image.size[0]),
+            min(crop[3] + border, image.size[1]),
+        )
+        if crop[2] - crop[0] < image.size[0] or crop[3] - crop[1] < image.size[1]:
+            crop = tuple(map(round, crop))
+            image = image.crop(crop)
+            quad -= crop[0:2]
+
+        pad = (
+            int(np.floor(min(quad[:, 0]))),
+            int(np.floor(min(quad[:, 1]))),
+            int(np.ceil(max(quad[:, 0]))),
+            int(np.ceil(max(quad[:, 1]))),
+        )
+        pad = (
+            max(-pad[0] + border, 0),
+            max(-pad[1] + border, 0),
+            max(pad[2] - image.size[0] + border, 0),
+            max(pad[3] - image.size[1] + border, 0),
+        )
+        if enable_padding and max(pad) > border - 4:
+            pad = np.maximum(pad, int(np.rint(qsize * 0.3)))
+            image_arr = np.pad(
+                np.float32(image),
+                ((pad[1], pad[3]), (pad[0], pad[2]), (0, 0)),
+                "reflect",
+            )
+            h, w, _ = image_arr.shape
+            y_grid, x_grid, _ = np.ogrid[:h, :w, :1]
+            mask = np.maximum(
+                1.0
+                - np.minimum(
+                    np.float32(x_grid) / pad[0], np.float32(w - 1 - x_grid) / pad[2]
+                ),
+                1.0
+                - np.minimum(
+                    np.float32(y_grid) / pad[1], np.float32(h - 1 - y_grid) / pad[3]
+                ),
+            )
+            blur = qsize * 0.02
+            image_arr += (
+                ndimage.gaussian_filter(image_arr, [blur, blur, 0]) - image_arr
+            ) * np.clip(mask * 3.0 + 1.0, 0.0, 1.0)
+            image_arr += (np.median(image_arr, axis=(0, 1)) - image_arr) * np.clip(
+                mask, 0.0, 1.0
+            )
+            image = Image.fromarray(
+                np.uint8(np.clip(np.rint(image_arr), 0, 255)), "RGB"
+            )
+            quad += pad[:2]
+
+        quad = (quad + 0.5).flatten()
+        affine = (
+            -(quad[0] - quad[6]) / transform_size,
+            -(quad[0] - quad[2]) / transform_size,
+            quad[0],
+            -(quad[1] - quad[7]) / transform_size,
+            -(quad[1] - quad[3]) / transform_size,
+            quad[1],
+        )
+        image = image.transform(
+            (transform_size, transform_size), Image.AFFINE, affine, Image.BICUBIC
+        )
+        if output_size < transform_size:
+            image = image.resize((output_size, output_size), Image.BICUBIC)
+
+        return np.array(image).astype(np.uint8)
+
+    def _extract_convex_hull_from_normalized_landmark(
+        self, landmark_norm: np.ndarray, size: int = 256
+    ) -> np.ndarray:
+        landmark = landmark_norm * size
+        hull = ConvexHull(landmark)
+        image = np.zeros((size, size), dtype=np.float32)
+        points = [landmark[hull.vertices, :1], landmark[hull.vertices, 1:]]
+        points = np.concatenate(points, axis=-1).astype("int32")
+        mask = cv2.fillPoly(image, pts=[points], color=(255, 255, 255))
+        return mask > 0
+
+    def _build_portrait_masks_in_memory(
+        self, landmark_norm: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        all_indices = np.arange(0, 68)
+        landmark_indices = {
+            "l_eye": all_indices[36:42].tolist(),
+            "r_eye": all_indices[42:48].tolist(),
+            "nose": all_indices[27:36].tolist(),
+            "mouth": all_indices[48:68].tolist(),
+        }
+        mask_organ = []
+        for _, indices in landmark_indices.items():
+            mask_organ.append(
+                self._extract_convex_hull_from_normalized_landmark(landmark_norm[indices])
+            )
+        face_mask = self._extract_convex_hull_from_normalized_landmark(landmark_norm)
+        if self.face_mask_dilate > 0:
+            kernel = np.ones(
+                (self.face_mask_dilate, self.face_mask_dilate),
+                dtype=np.uint8,
+            )
+            face_mask = cv2.dilate(face_mask.astype(np.uint8), kernel, iterations=1) > 0
+        return np.stack(mask_organ).astype(np.float32), face_mask.astype(np.float32)
+
+    def _build_portrait_item_in_memory(
+        self, img: Tensor
+    ) -> dict[str, Tensor | np.ndarray] | None:
+        original_rgb_uint8 = self._tensor_to_rgb_uint8(img)
+        landmark_ori_result = self._get_landmark_ori_in_memory(original_rgb_uint8)
+        if landmark_ori_result is None:
+            return None
+
+        resized_original_rgb_uint8, landmark_ori = landmark_ori_result
+        image_rgb_uint8 = self._crop_ffhq_in_memory(
+            resized_original_rgb_uint8,
+            landmark_ori,
+            output_size=self.model_input_size,
+        )
+
+        landmark_256 = self._get_landmark_256_in_memory(image_rgb_uint8)
+        if landmark_256 is None:
+            return None
+
+        five_points = self._detect_five_points_mtcnn(image_rgb_uint8)
+        if five_points is None:
+            five_points = self._extract_five_points(landmark_256)
+
+        landmark_norm = (landmark_256 / float(self.model_input_size)).astype(np.float32)
+        mask_organ, face_mask = self._build_portrait_masks_in_memory(landmark_norm)
+
+        image_hwc = (
+            torch.from_numpy(image_rgb_uint8)
+            .to(self.device, dtype=torch.float32)
+            / 127.5
+            - 1.0
+        )
+
+        return {
+            "align_image": image_rgb_uint8,
+            "landmark_256": landmark_256,
+            "image_hwc": image_hwc,
+            "landmark_norm": torch.from_numpy(landmark_norm).to(
+                self.device, dtype=torch.float32
+            ),
+            "affine_theta": torch.from_numpy(
+                self._build_affine_theta_from_five_points(five_points)
+            ).to(self.device, dtype=torch.float32),
+            "mask": torch.from_numpy(face_mask).to(self.device, dtype=torch.float32),
+            "mask_organ": torch.from_numpy(mask_organ).to(
+                self.device, dtype=torch.float32
+            ),
+        }
 
     @staticmethod
     def _extract_five_points(landmarks: np.ndarray) -> np.ndarray:
@@ -259,8 +569,9 @@ class Base:
         theta = a @ np.linalg.inv(tfm_h) @ b
         return theta[:2].astype(np.float32)
 
-    def _build_affine_theta(self, landmarks: np.ndarray) -> np.ndarray:
-        facial_5pts = self._extract_five_points(landmarks)
+    def _build_affine_theta_from_five_points(
+        self, facial_5pts: np.ndarray
+    ) -> np.ndarray:
         tfm = self._warp_and_crop_face(
             None,
             facial_5pts,
@@ -270,56 +581,105 @@ class Base:
         )
         return self._transform_to_theta(tfm)
 
-    def _build_face_affine_theta_batch(self, imgs: Tensor) -> Tensor:
-        imgs = self._prepare_image_batch(imgs)
-        theta_list = []
-
-        for index in range(imgs.shape[0]):
-            img_np = (
-                imgs[index]
-                .permute(1, 2, 0)
-                .mul(255)
-                .round()
-                .clamp(0, 255)
-                .byte()
-                .cpu()
-                .numpy()
-            )
-            landmarks = self._predict_landmarks(img_np)
-            if landmarks is None:
-                self.logger.warning(
-                    "DiffSwap face detection failed for identity crop %s; "
-                    "falling back to the full-image crop.",
-                    index,
-                )
-                theta_list.append(self._identity_theta(1, imgs.device)[0])
-                continue
-
-            theta_list.append(
-                torch.from_numpy(self._build_affine_theta(landmarks)).to(imgs.device)
-            )
-
-        return torch.stack(theta_list, dim=0)
-
-    def _crop_face_with_theta(self, imgs: Tensor, theta: Tensor) -> Tensor:
-        grid = F.affine_grid(
-            theta,
-            size=(imgs.shape[0], 3, self.crop_size, self.crop_size),
-            align_corners=False,
-        )
-        return F.grid_sample(
-            imgs,
-            grid,
-            mode="bilinear",
-            padding_mode="border",
-            align_corners=False,
-        )
-
     @staticmethod
     def _free_gpu() -> None:
         if torch.cuda.is_available():
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
+
+    @staticmethod
+    def _im_reduce(img: np.ndarray) -> np.ndarray:
+        filt = 1.0 / 20 * np.array([1, 5, 8, 5, 1])
+        lowpass = ndimage.correlate1d(img, filt, 0)
+        lowpass = ndimage.correlate1d(lowpass, filt, 1)
+        return lowpass[::2, ::2, ...]
+
+    @staticmethod
+    def _im_expand(img: np.ndarray, template: np.ndarray) -> np.ndarray:
+        expanded = np.zeros(template.shape, img.dtype)
+        expanded[::2, ::2, ...] = img
+        filt = 1.0 / 10 * np.array([1, 5, 8, 5, 1])
+        lowpass = ndimage.correlate1d(expanded, filt, 0, mode="constant")
+        lowpass = ndimage.correlate1d(lowpass, filt, 1, mode="constant")
+        return lowpass
+
+    def _gaussian_pyramid(self, image: np.ndarray, layers: int = 7) -> list[np.ndarray]:
+        pyr = [image]
+        temp = image
+        for _ in range(layers):
+            temp = self._im_reduce(temp)
+            pyr.append(temp)
+        return pyr
+
+    def _laplacian_pyramid(self, gaussian_pyramid: list[np.ndarray]) -> list[np.ndarray]:
+        pyr = []
+        for i in range(len(gaussian_pyramid) - 1):
+            g_k = gaussian_pyramid[i]
+            g_k_plus_1 = gaussian_pyramid[i + 1]
+            g_k_1_expand = self._im_expand(g_k_plus_1, g_k)
+            pyr.append(g_k - g_k_1_expand)
+        pyr.append(gaussian_pyramid[-1])
+        return pyr
+
+    def _laplacian_collapse(self, pyr: list[np.ndarray]) -> np.ndarray:
+        partial = pyr[-1]
+        for i in range(len(pyr) - 1):
+            next_lowest = pyr[-2 - i]
+            expanded = self._im_expand(partial, next_lowest)
+            partial = expanded + next_lowest
+        return partial
+
+    @staticmethod
+    def _laplacian_pyr_join(
+        pyr1: list[np.ndarray], pyr2: list[np.ndarray], mask_gp: list[np.ndarray]
+    ) -> list[np.ndarray]:
+        pyr = []
+        for i in range(len(pyr1)):
+            mask = np.array([mask_gp[i], mask_gp[i], mask_gp[i]]).transpose(1, 2, 0)
+            pyr.append(np.multiply(pyr1[i], mask) + np.multiply(pyr2[i], 1 - mask))
+        return pyr
+
+    def _repair_by_mask_batch(self, swap_results: Tensor) -> Tensor:
+        if not hasattr(self, "last_pipeline_steps"):
+            return swap_results
+
+        repaired = []
+        target_steps = self.last_pipeline_steps.get("target", [])
+        for idx in range(swap_results.shape[0]):
+            if idx >= len(target_steps):
+                repaired.append(swap_results[idx])
+                continue
+
+            swap_img = (
+                swap_results[idx]
+                .detach()
+                .permute(1, 2, 0)
+                .mul(255.0)
+                .clamp(0, 255)
+                .cpu()
+                .numpy()
+                .astype(np.uint8)
+            )
+            target_img = target_steps[idx]["align_image"].astype(np.uint8)
+            mask = target_steps[idx]["mask"].detach().cpu().numpy().astype(np.uint8)
+
+            im1 = np.int32(swap_img)
+            im2 = np.int32(target_img)
+            gp_1, gp_2 = [self._gaussian_pyramid(im) for im in [im1, im2]]
+            mask_gp = [cv2.resize(mask, (gp.shape[1], gp.shape[0])) for gp in gp_1]
+            lp_1, lp_2 = [self._laplacian_pyramid(gp) for gp in [gp_1, gp_2]]
+            lp_join = self._laplacian_pyr_join(lp_1, lp_2, mask_gp)
+            im_join = self._laplacian_collapse(lp_join)
+            np.clip(im_join, 0, 255, out=im_join)
+            repaired_img = (
+                torch.from_numpy(np.uint8(im_join))
+                .permute(2, 0, 1)
+                .to(swap_results.device, dtype=torch.float32)
+                / 255.0
+            )
+            repaired.append(repaired_img)
+
+        return torch.stack(repaired, dim=0)
 
     def _polygon_mask(
         self,
@@ -383,8 +743,6 @@ class Base:
         target_imgs: Tensor,
     ) -> tuple[dict[str, Tensor] | None, list[int]]:
         batch_size = source_imgs.shape[0]
-        source_hwc = source_imgs.permute(0, 2, 3, 1).contiguous()
-        target_hwc = target_imgs.permute(0, 2, 3, 1).contiguous()
 
         valid_indices: list[int] = []
         valid_source_hwc = []
@@ -395,34 +753,14 @@ class Base:
         target_organ_masks = []
         source_affines = []
         source_organ_masks = []
+        debug_steps = {"target": []}
 
         for index in range(batch_size):
-            src_np = (
-                source_imgs[index]
-                .permute(1, 2, 0)
-                .mul(255)
-                .round()
-                .clamp(0, 255)
-                .byte()
-                .cpu()
-                .numpy()
-            )
-            tgt_np = (
-                target_imgs[index]
-                .permute(1, 2, 0)
-                .mul(255)
-                .round()
-                .clamp(0, 255)
-                .byte()
-                .cpu()
-                .numpy()
-            )
-
-            src_landmarks = self._predict_landmarks(src_np)
-            tgt_landmarks = self._predict_landmarks(tgt_np)
-            if src_landmarks is None or tgt_landmarks is None:
+            src_item = self._build_portrait_item_in_memory(source_imgs[index])
+            tgt_item = self._build_portrait_item_in_memory(target_imgs[index])
+            if src_item is None or tgt_item is None:
                 self.logger.warning(
-                    "DiffSwap face detection failed for batch item %s; "
+                    "DiffSwap original in-memory preprocessing failed for batch item %s; "
                     "using '%s' fallback for that sample.",
                     index,
                     self.detection_failure_fallback,
@@ -430,39 +768,29 @@ class Base:
                 continue
 
             valid_indices.append(index)
-            valid_source_hwc.append(source_hwc[index])
-            valid_target_hwc.append(target_hwc[index])
-
-            src_mask_organ, _ = self._build_target_masks(src_landmarks)
-            tgt_mask_organ, tgt_mask = self._build_target_masks(tgt_landmarks)
-
-            target_landmarks.append(
-                torch.from_numpy(
-                    (tgt_landmarks / float(self.model_input_size)).astype(np.float32)
-                )
-            )
-            target_affines.append(
-                torch.from_numpy(self._build_affine_theta(tgt_landmarks))
-            )
-            target_masks.append(torch.from_numpy(tgt_mask))
-            target_organ_masks.append(torch.from_numpy(tgt_mask_organ))
-            source_affines.append(
-                torch.from_numpy(self._build_affine_theta(src_landmarks))
-            )
-            source_organ_masks.append(torch.from_numpy(src_mask_organ))
+            valid_source_hwc.append(src_item["image_hwc"])
+            valid_target_hwc.append(tgt_item["image_hwc"])
+            target_landmarks.append(tgt_item["landmark_norm"])
+            target_affines.append(tgt_item["affine_theta"])
+            target_masks.append(tgt_item["mask"])
+            target_organ_masks.append(tgt_item["mask_organ"])
+            source_affines.append(src_item["affine_theta"])
+            source_organ_masks.append(src_item["mask_organ"])
+            debug_steps["target"].append(tgt_item)
 
         if not valid_indices:
             return None, valid_indices
 
+        self.last_pipeline_steps = debug_steps
         batch = {
-            "image": torch.stack(valid_target_hwc, dim=0) * 2 - 1,
-            "image_src": torch.stack(valid_source_hwc, dim=0) * 2 - 1,
-            "landmark": torch.stack(target_landmarks, dim=0).to(self.device),
-            "affine_theta": torch.stack(target_affines, dim=0).to(self.device),
-            "affine_theta_src": torch.stack(source_affines, dim=0).to(self.device),
-            "mask": torch.stack(target_masks, dim=0).to(self.device),
-            "mask_organ": torch.stack(target_organ_masks, dim=0).to(self.device),
-            "mask_organ_src": torch.stack(source_organ_masks, dim=0).to(self.device),
+            "image": torch.stack(valid_target_hwc, dim=0),
+            "image_src": torch.stack(valid_source_hwc, dim=0),
+            "landmark": torch.stack(target_landmarks, dim=0),
+            "affine_theta": torch.stack(target_affines, dim=0),
+            "affine_theta_src": torch.stack(source_affines, dim=0),
+            "mask": torch.stack(target_masks, dim=0),
+            "mask_organ": torch.stack(target_organ_masks, dim=0),
+            "mask_organ_src": torch.stack(source_organ_masks, dim=0),
         }
         return batch, valid_indices
 
@@ -502,12 +830,15 @@ class Base:
         if target_imgs.min() < -1e-5 or target_imgs.max() > 1 + 1e-5:
             raise ValueError("target_imgs must be normalized to [0, 1].")
 
-        source_imgs = self._prepare_image_batch(source_imgs)
-        target_imgs = self._prepare_image_batch(target_imgs)
+        source_imgs = source_imgs.detach().to(self.device, dtype=torch.float32)
+        target_imgs = target_imgs.detach().to(self.device, dtype=torch.float32)
 
         fallback_results = torch.stack(
             [
-                self._get_detection_fallback(source_imgs[idx], target_imgs[idx])
+                self._get_detection_fallback(
+                    self._prepare_image_batch(source_imgs[idx : idx + 1])[0],
+                    self._prepare_image_batch(target_imgs[idx : idx + 1])[0],
+                )
                 for idx in range(source_imgs.shape[0])
             ],
             dim=0,
@@ -551,6 +882,8 @@ class Base:
             )
             valid_results = self.model.decode_first_stage(samples.to(self.device))
             valid_results = ((valid_results + 1.0) / 2.0).clamp(0.0, 1.0)
+            if self.repair_by_mask:
+                valid_results = self._repair_by_mask_batch(valid_results)
 
         results = fallback_results.clone()
         for output_index, batch_index in enumerate(valid_indices):

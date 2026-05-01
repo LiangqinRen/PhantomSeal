@@ -6,6 +6,7 @@ from src.evaluate import ScoreCalculator
 
 import textwrap
 import torch
+import torch.nn.functional as F
 from pathlib import Path
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -26,14 +27,7 @@ class Defense(Base):
     @torch.no_grad()
     def swap(self) -> None:
         config = self.config.third_party
-        transform = transforms.Compose(
-            [
-                transforms.Resize(
-                    (config.dataset.image_size, config.dataset.image_size)
-                ),
-                transforms.ToTensor(),
-            ]
-        )
+        transform = transforms.Compose([transforms.ToTensor()])
         dataset = FFHQMetric(
             Path(config.dataset.metric_dir), config.dataset.metric_pairs, transform
         )
@@ -63,12 +57,22 @@ class Defense(Base):
                 [
                     "imgs_A",
                     "imgs_B",
-                    "source\nswap",
-                    "target\nswap",
+                    "source_swap",
+                    "target_swap",
                 ],
                 [
-                    imgs_A,
-                    imgs_B,
+                    F.interpolate(
+                        imgs_A,
+                        size=source_swap.shape[-2:],
+                        mode="bilinear",
+                        align_corners=False,
+                    ),
+                    F.interpolate(
+                        imgs_B,
+                        size=target_swap.shape[-2:],
+                        mode="bilinear",
+                        align_corners=False,
+                    ),
                     source_swap,
                     target_swap,
                 ],
