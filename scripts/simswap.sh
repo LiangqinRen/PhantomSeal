@@ -82,7 +82,8 @@ then
     run \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
-    third_party.defense.epochs=335
+    third_party.defense.epochs=335 \
+    evaluate.facepp.enable=true
 elif [[ $function == 'forensics_robustness_sample' ]]
 then
     run \

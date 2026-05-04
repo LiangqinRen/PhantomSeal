@@ -423,11 +423,7 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self._get_robustness_perturb_imgs(imgs_A, cloak_imgs)
 
             utility = self.utility.calculate_utility(imgs_A, pert_imgs)
 
@@ -507,11 +503,7 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self._get_robustness_perturb_imgs(imgs_A, cloak_imgs)
             torch.set_grad_enabled(False)
 
             utility = cast(dict, self.utility.calculate_utility(imgs_A, pert_imgs))
@@ -636,11 +628,7 @@ class Defense(Base):
             imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self._get_robustness_perturb_imgs(imgs_A, cloak_imgs)
 
             imgs_A_identity = self._get_imgs_identity(imgs_A)
             source_swap = self.target(None, imgs_B, imgs_A_identity, None, True)
@@ -814,11 +802,7 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
-            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
-            pert_imgs = self.robustness.webp_compress(pert_imgs, 80)
-            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            pert_imgs = self._get_robustness_perturb_imgs(imgs_A, cloak_imgs)
 
             torch.set_grad_enabled(False)
             pert_imgs_A_identity = self._get_imgs_identity(pert_imgs)
@@ -1435,6 +1419,23 @@ class Defense(Base):
                 )
 
         return best_imgs
+
+    def _get_robustness_perturb_imgs(self, imgs: Tensor, cloak_imgs: Tensor) -> Tensor:
+        perturb_steps = self.config.third_party.robustness.perturb_steps
+        compress_quality = self.config.third_party.robustness.perturb_compress_quality
+
+        if perturb_steps < 1:
+            raise ValueError("third_party.robustness.perturb_steps must be at least 1")
+
+        pert_imgs = imgs
+        for step in range(perturb_steps):
+            pert_imgs = self._perturb_imgs(pert_imgs, cloak_imgs)
+            if step < perturb_steps - 1:
+                pert_imgs = self.robustness.webp_compress(
+                    pert_imgs, compress_quality
+                )
+
+        return pert_imgs
 
     def _get_full_swap_results(
         self, imgs_A: Tensor, imgs_B: Tensor, pert_imgs_A: Tensor
