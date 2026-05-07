@@ -13,6 +13,10 @@ from .dataset import PairedImageDataset
 from .model import SimpleDenoiserUNet
 
 
+def to_image_range(x: torch.Tensor) -> torch.Tensor:
+    return torch.clamp((x + 1.0) / 2.0, 0.0, 1.0)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a simple perturb->clean denoiser")
     parser.add_argument("--data-root", required=True, help="Dataset root with clean/ and perturb/")
@@ -25,7 +29,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--depth", type=int, default=2)
     parser.add_argument("--val-ratio", type=float, default=0.1)
     parser.add_argument("--num-workers", type=int, default=4)
-    parser.add_argument("--save-every", type=int, default=5)
     return parser.parse_args()
 
 
@@ -122,13 +125,48 @@ def evaluate(
                     sample_dir,
                     f"epoch_{epoch:04d}",
                     ["perturb", "prediction", "clean"],
-                    [perturb[:n], pred[:n], clean[:n]],
+                    [
+                        to_image_range(perturb[:n]),
+                        to_image_range(pred[:n]),
+                        to_image_range(clean[:n]),
+                    ],
                     image_name="denoiser",
                     only_save_summary=True,
                 )
                 sample_saved = True
 
     return total_loss / len(loader.dataset)
+
+
+def _format_effectiveness_with_names(effectiveness: dict | None) -> str:
+    if effectiveness is None:
+        return "()"
+
+    def format_rate(value: tuple) -> str:
+        if value[1] == 0:
+            return "nan/0"
+        return f"{value[0] / value[1] * 100:.3f}/{value[1]:.0f}"
+
+    parts = []
+    for verifier, values in effectiveness.items():
+        metrics = ", ".join(
+            f"{metric_name}={format_rate(metric_value)}"
+            for metric_name, metric_value in values.items()
+        )
+        parts.append(f"{verifier}({metrics})")
+    return " ".join(parts)
+
+
+def _limit_dataset(dataset: Any, max_images: Any, config_name: str) -> Any:
+    if max_images is None:
+        return dataset
+
+    max_images = int(max_images)
+    if max_images < 1 or max_images > len(dataset):
+        raise ValueError(
+            f"{config_name} must be in [1, {len(dataset)}], got {max_images}"
+        )
+    return Subset(dataset, range(max_images))
 
 
 @torch.no_grad()
@@ -148,6 +186,11 @@ def evaluate_internal_simswap(
     from src.common_utils import save_tensor_imgs
 
     internal_config = eval_config or config.third_party.internal
+    logger.info(
+        f"Start denoiser {label.lower()} SimSwap evaluation: "
+        f"samples={len(loader.dataset)}, batches={len(loader)}, "
+        f"batch_size={loader.batch_size}"
+    )
     model.eval()
     totals = {
         "clean/original": {"source": None, "target": None},
@@ -163,12 +206,24 @@ def evaluate_internal_simswap(
         else:
             metric.merge_single_dict(totals[name][side], item)
 
+    def format_metric_block(metrics: dict) -> str:
+        return textwrap.dedent(
+            f"""
+            clean/original source: {_format_effectiveness_with_names(metrics['clean/original']['source'])}
+            clean/original target: {_format_effectiveness_with_names(metrics['clean/original']['target'])}
+            perturb source: {_format_effectiveness_with_names(metrics['perturb']['source'])}
+            perturb target: {_format_effectiveness_with_names(metrics['perturb']['target'])}
+            denoised perturb source: {_format_effectiveness_with_names(metrics['denoised perturb']['source'])}
+            denoised perturb target: {_format_effectiveness_with_names(metrics['denoised perturb']['target'])}
+            """
+        )
+
     def evaluate_candidate(
         name: str,
         candidate: torch.Tensor,
         source_swap: torch.Tensor,
         target_swap: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, dict, dict]:
         candidate_source_swap = (
             source_swap if candidate is clean_01 else simswap.swap_face(candidate, target_01)
         )
@@ -191,9 +246,14 @@ def evaluate_internal_simswap(
         )
         merge_total(name, "source", source_effectiveness)
         merge_total(name, "target", target_effectiveness)
-        return candidate_source_swap, candidate_target_swap
+        return (
+            candidate_source_swap,
+            candidate_target_swap,
+            source_effectiveness,
+            target_effectiveness,
+        )
 
-    for batch in loader:
+    for batch_idx, batch in enumerate(loader, start=1):
         if len(batch) == 4:
             perturb, clean, cloak, target = batch
             cloak = torch.clamp(
@@ -215,26 +275,46 @@ def evaluate_internal_simswap(
         clean = clean.to(device, non_blocking=True)
         total_count += perturb.size(0)
 
-        denoised = torch.clamp((model(perturb) + 1.0) / 2.0, 0.0, 1.0)
-        perturb_01 = torch.clamp((perturb + 1.0) / 2.0, 0.0, 1.0)
-        clean_01 = torch.clamp((clean + 1.0) / 2.0, 0.0, 1.0)
-        target_01 = torch.clamp((target + 1.0) / 2.0, 0.0, 1.0)
+        denoised = to_image_range(model(perturb))
+        perturb_01 = to_image_range(perturb)
+        clean_01 = to_image_range(clean)
+        target_01 = to_image_range(target)
 
         source_swap = simswap.swap_face(clean_01, target_01)
         target_swap = simswap.swap_face(target_01, clean_01)
-        clean_source_swap, clean_target_swap = evaluate_candidate(
+        batch_metrics = {
+            "clean/original": {"source": None, "target": None},
+            "perturb": {"source": None, "target": None},
+            "denoised perturb": {"source": None, "target": None},
+        }
+        (
+            clean_source_swap,
+            clean_target_swap,
+            batch_metrics["clean/original"]["source"],
+            batch_metrics["clean/original"]["target"],
+        ) = evaluate_candidate(
             "clean/original",
             clean_01,
             source_swap,
             target_swap,
         )
-        perturb_source_swap, perturb_target_swap = evaluate_candidate(
+        (
+            perturb_source_swap,
+            perturb_target_swap,
+            batch_metrics["perturb"]["source"],
+            batch_metrics["perturb"]["target"],
+        ) = evaluate_candidate(
             "perturb",
             perturb_01,
             source_swap,
             target_swap,
         )
-        denoised_source_swap, denoised_target_swap = evaluate_candidate(
+        (
+            denoised_source_swap,
+            denoised_target_swap,
+            batch_metrics["denoised perturb"]["source"],
+            batch_metrics["denoised perturb"]["target"],
+        ) = evaluate_candidate(
             "denoised perturb",
             denoised,
             source_swap,
@@ -297,6 +377,25 @@ def evaluate_internal_simswap(
         )
         torch.cuda.empty_cache()
 
+        iter_log_str = textwrap.dedent(
+            f"""
+            [Denoiser {label} SimSwap][Epoch {epoch:4}][Batch {batch_idx:4}/{len(loader):4}]
+            enabled metrics are controlled by evaluate.effectiveness
+            effectiveness format: verifier(metric=percent/total, ...)
+            current batch:
+            {textwrap.indent(format_metric_block(batch_metrics), "    ")}
+            """
+        )
+        summary_log_str = textwrap.dedent(
+            f"""
+            [Denoiser {label} SimSwap Summary][Epoch {epoch:4}][Batch {batch_idx:4}/{len(loader):4}][Validate {total_count:4}]
+            cumulative:
+            {textwrap.indent(format_metric_block(totals), "    ")}
+            """
+        )
+        logger.info(textwrap.indent(iter_log_str, "    "))
+        logger.info(textwrap.indent(summary_log_str, "    "))
+
     if total_count == 0:
         logger.warning("Skip denoiser internal SimSwap validation: no samples evaluated")
         return
@@ -305,12 +404,13 @@ def evaluate_internal_simswap(
         f"""
         [Denoiser {label} SimSwap][Epoch {epoch:4}][Validate {total_count:4}]
         enabled metrics are controlled by evaluate.effectiveness
-        clean/original source: {metric.generate_iter_effectiveness_log(totals['clean/original']['source'])}
-        clean/original target: {metric.generate_iter_effectiveness_log(totals['clean/original']['target'])}
-        perturb source: {metric.generate_iter_effectiveness_log(totals['perturb']['source'])}
-        perturb target: {metric.generate_iter_effectiveness_log(totals['perturb']['target'])}
-        denoised perturb source: {metric.generate_iter_effectiveness_log(totals['denoised perturb']['source'])}
-        denoised perturb target: {metric.generate_iter_effectiveness_log(totals['denoised perturb']['target'])}
+        effectiveness format: verifier(metric=percent/total, ...)
+        clean/original source: {_format_effectiveness_with_names(totals['clean/original']['source'])}
+        clean/original target: {_format_effectiveness_with_names(totals['clean/original']['target'])}
+        perturb source: {_format_effectiveness_with_names(totals['perturb']['source'])}
+        perturb target: {_format_effectiveness_with_names(totals['perturb']['target'])}
+        denoised perturb source: {_format_effectiveness_with_names(totals['denoised perturb']['source'])}
+        denoised perturb target: {_format_effectiveness_with_names(totals['denoised perturb']['target'])}
         """
     )
     logger.info(textwrap.indent(log_str, "    "))
@@ -349,6 +449,11 @@ def train_with_config(config: Any, logger: Any) -> None:
             f"Denoiser internal cloak dir not found; tracing will be n/a: "
             f"{config.third_party.internal.cloak_dir}"
         )
+    internal_dataset = _limit_dataset(
+        internal_dataset,
+        config.third_party.internal.max_images,
+        "third_party.internal.max_images",
+    )
     internal_loader = DataLoader(
         internal_dataset,
         batch_size=config.third_party.internal.batch_size,
@@ -359,7 +464,28 @@ def train_with_config(config: Any, logger: Any) -> None:
     internal_simswap = None
     effectiveness = None
 
+    def run_internal_simswap(epoch: int, label: str = "Internal") -> None:
+        nonlocal internal_simswap, effectiveness
+        if internal_simswap is None:
+            from src.evaluate import Effectiveness
+            from .simswap_validation import SimSwapValidator
+
+            internal_simswap = SimSwapValidator(config)
+            effectiveness = Effectiveness(logger, config)
+        evaluate_internal_simswap(
+            model,
+            internal_loader,
+            device,
+            config,
+            logger,
+            internal_simswap,
+            effectiveness,
+            epoch,
+            label=label,
+        )
+
     best_val = float("inf")
+    best_ckpt_path = ckpt_dir / f"{len(train_loader.dataset)}.pth"
     for epoch in range(1, config.third_party.defense.epochs + 1):
         model.train()
         total_loss = 0.0
@@ -386,33 +512,15 @@ def train_with_config(config: Any, logger: Any) -> None:
             and config.third_party.internal.interval > 0
             and epoch % config.third_party.internal.interval == 0
         ):
-            if internal_simswap is None:
-                from src.evaluate import Effectiveness
-                from .simswap_validation import SimSwapValidator
-
-                internal_simswap = SimSwapValidator(config)
-                effectiveness = Effectiveness(logger, config)
-            evaluate_internal_simswap(
-                model,
-                internal_loader,
-                device,
-                config,
-                logger,
-                internal_simswap,
-                effectiveness,
-                epoch,
-            )
+            run_internal_simswap(epoch)
 
         is_best = val_loss is not None and val_loss < best_val
         if is_best:
             best_val = val_loss
-            torch.save(model.state_dict(), ckpt_dir / "best.pt")
+            torch.save(model.state_dict(), best_ckpt_path)
 
-        if (
-            epoch % config.third_party.defense.save_every == 0
-            or epoch == config.third_party.defense.epochs
-        ):
-            torch.save(model.state_dict(), ckpt_dir / f"epoch_{epoch:04d}.pt")
+    if config.third_party.internal.simswap and config.third_party.internal.final:
+        run_internal_simswap(config.third_party.defense.epochs, label="Final")
 
 
 def test_with_config(config: Any, logger: Any) -> None:
@@ -449,14 +557,6 @@ def test_with_config(config: Any, logger: Any) -> None:
         target_dir=config.third_party.test.target_dir,
         include_target=True,
     )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=config.third_party.test.batch_size,
-        shuffle=False,
-        num_workers=config.third_party.defense.num_workers,
-        pin_memory=True,
-    )
-
     if test_dataset.include_cloak:
         logger.info(f"Use denoiser test cloak dir: {test_dataset.cloak_dir}")
     else:
@@ -471,6 +571,18 @@ def test_with_config(config: Any, logger: Any) -> None:
             f"Denoiser test target dir not found; falling back to clean as target: "
             f"{config.third_party.test.target_dir}"
         )
+    test_dataset = _limit_dataset(
+        test_dataset,
+        config.third_party.test.max_images,
+        "third_party.test.max_images",
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=config.third_party.test.batch_size,
+        shuffle=False,
+        num_workers=config.third_party.defense.num_workers,
+        pin_memory=True,
+    )
 
     from src.evaluate import Effectiveness
     from .simswap_validation import SimSwapValidator
@@ -508,6 +620,7 @@ def main() -> None:
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
 
     best_val = float("inf")
+    best_ckpt_path = ckpt_dir / f"{len(train_loader.dataset)}.pth"
     for epoch in range(1, args.epochs + 1):
         model.train()
         total_loss = 0.0
@@ -532,10 +645,7 @@ def main() -> None:
         is_best = val_loss is not None and val_loss < best_val
         if is_best:
             best_val = val_loss
-            torch.save(model.state_dict(), ckpt_dir / "best.pt")
-
-        if epoch % args.save_every == 0 or epoch == args.epochs:
-            torch.save(model.state_dict(), ckpt_dir / f"epoch_{epoch:04d}.pt")
+            torch.save(model.state_dict(), best_ckpt_path)
 
 
 if __name__ == "__main__":

@@ -32,21 +32,32 @@ class DownBlock(nn.Module):
         return self.block(x)
 
 
-class DecoderBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int) -> None:
+class UpBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        skip_channels: int,
+        out_channels: int,
+    ) -> None:
         super().__init__()
-        self.block = nn.Sequential(
-            nn.ConvTranspose2d(
-                in_channels,
-                out_channels,
-                kernel_size=2,
-                stride=2,
-            ),
-            ConvBlock(out_channels, out_channels),
+        self.up = nn.ConvTranspose2d(
+            in_channels,
+            out_channels,
+            kernel_size=2,
+            stride=2,
         )
+        self.conv = ConvBlock(out_channels + skip_channels, out_channels)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.block(x)
+    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        x = self.up(x)
+        if x.shape[-2:] != skip.shape[-2:]:
+            x = F.interpolate(
+                x,
+                size=skip.shape[-2:],
+                mode="bilinear",
+                align_corners=False,
+            )
+        return self.conv(torch.cat([skip, x], dim=1))
 
 
 class SimpleDenoiserUNet(nn.Module):
@@ -81,19 +92,23 @@ class SimpleDenoiserUNet(nn.Module):
         )
         self.ups = nn.ModuleList(
             [
-                DecoderBlock(channels[i + 1], channels[i])
+                UpBlock(channels[i + 1], channels[i], channels[i])
                 for i in reversed(range(depth))
             ]
         )
         self.out = nn.Conv2d(channels[0], out_channels, kernel_size=1)
+        nn.init.zeros_(self.out.weight)
+        nn.init.zeros_(self.out.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.inc(x)
+        skips = [y]
         for down in self.downs:
             y = down(y)
+            skips.append(y)
 
-        for up in self.ups:
-            y = up(y)
+        for up, skip in zip(self.ups, reversed(skips[:-1])):
+            y = up(y, skip)
         if y.shape[-2:] != x.shape[-2:]:
             y = F.interpolate(
                 y,

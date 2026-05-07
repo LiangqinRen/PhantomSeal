@@ -166,6 +166,14 @@ class Effectiveness:
         if self.config.evaluate.face_recognition.enable:
             candidate_functions["facerec"] = self._get_facerec_matching
         if self.config.evaluate.facepp.enable:
+            if (
+                not self.config.evaluate.facepp.api_key
+                or not self.config.evaluate.facepp.api_secret
+            ):
+                raise ValueError(
+                    "evaluate.facepp.enable is true, but "
+                    "evaluate.facepp.api_key/api_secret are empty"
+                )
             candidate_functions["face++"] = self._get_facepp_matching
         if self.config.evaluate.aws.enable:
             candidate_functions["aws"] = self._get_aws_matching
@@ -296,6 +304,9 @@ class Effectiveness:
                         self.logger.warning(response)
                         return (0, 1e-10)
                 elif response.status_code == 400:
+                    self.logger.warning(
+                        f"Face++ API returned status 400: {response.text}"
+                    )
                     return (0, 1)
                 elif response.status_code == 403:
                     fail_count += 1

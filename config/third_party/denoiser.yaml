@@ -8,25 +8,26 @@ dataset:
   validate_dir: ${third_party.dataset.root_dir}/validate
   test_dir: ${third_party.dataset.root_dir}/test
   image_size: 224
-  max_train_images: 1000
+  max_train_images: 250
 
 model:
   base_channels: 16
-  depth: 5
-  residual: false
+  depth: 3
+  residual: true
 
 defense:
   batch_size: 32
-  epochs: 5
+  epochs: 10
   num_workers: 4
   lr: 0.0002
   weight_decay: 0.0001
-  save_every: 5
 
 internal:
   simswap: true
-  interval: 5
-  batch_size: 8
+  interval: 0
+  final: true
+  batch_size: 128
+  max_images: null
   cloak_dir: ${third_party.dataset.validate_dir}/cloak
   target_dir: ${third_party.dataset.validate_dir}/target
   save_images: true
@@ -34,7 +35,8 @@ internal:
 
 test:
   checkpoint_path: null
-  batch_size: 8
+  batch_size: 32
+  max_images: null
   cloak_dir: ${third_party.dataset.test_dir}/cloak
   target_dir: ${third_party.dataset.test_dir}/target
   save_images: true
