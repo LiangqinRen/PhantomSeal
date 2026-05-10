@@ -1,0 +1,19 @@
+name: initiativedefense
+function: metric
+project_root: ${root_dir}/third_party/SimSwap
+initiative_root: ${root_dir}/third_party/initiative_defense
+
+dataset:
+  sample_dir: data/vggface2_samples_224
+  metric_224_dir: data/vggface2_224_test
+  metric_512_dir: data/vggface2_512_test
+  use_224: true
+  metric_pairs: 3000
+  swap_batch_size: 30
+
+defense:
+  batch_size: 30
+  pg_checkpoint_path: ${root_dir}/checkpoints/initiativedefense/30000-PG-005.ckpt
+  eps: 0.03
+  perturbation_scale: 3.5
+  only_save_summary: true
