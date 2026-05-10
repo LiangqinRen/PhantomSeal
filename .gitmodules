@@ -37,3 +37,6 @@
 [submodule "third_party/faceswap"]
 	path = third_party/faceswap
 	url = https://github.com/deepfakes/faceswap.git
+[submodule "third_party/CUMA"]
+	path = third_party/CUMA
+	url = https://github.com/VDIGPKU/CMUA-Watermark.git

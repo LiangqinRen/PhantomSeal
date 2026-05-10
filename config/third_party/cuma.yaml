@@ -1,0 +1,17 @@
+name: cuma
+function: metric
+project_root: ${root_dir}/third_party/SimSwap
+
+dataset:
+  sample_dir: data/vggface2_samples_224
+  metric_224_dir: data/vggface2_224_test
+  metric_512_dir: data/vggface2_512_test
+  use_224: true
+  metric_pairs: 3000
+  swap_batch_size: 30
+
+defense:
+  batch_size: 30
+  perturbation_path: ${root_dir}/checkpoints/cuma/perturbation.pt
+  perturbation_scale: 2.5
+  only_save_summary: true
