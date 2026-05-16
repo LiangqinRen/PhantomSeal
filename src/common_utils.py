@@ -3,6 +3,7 @@ import time
 import torch
 import random
 import os
+import shutil
 import sys
 import warnings
 import numpy as np
@@ -16,6 +17,7 @@ from typing import Iterable, Iterator, TypeAlias
 
 
 FontLike: TypeAlias = ImageFont.ImageFont | ImageFont.FreeTypeFont
+_SOURCE_SNAPSHOT_DONE = False
 
 
 class Timer:
@@ -66,7 +68,49 @@ def get_customized_logger(log_level: str) -> logging.Logger:
     for handler in logger.handlers:
         handler.setFormatter(formatter)
 
+    snapshot_source_tree(logger)
+
     return logger
+
+
+def snapshot_source_tree(logger: logging.Logger) -> None:
+    global _SOURCE_SNAPSHOT_DONE
+    if _SOURCE_SNAPSHOT_DONE:
+        return
+
+    try:
+        from hydra.core.hydra_config import HydraConfig
+
+        runtime = HydraConfig.get().runtime
+        project_root = Path(runtime.cwd)
+        log_dir = Path(runtime.output_dir)
+    except Exception as exc:
+        logger.debug("Skip source snapshot: Hydra runtime is unavailable: %s", exc)
+        return
+
+    source_dir = project_root / "src"
+    snapshot_dir = log_dir / "src"
+    if not source_dir.is_dir() or snapshot_dir.exists():
+        _SOURCE_SNAPSHOT_DONE = True
+        return
+
+    try:
+        shutil.copytree(
+            source_dir,
+            snapshot_dir,
+            ignore=shutil.ignore_patterns(
+                "__pycache__",
+                "*.pyc",
+                "*.pyo",
+                ".pytest_cache",
+                ".mypy_cache",
+                ".ruff_cache",
+            ),
+        )
+        _SOURCE_SNAPSHOT_DONE = True
+        logger.info("Snapshot current src to %s", snapshot_dir)
+    except Exception as exc:
+        logger.warning("Failed to snapshot current src to %s: %s", snapshot_dir, exc)
 
 
 def check_cuda_availability(logger: logging.Logger) -> None:
