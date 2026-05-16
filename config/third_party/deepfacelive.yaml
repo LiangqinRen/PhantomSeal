@@ -1,0 +1,56 @@
+name: deepfacelive
+function: perturb
+project_root: ${root_dir}/third_party/DeepFaceLive
+dataset:
+  metric_dir: data/FFHQ_test
+  metric_pairs: 3000
+  input_size: 256
+  output_size: 256
+defense:
+  batch_size: 10
+  perturb_level: 0.12549019607843137 # 32 / 255
+  max_perturb_level: 0.12549019607843137
+  perturb_expand: 1.0
+  steps: 80
+  step_scale: 0.45
+  attack_mode: yolo
+  yolo_pgd_steps: 120
+  yolo_step_size: 0.00784313725490196 # 2 / 255
+  yolo_topk: 256
+  yolo_loss_topk: 64
+  yolo_restarts: 5
+  yolo_min_steps: 20
+  yolo_verify_interval: 5
+  yolo_quantize: true
+  yolo_eot: true
+  yolo_eot_scales: [1.0]
+  yolo_eot_shifts: [[0.0, 0.0], [0.02, 0.0], [-0.02, 0.0], [0.0, 0.02], [0.0, -0.02]]
+  yolo_success_score: 0.005
+  yolo_mask_mode: full # full | box | ellipse
+  yolo_mask_expand: 1.8
+  use_blackbox_refine: true
+  max_blackbox_rounds: 1
+  require_undetected: false
+  marker_success_score: 2.0
+  aligned_success_score: 0.090
+  population: 16
+  target_mse_255: [25.0, 50.0, 100.0]
+  noise_sigma: 0.05
+  marker_mask_sigma: 0.03
+  marker_rect_weight: 0.55
+  detector_threshold: 0.5
+  fixed_window_size: 480
+  marker_coverage: 1.4
+  aligner_coverage: 2.2
+  aligner_resolution: 224
+  exclude_moving_parts: true
+  quiet_third_party: true
+  silent_perturb: false
+  only_save_summary: true
+  log_interval: 20
+  weight:
+    detector: 2.0
+    marker: 24.0
+    align: 12.0
+    fidelity: 1.0
+    tv: 0.04
