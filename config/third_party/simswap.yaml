@@ -10,7 +10,7 @@ origin:
   crop_size: 224
 
 dataset:
-  sample_dir: data/vggface2_samples_224
+  sample_dir: data/vggface2_224_samples
   metric_224_dir: data/vggface2_224_test
   metric_512_dir: data/vggface2_512_test
   use_224: true
