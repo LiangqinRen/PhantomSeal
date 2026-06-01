@@ -2,10 +2,30 @@ from torch import Tensor
 from copy import deepcopy
 
 
+UTILITY_LABELS = {
+    "mse": "MSE",
+    "psnr": "PSNR",
+    "ssim": "SSIM",
+    "lpips": "LPIPS",
+}
+
+EFFECTIVENESS_LABELS = {
+    "pert": "x̃",
+    "swap": "ASRₒ",
+    "pert_swap": "ASRₚ",
+    "cloak": "TSR",
+}
+
+
 def _format_rate(value: tuple) -> str:
     if value[1] == 0:
         return "nan/0"
     return f"{value[0] / value[1] * 100:.3f}/{value[1]:.0f}"
+
+
+def _format_labeled_rate(name: str, value: tuple) -> str:
+    label = EFFECTIVENESS_LABELS.get(name, name)
+    return f"{label} {_format_rate(value)}"
 
 
 def get_metric_data_template(effectiveness) -> dict:
@@ -240,15 +260,31 @@ def generate_iter_utility_log(utilities: dict) -> str:
     if utilities is None:
         return "()"
 
-    return f"({', '.join(f'{v:.3f}' for v in utilities.values())})"
+    vals = (
+        f"{UTILITY_LABELS.get(k, k)} {v:.3f}"
+        for k, v in utilities.items()
+    )
+    return f"({', '.join(vals)})"
 
 
-def generate_iter_effectiveness_log(effectiveness: dict) -> str:
+def generate_iter_effectiveness_label(effectiveness: dict) -> str:
+    for values in effectiveness.values():
+        labels = (EFFECTIVENESS_LABELS.get(k, k) for k in values.keys())
+        return f"({', '.join(labels)})"
+    return "()"
+
+
+def generate_iter_effectiveness_log(
+    effectiveness: dict, include_labels: bool = True
+) -> str:
     parts = []
 
-    for effec in effectiveness:
-        vals = (_format_rate(v) for v in effectiveness[effec].values())
-        parts.append(f"({', '.join(vals)})")
+    for effec, values in effectiveness.items():
+        if include_labels:
+            vals = (_format_labeled_rate(k, v) for k, v in values.items())
+        else:
+            vals = (_format_rate(v) for v in values.values())
+        parts.append(f"{effec} ({', '.join(vals)})")
 
     return " ".join(parts)
 
@@ -261,15 +297,31 @@ def generate_iter_score_log(scores: dict) -> str:
 def generate_summary_utility_log(data: dict, item: str, batch: int) -> str:
     if not data.get(item):
         return "()"
-    return f"({', '.join(f'{x / batch:.3f}' for x in data[item])})"
+    vals = (
+        f"{label} {value / batch:.3f}"
+        for label, value in zip(UTILITY_LABELS.values(), data[item])
+    )
+    return f"({', '.join(vals)})"
 
 
-def generate_summary_effectiveness_log(data: dict, item: str) -> str:
+def generate_summary_effectiveness_label(data: dict, item: str) -> str:
+    for values in data[item].values():
+        labels = (EFFECTIVENESS_LABELS.get(k, k) for k in values.keys())
+        return f"({', '.join(labels)})"
+    return "()"
+
+
+def generate_summary_effectiveness_log(
+    data: dict, item: str, include_labels: bool = True
+) -> str:
     parts = []
 
-    for effec in data[item]:
-        vals = (_format_rate(v) for v in data[item][effec].values())
-        parts.append(f"({', '.join(vals)})")
+    for effec, values in data[item].items():
+        if include_labels:
+            vals = (_format_labeled_rate(k, v) for k, v in values.items())
+        else:
+            vals = (_format_rate(v) for v in values.values())
+        parts.append(f"{effec} ({', '.join(vals)})")
 
     return " ".join(parts)
 
@@ -282,19 +334,22 @@ def generate_summary_score_log(scores: dict) -> str:
 def generate_iter_robustness_log(source: dict, target: dict) -> str:
     parts = []
 
-    for effec in source:
-        vals = (_format_rate(v) for v in source[effec].values())
-        parts.append(f"({', '.join(vals)})")
+    for effec, values in source.items():
+        vals = (_format_labeled_rate(k, v) for k, v in values.items())
+        parts.append(f"{effec} ({', '.join(vals)})")
 
-    for effec in target:
-        vals = (_format_rate(v) for v in target[effec].values())
-        parts.append(f"({', '.join(vals)})")
+    for effec, values in target.items():
+        vals = (_format_labeled_rate(k, v) for k, v in values.items())
+        parts.append(f"{effec} ({', '.join(vals)})")
 
     return " ".join(parts)
 
 
 def generate_summary_robustness_utility_log(data: dict, batch: int) -> str:
-    vals = (f"{v / batch:.3f}" for v in data.values())
+    vals = (
+        f"{UTILITY_LABELS.get(k, k)} {v / batch:.3f}"
+        for k, v in data.items()
+    )
     return f"({', '.join(vals)})"
 
 
@@ -304,17 +359,17 @@ def generate_summary_robustness_log(data: dict) -> str:
     source = data["pert_source_effectiveness"]
     target = data["pert_target_effectiveness"]
 
-    for effec in source:
-        vals = (_format_rate(v) for v in source[effec].values())
-        parts.append(f"({', '.join(vals)})")
+    for effec, values in source.items():
+        vals = (_format_labeled_rate(k, v) for k, v in values.items())
+        parts.append(f"{effec} ({', '.join(vals)})")
 
-    for effec in target:
-        vals = (_format_rate(v) for v in target[effec].values())
-        parts.append(f"({', '.join(vals)})")
+    for effec, values in target.items():
+        vals = (_format_labeled_rate(k, v) for k, v in values.items())
+        parts.append(f"{effec} ({', '.join(vals)})")
 
     return " ".join(parts)
 
 
 def generate_forensics_robustness_log(data: dict) -> str:
-    vals = (_format_rate(v["cloak"]) for v in data.values())
+    vals = (_format_labeled_rate("cloak", v["cloak"]) for v in data.values())
     return f"({', '.join(vals)})"

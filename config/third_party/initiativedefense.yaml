@@ -3,6 +3,13 @@ function: metric
 project_root: ${root_dir}/third_party/SimSwap
 initiative_root: ${root_dir}/third_party/initiative_defense
 
+origin:
+  checkpoints_dir: ${root_dir}/checkpoints/simswap
+  arcface_path: ${root_dir}/checkpoints/simswap/arcface_checkpoint.tar
+  name: people
+  which_epoch: latest
+  crop_size: 224
+
 dataset:
   sample_dir: data/vggface2_samples_224
   metric_224_dir: data/vggface2_224_test

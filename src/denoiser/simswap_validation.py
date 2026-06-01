@@ -1,4 +1,3 @@
-from argparse import Namespace
 from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, cast
@@ -11,6 +10,7 @@ from torch import Tensor
 from torchvision import transforms
 
 from src.common_utils import cd, use_project
+from src.simswap.options import build_simswap_test_options
 
 try:
     from torch.serialization import add_safe_globals
@@ -34,17 +34,7 @@ class SimSwapValidator:
             from models.models import create_model
             from models import arcface_models
 
-            options = Namespace(
-                gpu_ids=[0],
-                isTrain=False,
-                checkpoints_dir="checkpoints",
-                name="people",
-                resize_or_crop="scale_width",
-                crop_size=224,
-                Arc_path="arcface_model/arcface_checkpoint.tar",
-                which_epoch="latest",
-                verbose=False,
-            )
+            options = build_simswap_test_options(config)
 
             add_safe_globals(
                 [

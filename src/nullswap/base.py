@@ -2,6 +2,7 @@ from src.common_utils import save_tensor_imgs, cd, use_project
 from src.dataset import FFHQSample, FFHQMetric
 from src.evaluate import Utility, Effectiveness, ScoreCalculator
 from src.nullswap.model import NullSwap, NullSwapDiscriminator
+from src.simswap.options import build_simswap_test_options
 import src.metric as metric
 
 import inspect
@@ -15,7 +16,6 @@ from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 from torchvision import transforms
 from collections import deque
-from argparse import Namespace
 from torch.serialization import add_safe_globals
 from typing import Callable, Any, cast
 from omegaconf import OmegaConf
@@ -449,17 +449,7 @@ class Base:
             from models.models import create_model
             from models import arcface_models
 
-            self.simswap_test_options = Namespace(
-                gpu_ids=[0],
-                isTrain=False,
-                checkpoints_dir="checkpoints",
-                name="people",
-                resize_or_crop="scale_width",
-                crop_size=224,
-                Arc_path="arcface_model/arcface_checkpoint.tar",
-                which_epoch="latest",
-                verbose=False,
-            )
+            self.simswap_test_options = build_simswap_test_options(self.config)
 
             add_safe_globals(
                 [

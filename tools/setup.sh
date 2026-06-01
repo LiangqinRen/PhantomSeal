@@ -80,10 +80,10 @@ echo -e "\033[1;34m[3/6] Downloading pre-trained models...\033[0m"
 (
     declare -A FILES=(
         # SimSwap
-        ["third_party/SimSwap/checkpoints/people/latest_net_D1.pth"]="13aFY8yYtpNnz2Qh7GLSeIpBHQTcVMB3i"
-        ["third_party/SimSwap/checkpoints/people/latest_net_D2.pth"]="1nGqLigx4Lp6wKM4hfdwb-w_NlaQG8L9q"
-        ["third_party/SimSwap/checkpoints/people/latest_net_G.pth"]="15_kHmSi1phbPS7ZLzOYeam-WPsJD7o-U"
-        ["third_party/SimSwap/arcface_model/arcface_checkpoint.tar"]="1T1dYHvrDf65FusJzktZU2kMhNasspdtF"
+        ["checkpoints/simswap/people/latest_net_D1.pth"]="13aFY8yYtpNnz2Qh7GLSeIpBHQTcVMB3i"
+        ["checkpoints/simswap/people/latest_net_D2.pth"]="1nGqLigx4Lp6wKM4hfdwb-w_NlaQG8L9q"
+        ["checkpoints/simswap/people/latest_net_G.pth"]="15_kHmSi1phbPS7ZLzOYeam-WPsJD7o-U"
+        ["checkpoints/simswap/arcface_checkpoint.tar"]="1T1dYHvrDf65FusJzktZU2kMhNasspdtF"
 
         # FaceShifter
         ["third_party/FaceShifter/ModelC/saved_models/G_latest.pth"]="1SPMR9zq6OqHDyuOelNS900SDpWEmTaq8"

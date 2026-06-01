@@ -74,16 +74,15 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())})
-            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
-            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
+            𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'source_effectiveness')}
-            target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'target_effectiveness')}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics, 'target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'target_effectiveness', include_labels=False)}
             """
             )
 

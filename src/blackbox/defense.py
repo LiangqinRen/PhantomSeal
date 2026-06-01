@@ -160,19 +160,19 @@ class Defense(Base):
 
             iter_parts = [
                 f"Batch {idx:4}/{len(dataloader):4}",
-                "utility: "
-                f"mse_255={utility['mse']:.3f}, "
-                f"psnr={utility['psnr']:.3f}, "
-                f"ssim={utility['ssim']:.3f}, "
-                f"lpips={utility['lpips']:.3f}",
+                "protection utility: "
+                f"(MSE {utility['mse']:.3f}, "
+                f"PSNR {utility['psnr']:.3f}, "
+                f"SSIM {utility['ssim']:.3f}, "
+                f"LPIPS {utility['lpips']:.3f})",
             ]
             summary_parts = [
                 f"Total {total_count} pairs",
-                "utility: "
-                f"mse_255={utility_total[0] / idx:.3f}, "
-                f"psnr={utility_total[1] / idx:.3f}, "
-                f"ssim={utility_total[2] / idx:.3f}, "
-                f"lpips={utility_total[3] / idx:.3f}",
+                "protection utility: "
+                f"(MSE {utility_total[0] / idx:.3f}, "
+                f"PSNR {utility_total[1] / idx:.3f}, "
+                f"SSIM {utility_total[2] / idx:.3f}, "
+                f"LPIPS {utility_total[3] / idx:.3f})",
             ]
             if idx == 1:
                 effect_labels = []
@@ -216,10 +216,10 @@ class Defense(Base):
                     metrics_by_target[target_name],
                 )
                 iter_parts.append(
-                    f"{target_name}: {metric.generate_iter_effectiveness_log(source_effectiveness)} score {metric.generate_iter_score_log(scores)}"
+                    f"{target_name} 𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)} score {metric.generate_iter_score_log(scores)}"
                 )
                 summary_parts.append(
-                    f"{target_name}: {metric.generate_summary_effectiveness_log(metrics_by_target[target_name], 'pert_source_effectiveness')} score {metric.generate_summary_score_log(scores)}"
+                    f"{target_name} 𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics_by_target[target_name], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics_by_target[target_name], 'pert_source_effectiveness', include_labels=False)} score {metric.generate_summary_score_log(scores)}"
                 )
 
             iter_log_str = "\n    ".join(iter_parts)

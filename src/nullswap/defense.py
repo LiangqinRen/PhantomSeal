@@ -68,11 +68,11 @@ class Defense(Base):
                     eval_log_str = textwrap.dedent(
                         f"""
                         [Periodic Eval][Step {global_step:6}]
-                        utility: {metric.generate_iter_utility_log(eval_result['utility'])}
-                        source utility: {metric.generate_iter_utility_log(eval_result['source_utility'])}
-                        target utility: {metric.generate_iter_utility_log(eval_result['target_utility'])}
-                        source effectiveness: {metric.generate_iter_effectiveness_log(eval_result['source_effectiveness'])}
-                        target effectiveness: {metric.generate_iter_effectiveness_log(eval_result['target_effectiveness'])}
+                        protection utility: {metric.generate_iter_utility_log(eval_result['utility'])}
+                        𝒯_identity utility: {metric.generate_iter_utility_log(eval_result['source_utility'])}
+                        𝒯_context utility: {metric.generate_iter_utility_log(eval_result['target_utility'])}
+                        𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(eval_result['source_effectiveness'])}: {metric.generate_iter_effectiveness_log(eval_result['source_effectiveness'], include_labels=False)}
+                        𝒯_context effectiveness {metric.generate_iter_effectiveness_label(eval_result['target_effectiveness'])}: {metric.generate_iter_effectiveness_log(eval_result['target_effectiveness'], include_labels=False)}
                         scores: {metric.generate_iter_score_log(eval_result['scores'])}
                         """
                     )
@@ -198,22 +198,22 @@ class Defense(Base):
                     iter_log_str = textwrap.dedent(
                         f"""
                         [{target_name}][Iter][Batch {idx:4}/{len(dataloader):4}]
-                        utility: {metric.generate_iter_utility_log(utility)}
-                        source utility: {metric.generate_iter_utility_log(source_utility)}
-                        target utility: {metric.generate_iter_utility_log(target_utility)}
-                        source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
-                        target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+                        protection utility: {metric.generate_iter_utility_log(utility)}
+                        𝒯_identity utility: {metric.generate_iter_utility_log(source_utility)}
+                        𝒯_context utility: {metric.generate_iter_utility_log(target_utility)}
+                        𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
+                        𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
                         scores: {metric.generate_iter_score_log(iter_scores)}
                         """
                     )
                     summary_log_str = textwrap.dedent(
                         f"""
                         [{target_name}][Summary][Batch {idx:4}/{len(dataloader):4}, {total_count} pairs]
-                        utility: {metric.generate_summary_utility_log(metrics_by_target[target_name], 'utility', idx)}
-                        source utility: {metric.generate_summary_utility_log(metrics_by_target[target_name], 'pert_source_utility', idx)}
-                        target utility: {metric.generate_summary_utility_log(metrics_by_target[target_name], 'pert_target_utility', idx)}
-                        source effectiveness: {metric.generate_summary_effectiveness_log(metrics_by_target[target_name], 'pert_source_effectiveness')}
-                        target effectiveness: {metric.generate_summary_effectiveness_log(metrics_by_target[target_name], 'pert_target_effectiveness')}
+                        protection utility: {metric.generate_summary_utility_log(metrics_by_target[target_name], 'utility', idx)}
+                        𝒯_identity utility: {metric.generate_summary_utility_log(metrics_by_target[target_name], 'pert_source_utility', idx)}
+                        𝒯_context utility: {metric.generate_summary_utility_log(metrics_by_target[target_name], 'pert_target_utility', idx)}
+                        𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics_by_target[target_name], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics_by_target[target_name], 'pert_source_effectiveness', include_labels=False)}
+                        𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics_by_target[target_name], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics_by_target[target_name], 'pert_target_effectiveness', include_labels=False)}
                         scores: {metric.generate_summary_score_log(summary_scores)}
                         """
                     )

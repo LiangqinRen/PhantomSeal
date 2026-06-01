@@ -119,21 +119,20 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(simswap_effectiveness.values())).keys())})
-            utility: {metric.generate_iter_utility_log(utility)}
-            simswap: {metric.generate_iter_effectiveness_log(simswap_effectiveness)}
-            faceshifter: {metric.generate_iter_effectiveness_log(faceshifter_effectiveness)}
-            hififace: {metric.generate_iter_effectiveness_log(hififace_effectiveness)}
+            protection utility: {metric.generate_iter_utility_log(utility)}
+            simswap 𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(simswap_effectiveness)}: {metric.generate_iter_effectiveness_log(simswap_effectiveness, include_labels=False)}
+            faceshifter 𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(faceshifter_effectiveness)}: {metric.generate_iter_effectiveness_log(faceshifter_effectiveness, include_labels=False)}
+            hififace 𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(hififace_effectiveness)}: {metric.generate_iter_effectiveness_log(hififace_effectiveness, include_labels=False)}
             scores: {metric.generate_iter_score_log(simswap_iter_scores)} {metric.generate_iter_score_log(faceshifter_iter_scores)} {metric.generate_iter_score_log(hififace_iter_scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            utility: {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
-            simswap: {metric.generate_summary_effectiveness_log(metrics, 'simswap')}
-            faceshifter: {metric.generate_summary_effectiveness_log(metrics, 'faceshifter')}
-            hififace: {metric.generate_summary_effectiveness_log(metrics, 'hififace')}
+            protection utility: {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            simswap 𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'simswap')}: {metric.generate_summary_effectiveness_log(metrics, 'simswap', include_labels=False)}
+            faceshifter 𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'faceshifter')}: {metric.generate_summary_effectiveness_log(metrics, 'faceshifter', include_labels=False)}
+            hififace 𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'hififace')}: {metric.generate_summary_effectiveness_log(metrics, 'hififace', include_labels=False)}
             scores: {self._generate_summary_score_log(summary_scores['simswap'])} {self._generate_summary_score_log(summary_scores['faceshifter'])} {self._generate_summary_score_log(summary_scores['hififace'])}
             """
             )

@@ -6,6 +6,12 @@ faceshifter_dir: ${root_dir}/third_party/FaceShifter/ModelC
 diffface_dir: ${root_dir}/third_party/DiffFace
 
 origin:
+  simswap:
+    checkpoints_dir: ${root_dir}/checkpoints/simswap
+    arcface_path: ${root_dir}/checkpoints/simswap/arcface_checkpoint.tar
+    name: people
+    which_epoch: latest
+    crop_size: 224
   hififace:
     config_path: config/model.yaml
     checkpoint_path: checkpoints/hififace_opensource_299999.ckpt

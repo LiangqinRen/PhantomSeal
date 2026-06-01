@@ -76,16 +76,15 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())})
-            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
-            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
+            𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'source_effectiveness')}
-            target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'target_effectiveness')}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics, 'target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'target_effectiveness', include_labels=False)}
             """
             )
 
@@ -164,12 +163,11 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
-            utility: {metric.generate_iter_utility_log(utility)}
-            source utility: {metric.generate_iter_utility_log(source_utility)}
-            target utility: {metric.generate_iter_utility_log(target_utility)}
-            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
-            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            protection utility: {metric.generate_iter_utility_log(utility)}
+            𝒯_identity utility: {metric.generate_iter_utility_log(source_utility)}
+            𝒯_context utility: {metric.generate_iter_utility_log(target_utility)}
+            𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
+            𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
@@ -389,23 +387,22 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
-            utility: {metric.generate_iter_utility_log(utility)}
-            source utility: {metric.generate_iter_utility_log(source_utility)}
-            target utility: {metric.generate_iter_utility_log(target_utility)}
-            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
-            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            protection utility: {metric.generate_iter_utility_log(utility)}
+            𝒯_identity utility: {metric.generate_iter_utility_log(source_utility)}
+            𝒯_context utility: {metric.generate_iter_utility_log(target_utility)}
+            𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
+            𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
-            source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
-            target utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
-            source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
-            target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            𝒯_identity utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+            𝒯_context utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness', include_labels=False)}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )
@@ -473,8 +470,7 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-                utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())}), context ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())})
-                utility: {metric.generate_iter_utility_log(utility)}
+                protection utility: {metric.generate_iter_utility_log(utility)}
                 noise: {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
                 compress: {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
                 crop: {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
@@ -591,8 +587,7 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())}), context ({', '.join(next(iter(noise_source_effectivenesses.values())).keys())})
-            utility: {metric.generate_iter_utility_log(utility)}
+            protection utility: {metric.generate_iter_utility_log(utility)}
             noise: {metric.generate_iter_robustness_log(noise_source_effectivenesses,noise_target_effectivenesses)}
             compress: {metric.generate_iter_robustness_log(compress_source_effectivenesses,compress_target_effectivenesses)}
             crop: {metric.generate_iter_robustness_log(crop_source_effectivenesses,crop_target_effectivenesses)}
@@ -605,7 +600,7 @@ class Defense(Base):
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            utility: {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
+            protection utility: {metric.generate_summary_robustness_utility_log(metrics['utility'], idx)}
             noise: {metric.generate_summary_robustness_log(metrics['noise'])}
             compress: {metric.generate_summary_robustness_log(metrics['compress'])}
             crop: {metric.generate_summary_robustness_log(metrics['crop'])}
@@ -923,41 +918,41 @@ class Defense(Base):
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
             noise
-            utility: {metric.generate_summary_utility_log(metrics['noise'], 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics['noise'], 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['noise'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['noise'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_target_effectiveness', include_labels=False)}
             compress
-            utility: {metric.generate_summary_utility_log(metrics['compress'], 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics['compress'], 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['compress'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['compress'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_target_effectiveness', include_labels=False)}
             crop
-            utility: {metric.generate_summary_utility_log(metrics['crop'], 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics['crop'], 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['crop'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['crop'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_target_effectiveness', include_labels=False)}
             logo
-            utility: {metric.generate_summary_utility_log(metrics['logo'], 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics['logo'], 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['logo'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['logo'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_target_effectiveness', include_labels=False)}
             brighten
-            utility: {metric.generate_summary_utility_log(metrics['brighten'], 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics['brighten'], 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['brighten'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['brighten'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_target_effectiveness', include_labels=False)}
             darken
-            utility: {metric.generate_summary_utility_log(metrics['darken'], 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics['darken'], 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['darken'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['darken'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_target_effectiveness', include_labels=False)}
             """
             )
 
@@ -1057,23 +1052,22 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
-            utility: {metric.generate_iter_utility_log(utility)}
-            source utility: {metric.generate_iter_utility_log(source_utility)}
-            target utility: {metric.generate_iter_utility_log(target_utility)}
-            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
-            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            protection utility: {metric.generate_iter_utility_log(utility)}
+            𝒯_identity utility: {metric.generate_iter_utility_log(source_utility)}
+            𝒯_context utility: {metric.generate_iter_utility_log(target_utility)}
+            𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
+            𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness', include_labels=False)}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )
@@ -1288,23 +1282,22 @@ class Defense(Base):
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())}), context ({', '.join(next(iter(target_effectiveness.values())).keys())})
-            utility: {metric.generate_iter_utility_log(utility)}
-            source utility: {metric.generate_iter_utility_log(source_utility)}
-            target utility: {metric.generate_iter_utility_log(target_utility)}
-            source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
-            target effectiveness: {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            protection utility: {metric.generate_iter_utility_log(utility)}
+            𝒯_identity utility: {metric.generate_iter_utility_log(source_utility)}
+            𝒯_context utility: {metric.generate_iter_utility_log(target_utility)}
+            𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
+            𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
             scores: {metric.generate_iter_score_log(scores)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
-            pert source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
-            pert target utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
-            pert source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
-            pert target effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
+            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness', include_labels=False)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness', include_labels=False)}
             scores: {metric.generate_summary_score_log(scores)}
             """
             )

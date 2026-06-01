@@ -5,6 +5,12 @@ hififace_dir: ${root_dir}/third_party/HifiFace
 faceshifter_dir: ${root_dir}/third_party/FaceShifter/ModelC
 
 origin:
+  simswap:
+    checkpoints_dir: ${root_dir}/checkpoints/simswap
+    arcface_path: ${root_dir}/checkpoints/simswap/arcface_checkpoint.tar
+    name: people
+    which_epoch: latest
+    crop_size: 224
   config_path: config/model.yaml
   checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
   model_path: face_modules/model_ir_se50.pth

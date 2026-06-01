@@ -1,4 +1,3 @@
-from argparse import Namespace
 from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, cast
@@ -17,6 +16,7 @@ from torchvision import transforms
 from src import metric
 from src.common_utils import cd, save_tensor_imgs, use_project
 from src.evaluate import Effectiveness, Utility
+from src.simswap.options import build_simswap_test_options
 
 try:
     from torch.serialization import add_safe_globals
@@ -124,17 +124,7 @@ class Defense:
             from models.models import create_model
             from models import arcface_models
 
-            test_options = Namespace(
-                gpu_ids=[0],
-                isTrain=False,
-                checkpoints_dir="checkpoints",
-                name="people",
-                resize_or_crop="scale_width",
-                crop_size=224,
-                Arc_path="arcface_model/arcface_checkpoint.tar",
-                which_epoch="latest",
-                verbose=False,
-            )
+            test_options = build_simswap_test_options(self.config)
 
             add_safe_globals(
                 [
@@ -308,19 +298,18 @@ class Defense:
 
             iter_log_str = textwrap.dedent(
                 f"""
-            utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())})
             eps: {self.config.third_party.defense.eps:.4f}, perturbation scale: {self.config.third_party.defense.perturbation_scale:.3f}
-            utility: {metric.generate_iter_utility_log(utility)}
-            target utility: {metric.generate_iter_utility_log(target_utility)}
-            target effectiveness (clean target swap ASR, InitiativeDefense target swap ASR): {metric.generate_iter_effectiveness_log(target_effectiveness)}
+            protection utility: {metric.generate_iter_utility_log(utility)}
+            𝒯_context utility: {metric.generate_iter_utility_log(target_utility)}
+            𝒯_context effectiveness {metric.generate_iter_effectiveness_label(target_effectiveness)}: {metric.generate_iter_effectiveness_log(target_effectiveness, include_labels=False)}
             """
             )
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
-            target utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
-            target effectiveness (clean target swap ASR, InitiativeDefense target swap ASR): {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness')}
+            protection utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+            𝒯_context utility: {metric.generate_summary_utility_log(metrics, 'pert_target_utility', idx)}
+            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_target_effectiveness', include_labels=False)}
             """
             )
 

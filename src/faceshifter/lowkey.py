@@ -175,19 +175,18 @@ class Lowkey(Defense):
 
             iter_log_str = textwrap.dedent(
                 f"""
-                utility (mse, psnr, ssim, lpips), effectiveness ({', '.join(self.effectiveness.candi_funcs.keys())}), identity ({', '.join(next(iter(source_effectiveness.values())).keys())})
-                utility: {metric.generate_iter_utility_log(utility)}
-                source utility: {metric.generate_iter_utility_log(source_utility)}
-                source effectiveness: {metric.generate_iter_effectiveness_log(source_effectiveness)}
+                protection utility: {metric.generate_iter_utility_log(utility)}
+                𝒯_identity utility: {metric.generate_iter_utility_log(source_utility)}
+                𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(source_effectiveness)}: {metric.generate_iter_effectiveness_log(source_effectiveness, include_labels=False)}
                 scores: {metric.generate_iter_score_log(scores)}
                 """
             )
             summary_log_str = textwrap.dedent(
                 f"""
                 Batch {idx:4}/{len(dataloader):4}, {total_count} valid pairs of pictures
-                utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
-                source utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
-                source effectiveness: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness')}
+                protection utility: {metric.generate_summary_utility_log(metrics, 'utility', idx)}
+                𝒯_identity utility: {metric.generate_summary_utility_log(metrics, 'pert_source_utility', idx)}
+                𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics, 'pert_source_effectiveness', include_labels=False)}
                 scores: {metric.generate_summary_score_log(scores)}
                 """
             )

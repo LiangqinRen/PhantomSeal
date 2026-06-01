@@ -4,6 +4,12 @@ simswap_dir: ${root_dir}/third_party/SimSwap
 faceshifter_dir: ${root_dir}/third_party/FaceShifter/ModelC
 
 origin:
+  simswap:
+    checkpoints_dir: ${root_dir}/checkpoints/simswap
+    arcface_path: ${root_dir}/checkpoints/simswap/arcface_checkpoint.tar
+    name: people
+    which_epoch: latest
+    crop_size: 224
   faceshifter:
     model_path: face_modules/model_ir_se50.pth
 
