@@ -3,6 +3,7 @@ channels:
   - defaults
 dependencies:
   - python=3.10.19
+  - pip
   - pip:
       - boto3==1.42.17
       - botocore==1.42.17

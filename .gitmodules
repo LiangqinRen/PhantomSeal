@@ -28,15 +28,6 @@
 [submodule "third_party/E4S"]
 	path = third_party/E4S
 	url = https://github.com/e4s2022/e4s.git
-[submodule "third_party/Deep-Live-Cam"]
-	path = third_party/Deep-Live-Cam
-	url = https://github.com/hacksider/Deep-Live-Cam.git
-[submodule "third_party/DeepFaceLive"]
-	path = third_party/DeepFaceLive
-	url = https://github.com/iperov/DeepFaceLive.git
-[submodule "third_party/faceswap"]
-	path = third_party/faceswap
-	url = https://github.com/deepfakes/faceswap.git
 [submodule "third_party/CUMA"]
 	path = third_party/CUMA
 	url = https://github.com/VDIGPKU/CMUA-Watermark.git
