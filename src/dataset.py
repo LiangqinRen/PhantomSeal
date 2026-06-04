@@ -16,14 +16,8 @@ class SampleDataset(Dataset):
     def _get_double_imgs_list(self):
         sample_dir = self.root_dir
 
-        A = [
-            sample_dir / f
-            for f in ["imgs_A_1_7.png", "imgs_A_5_1.png", "imgs_A_7_4.png"]
-        ]
-        B = [
-            sample_dir / f
-            for f in ["imgs_B_1_7.png", "imgs_B_5_1.png", "imgs_B_7_4.png"]
-        ]
+        A = [sample_dir / f for f in ["imgs_A_1_7.png"]]
+        B = [sample_dir / f for f in ["imgs_B_1_7.png"]]
 
         return A, B
 

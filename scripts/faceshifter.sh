@@ -39,26 +39,17 @@ then
     third_party.dataset.swap_batch_size=30 \
     third_party.dataset.metric_pairs=30 \
     evaluate.effectiveness.perturb=false \
-    evaluate.effectiveness.ASRo=true \
     evaluate.effectiveness.ASRp=false \
-    evaluate.effectiveness.TSR=false \
-    evaluate.facepp.enable=true
+    evaluate.effectiveness.TSR=false
 elif [[ $function == 'metric' ]]
 then
-    run \
-    evaluate.effectiveness.perturb=true \
-    evaluate.effectiveness.ASRo=true \
-    evaluate.effectiveness.ASRp=true \
-    evaluate.effectiveness.TSR=true \
-    evaluate.facepp.enable=true
+    run
 elif [[ $function == 'lowkey' ]]
 then
     run \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
-    evaluate.effectiveness.ASRp=true \
-    evaluate.effectiveness.TSR=false \
-    evaluate.facepp.enable=true
+    evaluate.effectiveness.TSR=false
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi

@@ -33,20 +33,32 @@ multirun() {
         "$@"
 }
 
+checkpoint_sweep() {
+    local paths=()
+    local n
+
+    for n in $(seq 10 10 500); do
+        paths+=("checkpoints/denoiser/${n}.pth")
+    done
+
+    local IFS=,
+    echo "${paths[*]}"
+}
+
 if [[ $function == 'train' ]]
 then
-    run \
+    multirun \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
     third_party.dataset.max_train_images='range(10,510,10)'
 elif [[ $function == 'test' ]]
 then
-    run \
+    checkpoint_paths=$(checkpoint_sweep)
+    multirun \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
-    third_party.test.checkpoint_path=checkpoints/denoiser/500.pth \
-    third_party.test.max_images=2000 \
-    evaluate.facepp.enable=true
+    third_party.test.checkpoint_path="$checkpoint_paths" \
+    third_party.test.max_images=2000
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi

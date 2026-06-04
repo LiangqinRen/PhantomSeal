@@ -39,7 +39,6 @@ then
     third_party.dataset.swap_batch_size=30 \
     third_party.dataset.metric_pairs=30 \
     evaluate.effectiveness.perturb=false \
-    evaluate.effectiveness.ASRo=true \
     evaluate.effectiveness.ASRp=false \
     evaluate.effectiveness.TSR=false
 elif [[ $function == 'sample' ]]
@@ -48,29 +47,19 @@ then
 elif [[ $function == 'metric' ]]
 then
     run \
-    third_party.defense.weight.context=0 \
     evaluate.effectiveness.perturb=false \
-    evaluate.effectiveness.ASRo=false \
-    evaluate.effectiveness.ASRp=true \
-    evaluate.effectiveness.TSR=true \
-    evaluate.facepp.enable=true
+    evaluate.effectiveness.ASRo=false
 elif [[ $function == 'lowkey' ]]
 then
     run \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
-    evaluate.effectiveness.ASRp=true \
-    evaluate.effectiveness.TSR=false \
-    evaluate.facepp.enable=true
+    evaluate.effectiveness.TSR=false
 elif [[ $function == 'ai_beauty' ]]
 then
     run \
     third_party.robustness.ai_beauty=true \
     third_party.robustness.ai_beauty_tool=ai_lab_tools # ai_lab_tools or tencent_cloud
-elif [[ $function == 'failure_tracing' ]]
-then
-    run \
-    third_party.defense.failure_defense_tracing=true
 elif [[ $function == 'protection_robustness_sample' ]]
 then
     run \
@@ -82,8 +71,7 @@ then
     run \
     evaluate.effectiveness.perturb=false \
     evaluate.effectiveness.ASRo=false \
-    third_party.defense.epochs=335 \
-    evaluate.facepp.enable=true
+    third_party.defense.epochs=335
 elif [[ $function == 'forensics_robustness_sample' ]]
 then
     run \

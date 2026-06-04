@@ -40,15 +40,10 @@ then
         third_party.dataset.batch_size=10 \
         third_party.dataset.metric_pairs=10 \
         evaluate.effectiveness.perturb=false \
-        evaluate.effectiveness.ASRo=true \
-        evaluate.effectiveness.ASRp=false \
-        evaluate.effectiveness.TSR=false
+        evaluate.effectiveness.ASRp=false
     else
         run \
-        evaluate.effectiveness.perturb=false \
-        evaluate.effectiveness.ASRo=true \
-        evaluate.effectiveness.ASRp=true \
-        evaluate.effectiveness.TSR=true
+        evaluate.effectiveness.perturb=false
     fi
 else
     echo "Oops! Function '$function' is not supported."

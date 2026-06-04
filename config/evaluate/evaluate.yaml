@@ -3,7 +3,7 @@ facenet_512:
   threshold: 1.04
 
 face_recognition:
-  enable: false
+  enable: true
 
 facepp:
   enable: false
