@@ -35,6 +35,8 @@ apply_patches() {
   done
 }
 
+apply_patches "third_party/DiffFace" "patches/diffface"
+apply_patches "third_party/SepMark" "patches/sepmark"
 apply_patches "third_party/E4S" "patches/e4s"
 apply_patches "third_party/InfoSwap" "patches/infoswap"
 apply_patches "third_party/UniFace" "patches/uniface"
