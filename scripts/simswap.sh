@@ -43,7 +43,8 @@ then
     evaluate.effectiveness.TSR=false
 elif [[ $function == 'sample' ]]
 then
-    run
+    run \
+    third_party.defense.only_save_summary=false
 elif [[ $function == 'metric' ]]
 then
     run \
