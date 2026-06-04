@@ -48,6 +48,6 @@ defense:
     perturb: 30
     identity: 10000
     cloak: 10000
-  silent_perturb: false
+  silent_perturb: true
   only_save_summary: true
   log_interval: 20

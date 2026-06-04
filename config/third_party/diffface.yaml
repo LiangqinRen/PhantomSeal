@@ -42,7 +42,7 @@ defense:
     identity: 1000000
     cloak: 3000000
     context: 100000
-  silent_perturb: false
+  silent_perturb: true
   only_save_summary: true
   log_interval: 100
 
@@ -50,7 +50,7 @@ lowkey:
   batch_size: 30
   epochs: 1000
   epsilon: 0.005
-  silent_perturb: false
+  silent_perturb: true
   log_interval: 100
   weight:
     perturb: 1000

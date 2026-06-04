@@ -49,6 +49,6 @@ defense:
     hififace_cloak_id: 15000
     faceshifter_id: 35000
     faceshifter_cloak: 1000000
-  silent_perturb: false
+  silent_perturb: true
   only_save_summary: true
   log_interval: 100

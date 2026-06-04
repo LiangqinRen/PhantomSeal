@@ -65,6 +65,6 @@ defense:
     arcface_cloak: 18000
     facenet_push: 16000
     facenet_cloak: 18000
-  silent_perturb: false
+  silent_perturb: true
   only_save_summary: true
   log_interval: 100
