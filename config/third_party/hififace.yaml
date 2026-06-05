@@ -4,7 +4,7 @@ project_root: ${root_dir}/third_party/HifiFace
 
 origin:
   config_path: config/model.yaml
-  checkpoint_path: checkpoints/hififace_opensource_299999.ckpt
+  checkpoint_path: ${root_dir}/checkpoints/hififace/hififace_opensource_299999.ckpt
 
 dataset:
   metric_512_dir: data/vggface2_512_test

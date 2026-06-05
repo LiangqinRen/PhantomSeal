@@ -91,14 +91,17 @@ class Base:
         with use_project([hififace_root]), cd(hififace_root):
             from hififace_pl import HifiFace
 
-            origin_config = OmegaConf.load(
-                config.third_party.origin.hififace.config_path
-            )
+            config_path = Path(config.third_party.origin.hififace.config_path)
+            if not config_path.is_absolute():
+                config_path = hififace_root / config_path
+            checkpoint_path = Path(config.third_party.origin.hififace.checkpoint_path)
+            if not checkpoint_path.is_absolute():
+                checkpoint_path = Path(config.root_dir) / checkpoint_path
+
+            origin_config = OmegaConf.load(config_path)
 
             self.net = HifiFace(origin_config)
-            checkpoint = torch.load(
-                config.third_party.origin.hififace.checkpoint_path, map_location="cpu"
-            )
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
             self.net.load_state_dict(checkpoint["state_dict"])
             self.net = self.net.eval().to(self.device)
 

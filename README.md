@@ -20,6 +20,7 @@
     - [Table 2](#table-2)
     - [Table 3](#table-3)
     - [Table 4](#table-4)
+    - [Table 6](#table-6)
 
 ## Description
 
@@ -91,4 +92,14 @@ Experiments 3 and 8 use the Face++ API to infer gender and cannot be run without
 
 ```shell
 bash reproduce/table4.sh
+```
+
+### Table 6
+
+![Table 6](assets/table6.png)
+
+For experiment 1, the expected runtime is 9 minutes per batch and 2,700 minutes in total. For experiment 2, the expected runtime is 8 minutes per batch and 2,400 minutes in total. Experiment 3 cannot be executed automatically because Deep-Live-Cam requires a subscription and runs as Windows GUI software; therefore, the face-swapping step must be performed manually with the protected images.
+
+```shell
+bash reproduce/table6.sh
 ```

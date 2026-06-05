@@ -37,7 +37,7 @@ class Base:
                 config_path = root_dir / config_path
             checkpoint_path = Path(self.config.third_party.origin.checkpoint_path)
             if not checkpoint_path.is_absolute():
-                checkpoint_path = root_dir / checkpoint_path
+                checkpoint_path = Path(self.config.root_dir) / checkpoint_path
 
             origin_config = OmegaConf.load(config_path)
 

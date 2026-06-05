@@ -36,11 +36,7 @@ multirun() {
 if [[ $function == 'metric' ]]
 then
     run \
-    third_party.defense.silent_perturb=true \
     evaluate.effectiveness.perturb=false \
-    evaluate.effectiveness.ASRo=true \
-    evaluate.effectiveness.ASRp=true \
-    evaluate.effectiveness.TSR=true \
     protection=phantomseal
 else
     echo "⚠️ Oops! Function '$function' is not supported."

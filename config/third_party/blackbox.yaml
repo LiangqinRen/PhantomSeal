@@ -14,7 +14,7 @@ origin:
     crop_size: 224
   hififace:
     config_path: config/model.yaml
-    checkpoint_path: checkpoints/hififace_opensource_299999.ckpt
+    checkpoint_path: ${root_dir}/checkpoints/hififace/hififace_opensource_299999.ckpt
   faceshifter:
     model_path: face_modules/model_ir_se50.pth
     G_path: saved_models/G_latest.pth
