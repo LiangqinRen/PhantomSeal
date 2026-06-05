@@ -21,6 +21,7 @@
     - [Table 3](#table-3)
     - [Table 4](#table-4)
     - [Table 6](#table-6)
+    - [Table 8](#table-8)
 
 ## Description
 
@@ -75,8 +76,7 @@ bash reproduce/table2.sh
 
 ![Table 3](assets/table3.png)
 
-For experiment 1, the expected runtime is 2.5 minutes per batch and 125 minutes in total.
-For experiment 2, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. Note that DiffFace runs much slower than the other experiments because it does not support batched face-swapping.
+For experiment 1, the expected runtime is 2.5 minutes per batch and 125 minutes in total. For experiment 2, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. Note that DiffFace runs much slower than the other experiments because it does not support batched face-swapping.
 
 ```shell
 bash reproduce/table3.sh
@@ -102,4 +102,14 @@ For experiment 1, the expected runtime is 9 minutes per batch and 2,700 minutes 
 
 ```shell
 bash reproduce/table6.sh
+```
+
+### Table 8
+
+![Table 8](assets/table8.png)
+
+For experiments 1 and 2, the expected runtime is 2.5 minutes per batch and 125 minutes in total. Experiment 2 cannot be run without configuring the corresponding AWS API credentials. Experiment 3 reports the user study result and therefore does not have a corresponding program to execute.
+
+```shell
+bash reproduce/table8.sh
 ```
