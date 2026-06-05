@@ -17,6 +17,7 @@
     - [Environment](#environment)
     - [Dataset, Pre-Trained Models, and Third-Party Projects](#dataset-pre-trained-models-and-third-party-projects)
   - [Usage](#usage)
+    - [Table 2](#table-2)
 
 ## Description
 
@@ -55,4 +56,14 @@ All projects are controlled by their corresponding configuration files in *confi
 
 Most experiments evaluate 3,000 images by default, and the running time depends on the actual number of images being evaluated. The reported results and expected running times are based on our experimental environment. On different hardware, especially different GPU environments, users may need to adjust the corresponding *batch_size* values in the configuration files to fit available memory and throughput.
 
-We provide project scripts in the *scripts* folder for all experiments reported in the paper. The following sections list the commands used to reproduce the corresponding paper results. All commands should be run directly from the repository root directory.
+We provide scripts in the *reproduce* folder to reproduce all experimental results reported in the paper. For each experimental result in each figure or table, the corresponding script includes code blocks with matching result identifiers. All commands should be run directly from the repository root directory. Note that although the paper tables use Face++ for evaluation, the open-source artifact uses the open-source Face Recognition evaluation tool instead of Face++ by default. For CCS Artifacts evaluation, please contact us if API access is needed for a small number of paid-API experiments.
+
+### Table 2
+
+![Table 2](assets/table2.png)
+
+The expected running time is 1 minute.
+
+```shell
+bash reproduce/table2.sh
+```
