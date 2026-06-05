@@ -19,6 +19,7 @@
   - [Usage](#usage)
     - [Table 2](#table-2)
     - [Table 3](#table-3)
+    - [Table 4](#table-4)
 
 ## Description
 
@@ -78,4 +79,16 @@ For experiment 2, the expected runtime is 12.5 minutes per batch and 1,250 minut
 
 ```shell
 bash reproduce/table3.sh
+```
+
+### Table 4
+
+![Table 4](assets/table4.png)
+
+For experiments 1-4, the expected runtime is 2.5 minutes per batch and 125 minutes in total. Experiment 5 evaluates five parameter settings, and each setting is expected to take 2.5 minutes per batch and 125 minutes in total.
+For experiments 6-9, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. Experiment 10 evaluates five parameter settings, and each setting is expected to take 12.5 minutes per batch and 1,250 minutes in total.
+Experiments 3 and 8 use the Face++ API to infer gender and cannot be run without configuring the corresponding API credentials.
+
+```shell
+bash reproduce/table4.sh
 ```
