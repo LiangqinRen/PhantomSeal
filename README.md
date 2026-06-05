@@ -18,6 +18,7 @@
     - [Dataset, Pre-Trained Models, and Third-Party Projects](#dataset-pre-trained-models-and-third-party-projects)
   - [Usage](#usage)
     - [Table 2](#table-2)
+    - [Table 3](#table-3)
 
 ## Description
 
@@ -54,9 +55,9 @@ If the automatic download fails, please visit the [Google Drive](https://drive.g
 
 All projects are controlled by their corresponding configuration files in *config/third_party*. All running results, including logs, metrics, and saved images, are written to the *logs* folder. Single-run experiments are saved under *logs/run*, while multi-run experiments with multiple parameter settings are saved under *logs/multirun*. In both cases, results are first grouped by date and then by run time. Evaluation runs are processed batch by batch. For each batch, PhantomSeal reports both the current batch result and the cumulative summary up to that batch, so users can monitor the running summary and stop early when enough samples have been evaluated to save time.
 
-Most experiments evaluate 3,000 images by default, and the running time depends on the actual number of images being evaluated. The reported results and expected running times are based on our experimental environment. On different hardware, especially different GPU environments, users may need to adjust the corresponding *batch_size* values in the configuration files to fit available memory and throughput.
+Most experiments evaluate 3,000 images by default, and the running time depends on the actual number of images being evaluated. The *reproduce* scripts provide the batch size and total image count used for each experiment, and users can adjust these parameters to obtain faster preliminary results or to control the overall running time. The reported results and expected running times are based on our experimental environment. On different hardware, especially different GPU environments, users may need to adjust the corresponding *batch_size* values in the scripts or configuration files to fit available memory and throughput.
 
-We provide scripts in the *reproduce* folder to reproduce all experimental results reported in the paper. For each experimental result in each figure or table, the corresponding script includes code blocks with matching result identifiers. All commands should be run directly from the repository root directory. Note that although the paper tables use Face++ for evaluation, the open-source artifact uses the open-source Face Recognition evaluation tool instead of Face++ by default. For CCS Artifacts evaluation, please contact us if API access is needed for a small number of paid-API experiments.
+We provide scripts in the *reproduce* folder to reproduce all experimental results reported in the paper. For each figure or table, we divide all reported data into numbered experiments, and the corresponding script runs these numbered experiment blocks in order. Users can comment out unnecessary commands in the script to control which experiments are executed. All commands should be run directly from the repository root directory. Note that although the paper tables use Face++ for evaluation, the open-source artifact uses the open-source Face Recognition evaluation tool instead of Face++ by default. For CCS Artifacts evaluation, please contact us if API access is needed for a small number of paid-API experiments.
 
 ### Table 2
 
@@ -66,4 +67,15 @@ The expected running time is 1 minute.
 
 ```shell
 bash reproduce/table2.sh
+```
+
+### Table 3
+
+![Table 3](assets/table3.png)
+
+For experiment 1, the expected runtime is 2.5 minutes per batch and 125 minutes in total.
+For experiment 2, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. Note that DiffFace runs much slower than the other experiments because it does not support batched face-swapping.
+
+```shell
+bash reproduce/table3.sh
 ```

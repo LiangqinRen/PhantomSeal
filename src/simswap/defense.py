@@ -1399,8 +1399,10 @@ class Defense(Base):
 
             if (
                 not self.config.third_party.defense.silent_perturb
-                and (epoch + 1) % self.config.third_party.defense.log_interval == 0
-                or (epoch + 1) == self.config.third_party.defense.epochs
+                and (
+                    (epoch + 1) % self.config.third_party.defense.log_interval == 0
+                    or (epoch + 1) == self.config.third_party.defense.epochs
+                )
             ):
                 self.logger.info(
                     f"[Epoch {epoch+1:4}/{self.config.third_party.defense.epochs:4}] "
