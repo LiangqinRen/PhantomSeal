@@ -17,7 +17,6 @@
     - [Environment](#environment)
     - [Dataset, Pre-Trained Models, and Third-Party Projects](#dataset-pre-trained-models-and-third-party-projects)
   - [Usage](#usage)
-    - [Table 2](#table-2)
 
 ## Description
 
@@ -52,16 +51,8 @@ If the automatic download fails, please visit the [Google Drive](https://drive.g
 
 ## Usage
 
-All projects are controlled by their corresponding configuration files in *config/third_party*. All running results, including logs, metrics, and saved images, are written to the *logs* folder. Evaluation runs are processed batch by batch. For each batch, PhantomSeal reports both the current batch result and the cumulative summary up to that batch, so users can monitor the running summary and stop early when enough samples have been evaluated to save time.
+All projects are controlled by their corresponding configuration files in *config/third_party*. All running results, including logs, metrics, and saved images, are written to the *logs* folder. Single-run experiments are saved under *logs/run*, while multi-run experiments with multiple parameter settings are saved under *logs/multirun*. In both cases, results are first grouped by date and then by run time. Evaluation runs are processed batch by batch. For each batch, PhantomSeal reports both the current batch result and the cumulative summary up to that batch, so users can monitor the running summary and stop early when enough samples have been evaluated to save time.
 
 Most experiments evaluate 3,000 images by default, and the running time depends on the actual number of images being evaluated. The reported results and expected running times are based on our experimental environment. On different hardware, especially different GPU environments, users may need to adjust the corresponding *batch_size* values in the configuration files to fit available memory and throughput.
 
 We provide project scripts in the *scripts* folder for all experiments reported in the paper. The following sections list the commands used to reproduce the corresponding paper results. All commands should be run directly from the repository root directory.
-
-### Table 2
-
-The image results reported in Table 2 are saved in the *image* subdirectory of the corresponding log directory. The expected running time is about one minute.
-
-```shell
-bash scripts/simswap.sh sample
-```
