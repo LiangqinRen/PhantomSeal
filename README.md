@@ -22,6 +22,7 @@
     - [Table 4](#table-4)
     - [Table 6](#table-6)
     - [Table 8](#table-8)
+    - [Table 9](#table-9)
 
 ## Description
 
@@ -112,4 +113,14 @@ For experiments 1 and 2, the expected runtime is 2.5 minutes per batch and 125 m
 
 ```shell
 bash reproduce/table8.sh
+```
+
+### Table 9
+
+![Table 9](assets/table9.png)
+
+For experiments 1-5, the expected runtime is 2.5 minutes per batch and 125 minutes in total.
+
+```shell
+bash reproduce/table9.sh
 ```
