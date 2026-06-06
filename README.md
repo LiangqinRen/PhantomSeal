@@ -24,6 +24,7 @@
     - [Table 8](#table-8)
     - [Table 9](#table-9)
     - [Figure 3](#figure-3)
+    - [Table 10](#table-10)
 
 ## Description
 
@@ -134,4 +135,14 @@ For experiments 1-4, the expected runtime is 2.5 minutes per batch and 125 minut
 
 ```shell
 bash reproduce/figure3.sh
+```
+
+### Table 10
+
+![Table 10](assets/table10.png)
+
+For experiments 1-3, the expected runtime is 2.5 minutes per batch and 125 minutes in total. Experiments 2 and 3 require paid API credentials for the corresponding AI beauty services and cannot be run without configuring those credentials. For experiment 4, the expected runtime is 6 minutes per batch and 300 minutes in total. For experiments 5 and 6, the expected runtime is 4 minutes per batch and 200 minutes in total. Experiment 7 evaluates four denoiser checkpoints, and each checkpoint is expected to take 1 minute per batch and 60 minutes in total, with 240 minutes expected for the full multirun.
+
+```shell
+bash reproduce/table10.sh
 ```

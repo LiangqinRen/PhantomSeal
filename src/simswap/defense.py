@@ -863,96 +863,41 @@ class Defense(Base):
             total_count += len(imgs_A)
 
             cloak_imgs = self.cloak.find_best_cloaks(imgs_A)
+            robustness_ops = [
+                ("compress", self.robustness.webp_compress(imgs_A)),
+                ("crop", self.robustness.crop(imgs_A)),
+                ("logo", self.robustness.logo(imgs_A, logo)),
+            ]
 
-            noise_imgs_A = self.robustness.gauss_noise(imgs_A)
-            self._get_single_robustness_operate_metric(
-                imgs_B,
-                noise_imgs_A,
-                cloak_imgs,
-                metrics["noise"],
-            )
-
-            compress_imgs_A = self.robustness.webp_compress(imgs_A)
-            self._get_single_robustness_operate_metric(
-                imgs_B,
-                compress_imgs_A,
-                cloak_imgs,
-                metrics["compress"],
-            )
-
-            crop_imgs_A = self.robustness.crop(imgs_A)
-            self._get_single_robustness_operate_metric(
-                imgs_B,
-                crop_imgs_A,
-                cloak_imgs,
-                metrics["crop"],
-            )
-
-            logo_imgs_A = self.robustness.logo(imgs_A, logo)
-            self._get_single_robustness_operate_metric(
-                imgs_B,
-                logo_imgs_A,
-                cloak_imgs,
-                metrics["logo"],
-            )
-
-            brighten_imgs_A = self.robustness.brightness(imgs_A, 1.25)
-            self._get_single_robustness_operate_metric(
-                imgs_B,
-                brighten_imgs_A,
-                cloak_imgs,
-                metrics["brighten"],
-            )
-
-            darken_imgs_A = self.robustness.brightness(imgs_A, 0.75)
-            self._get_single_robustness_operate_metric(
-                imgs_B,
-                darken_imgs_A,
-                cloak_imgs,
-                metrics["darken"],
-            )
+            for name, robust_imgs_A in robustness_ops:
+                self._get_single_robustness_operate_metric(
+                    imgs_B,
+                    robust_imgs_A,
+                    cloak_imgs,
+                    metrics[name],
+                )
 
             torch.cuda.empty_cache()
+
+            metric_logs = []
+            for name, _ in robustness_ops:
+                metric_logs.append(
+                    textwrap.dedent(
+                        f"""
+                    {name}
+                    protection utility: {metric.generate_summary_utility_log(metrics[name], 'utility', idx)}
+                    pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics[name], 'pert_source_utility', idx)}
+                    pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics[name], 'pert_target_utility', idx)}
+                    𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics[name], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics[name], 'pert_source_effectiveness', include_labels=False)}
+                    𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics[name], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics[name], 'pert_target_effectiveness', include_labels=False)}
+                    """
+                    )
+                )
 
             summary_log_str = textwrap.dedent(
                 f"""
             Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
-            noise
-            protection utility: {metric.generate_summary_utility_log(metrics['noise'], 'utility', idx)}
-            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_source_utility', idx)}
-            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['noise'], 'pert_target_utility', idx)}
-            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['noise'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_source_effectiveness', include_labels=False)}
-            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['noise'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['noise'], 'pert_target_effectiveness', include_labels=False)}
-            compress
-            protection utility: {metric.generate_summary_utility_log(metrics['compress'], 'utility', idx)}
-            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_source_utility', idx)}
-            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['compress'], 'pert_target_utility', idx)}
-            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['compress'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_source_effectiveness', include_labels=False)}
-            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['compress'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['compress'], 'pert_target_effectiveness', include_labels=False)}
-            crop
-            protection utility: {metric.generate_summary_utility_log(metrics['crop'], 'utility', idx)}
-            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_source_utility', idx)}
-            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['crop'], 'pert_target_utility', idx)}
-            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['crop'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_source_effectiveness', include_labels=False)}
-            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['crop'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['crop'], 'pert_target_effectiveness', include_labels=False)}
-            logo
-            protection utility: {metric.generate_summary_utility_log(metrics['logo'], 'utility', idx)}
-            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_source_utility', idx)}
-            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['logo'], 'pert_target_utility', idx)}
-            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['logo'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_source_effectiveness', include_labels=False)}
-            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['logo'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['logo'], 'pert_target_effectiveness', include_labels=False)}
-            brighten
-            protection utility: {metric.generate_summary_utility_log(metrics['brighten'], 'utility', idx)}
-            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_source_utility', idx)}
-            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['brighten'], 'pert_target_utility', idx)}
-            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['brighten'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_source_effectiveness', include_labels=False)}
-            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['brighten'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['brighten'], 'pert_target_effectiveness', include_labels=False)}
-            darken
-            protection utility: {metric.generate_summary_utility_log(metrics['darken'], 'utility', idx)}
-            pert 𝒯_identity utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_source_utility', idx)}
-            pert 𝒯_context utility: {metric.generate_summary_utility_log(metrics['darken'], 'pert_target_utility', idx)}
-            𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics['darken'], 'pert_source_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_source_effectiveness', include_labels=False)}
-            𝒯_context effectiveness {metric.generate_summary_effectiveness_label(metrics['darken'], 'pert_target_effectiveness')}: {metric.generate_summary_effectiveness_log(metrics['darken'], 'pert_target_effectiveness', include_labels=False)}
+            {"".join(metric_logs)}
             """
             )
 
@@ -976,7 +921,7 @@ class Defense(Base):
             x_imgs_B = self._perturb_imgs(imgs_B, cloak_imgs)
 
             torch.set_grad_enabled(False)
-            pert_imgs = pert_imgs_A - (x_imgs_B - imgs_B)
+            pert_imgs = torch.clamp(pert_imgs_A - (x_imgs_B - imgs_B), 0, 1)
             (
                 source_swap,
                 pert_source_swap,
@@ -1204,7 +1149,9 @@ class Defense(Base):
             pert_pert_imgs_A = self._perturb_imgs(pert_imgs_A, cloak_imgs)
 
             torch.set_grad_enabled(False)
-            pert_imgs = pert_imgs_A - (pert_pert_imgs_A - pert_imgs_A)
+            pert_imgs = torch.clamp(
+                pert_imgs_A - (pert_pert_imgs_A - pert_imgs_A), 0, 1
+            )
             (
                 source_swap,
                 pert_source_swap,

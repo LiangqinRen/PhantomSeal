@@ -2,6 +2,14 @@ name: denoiser
 function: train
 project_root: ${root_dir}/third_party/SimSwap
 
+origin:
+  simswap:
+    checkpoints_dir: ${root_dir}/checkpoints/simswap
+    arcface_path: ${root_dir}/checkpoints/simswap/arcface_checkpoint.tar
+    name: people
+    which_epoch: latest
+    crop_size: 224
+
 dataset:
   root_dir: ${root_dir}/data/denoiser
   train_dir: ${third_party.dataset.root_dir}/train
