@@ -331,19 +331,43 @@ def generate_summary_score_log(scores: dict) -> str:
     return f"({', '.join(vals)})"
 
 
-def generate_iter_robustness_log(source: dict, target: dict) -> str:
+def _format_directional_value(values: dict, key: str, label: str) -> str | None:
+    if key not in values:
+        return None
+    return f"{label} {_format_rate(values[key])}"
+
+
+def _format_robustness_pair_log(source: dict, target: dict) -> str:
     parts = []
 
-    for effec, values in source.items():
-        vals = (_format_labeled_rate(k, v) for k, v in values.items())
-        parts.append(f"{effec} ({', '.join(vals)})")
+    for effec, source_values in source.items():
+        values = []
+        id_value = _format_directional_value(source_values, "pert_swap", "ASR_id")
+        if id_value is not None:
+            values.append(id_value)
 
-    for effec, values in target.items():
-        vals = (_format_labeled_rate(k, v) for k, v in values.items())
-        parts.append(f"{effec} ({', '.join(vals)})")
+        target_values = target.get(effec, {})
+        ctx_value = _format_directional_value(target_values, "pert_swap", "ASR_ctx")
+        if ctx_value is not None:
+            values.append(ctx_value)
+
+        for key, value in source_values.items():
+            if key == "pert_swap":
+                continue
+            values.append(_format_labeled_rate(key, value))
+
+        for key, value in target_values.items():
+            if key == "pert_swap":
+                continue
+            values.append(_format_labeled_rate(key, value))
+
+        parts.append(f"{effec} ({', '.join(values)})")
 
     return " ".join(parts)
 
+
+def generate_iter_robustness_log(source: dict, target: dict) -> str:
+    return _format_robustness_pair_log(source, target)
 
 def generate_summary_robustness_utility_log(data: dict, batch: int) -> str:
     vals = (
@@ -354,21 +378,9 @@ def generate_summary_robustness_utility_log(data: dict, batch: int) -> str:
 
 
 def generate_summary_robustness_log(data: dict) -> str:
-    parts = []
-
     source = data["pert_source_effectiveness"]
     target = data["pert_target_effectiveness"]
-
-    for effec, values in source.items():
-        vals = (_format_labeled_rate(k, v) for k, v in values.items())
-        parts.append(f"{effec} ({', '.join(vals)})")
-
-    for effec, values in target.items():
-        vals = (_format_labeled_rate(k, v) for k, v in values.items())
-        parts.append(f"{effec} ({', '.join(vals)})")
-
-    return " ".join(parts)
-
+    return _format_robustness_pair_log(source, target)
 
 def generate_forensics_robustness_log(data: dict) -> str:
     vals = (_format_labeled_rate("cloak", v["cloak"]) for v in data.values())

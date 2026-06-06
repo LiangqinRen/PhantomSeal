@@ -25,6 +25,7 @@
     - [Table 9](#table-9)
     - [Figure 3](#figure-3)
     - [Table 10](#table-10)
+    - [Table 11](#table-11)
 
 ## Description
 
@@ -145,4 +146,14 @@ For experiments 1-3, the expected runtime is 2.5 minutes per batch and 125 minut
 
 ```shell
 bash reproduce/table10.sh
+```
+
+### Table 11
+
+![Table 11](assets/table11.png)
+
+For experiments 1 and 2, the expected runtime is 3.5 minutes per batch and 175 minutes in total. Experiment 3 shows image samples saved in the corresponding log directory under the *images* folder. Experiment 4 reports the user study result and therefore does not have a corresponding program to execute.
+
+```shell
+bash reproduce/table11.sh
 ```
