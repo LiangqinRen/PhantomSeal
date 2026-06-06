@@ -23,6 +23,7 @@
     - [Table 6](#table-6)
     - [Table 8](#table-8)
     - [Table 9](#table-9)
+    - [Figure 3](#figure-3)
 
 ## Description
 
@@ -123,4 +124,14 @@ For experiments 1-5, the expected runtime is 2.5 minutes per batch and 125 minut
 
 ```shell
 bash reproduce/table9.sh
+```
+
+### Figure 3
+
+![Figure 3](assets/figure3.png)
+
+For experiments 1-4, the expected runtime is 2.5 minutes per batch and 125 minutes per parameter setting. Each experiment is a SimSwap multirun over 15 parameter settings and is expected to take 1,875 minutes in total. Each subplot in Figure 3 corresponds to one Y-axis metric, such as MSE or $ASR_{id}$. Therefore, after all parameter settings finish running, the results for the same Y-axis metric are collected across different parameter values and reorganized to produce each subplot.
+
+```shell
+bash reproduce/figure3.sh
 ```
