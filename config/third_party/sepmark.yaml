@@ -33,4 +33,4 @@ defense:
   model_path: ${root_dir}/checkpoints/sepmark/EC_90.pth
 
 robustness:
-  logo_img_path: data/vggface2_samples_224/ccs.png
+  logo_img_path: ${root_dir}/data/vggface2_224_samples/ccs.png

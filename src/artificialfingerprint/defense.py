@@ -10,6 +10,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
 from scipy.stats import binom
+from omegaconf import open_dict
 
 
 class Defense(Base):
@@ -23,7 +24,15 @@ class Defense(Base):
         notes_path.touch(exist_ok=True)
 
         simswap_config = copy.deepcopy(config)
-        simswap_config.third_party.project_root = config.third_party.simswap_root
+        with open_dict(simswap_config):
+            simswap_config.third_party.project_root = config.third_party.simswap_root
+            simswap_config.third_party.origin.simswap = {
+                "checkpoints_dir": f"{config.root_dir}/checkpoints/simswap",
+                "arcface_path": f"{config.root_dir}/checkpoints/simswap/arcface_checkpoint.tar",
+                "name": "people",
+                "which_epoch": "latest",
+                "crop_size": 224,
+            }
         self.robustness = Robustness(logger, simswap_config)
 
     def forensics_robustness_metric(self) -> None:
