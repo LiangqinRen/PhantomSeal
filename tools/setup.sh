@@ -36,7 +36,7 @@ echo -e "\033[1;34m[3/6] Downloading datasets...\033[0m"
 
 echo -e "\033[1;34m[4/6] Downloading pre-trained models...\033[0m"
 (
-    gdown 1ZpkwyuSipEaQj0JfxzvwcWWlyBlrkSvX -O checkpoints.tar.gz
+    gdown 1JleqRGtrUMvyCMAdIxOsfh8FCYVmiETC -O checkpoints.tar.gz
     tar -xf checkpoints.tar.gz
     rm checkpoints.tar.gz
 )
