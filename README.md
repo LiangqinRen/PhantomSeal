@@ -21,6 +21,7 @@
     - [Table 3](#table-3)
     - [Table 4](#table-4)
     - [Table 6](#table-6)
+    - [Table 7](#table-7)
     - [Table 8](#table-8)
     - [Table 9](#table-9)
     - [Figure 3](#figure-3)
@@ -107,6 +108,16 @@ For experiment 1, the expected runtime is 9 minutes per batch and 2,700 minutes 
 
 ```shell
 bash reproduce/table6.sh
+```
+
+### Table 7
+
+![Table 7](assets/table7.png)
+
+For experiment 1, the expected runtime is 2.5 minutes per batch and 125 minutes in total. For experiment 2, the expected runtime is 1.5 minutes per batch and 75 minutes in total. For experiment 3, the expected runtime is 3 minutes per batch and 150 minutes in total. For experiment 4, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. For experiments 5-7, the expected runtime is 5 minutes per batch and 250 minutes in total. For experiment 8, the expected runtime is 15 minutes per batch and 1,500 minutes in total.
+
+```shell
+bash reproduce/table7.sh
 ```
 
 ### Table 8
