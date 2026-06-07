@@ -4,6 +4,9 @@ simswap_dir: ${root_dir}/third_party/SimSwap
 hififace_dir: ${root_dir}/third_party/HifiFace
 faceshifter_dir: ${root_dir}/third_party/FaceShifter/ModelC
 
+extend:
+  metric_pairs: 3000
+
 origin:
   simswap:
     checkpoints_dir: ${root_dir}/checkpoints/simswap
@@ -12,7 +15,7 @@ origin:
     which_epoch: latest
     crop_size: 224
   config_path: config/model.yaml
-  checkpoint_path: checkpoints/hififace_opensouce_299999.ckpt
+  checkpoint_path: ${root_dir}/checkpoints/hififace/hififace_opensource_299999.ckpt
   model_path: face_modules/model_ir_se50.pth
   G_path: saved_models/G_latest.pth
 

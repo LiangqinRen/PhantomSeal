@@ -17,9 +17,15 @@ EFFECTIVENESS_LABELS = {
 }
 
 
+def _is_calculated_rate(value: tuple) -> bool:
+    return len(value) >= 2 and value[1] != 0
+
+
+def _calculated_items(values: dict):
+    return ((key, value) for key, value in values.items() if _is_calculated_rate(value))
+
+
 def _format_rate(value: tuple) -> str:
-    if value[1] == 0:
-        return "nan/0"
     return f"{value[0] / value[1] * 100:.3f}/{value[1]:.0f}"
 
 
@@ -239,21 +245,19 @@ def merge_metric(
         )
 
     for effec in effectiveness.candi_funcs.keys():
-        metrics["pert_source_effectiveness"][effec] = {
-            key2: (value1[0] + value2[0], value1[1] + value2[1])
-            for (key1, value1), (key2, value2) in zip(
-                metrics["pert_source_effectiveness"][effec].items(),
-                source_effectiveness[effec].items(),
+        for key, value in source_effectiveness[effec].items():
+            prev = metrics["pert_source_effectiveness"][effec].get(key, (0, 0))
+            metrics["pert_source_effectiveness"][effec][key] = (
+                prev[0] + value[0],
+                prev[1] + value[1],
             )
-        }
         if target_effectiveness is not None:
-            metrics["pert_target_effectiveness"][effec] = {
-                key2: (value1[0] + value2[0], value1[1] + value2[1])
-                for (key1, value1), (key2, value2) in zip(
-                    metrics["pert_target_effectiveness"][effec].items(),
-                    target_effectiveness[effec].items(),
+            for key, value in target_effectiveness[effec].items():
+                prev = metrics["pert_target_effectiveness"][effec].get(key, (0, 0))
+                metrics["pert_target_effectiveness"][effec][key] = (
+                    prev[0] + value[0],
+                    prev[1] + value[1],
                 )
-            }
 
 
 def generate_iter_utility_log(utilities: dict) -> str:
@@ -269,8 +273,10 @@ def generate_iter_utility_log(utilities: dict) -> str:
 
 def generate_iter_effectiveness_label(effectiveness: dict) -> str:
     for values in effectiveness.values():
-        labels = (EFFECTIVENESS_LABELS.get(k, k) for k in values.keys())
-        return f"({', '.join(labels)})"
+        labels = (EFFECTIVENESS_LABELS.get(k, k) for k, _ in _calculated_items(values))
+        label_text = ", ".join(labels)
+        if label_text:
+            return f"({label_text})"
     return "()"
 
 
@@ -280,13 +286,16 @@ def generate_iter_effectiveness_log(
     parts = []
 
     for effec, values in effectiveness.items():
+        items = list(_calculated_items(values))
+        if not items:
+            continue
         if include_labels:
-            vals = (_format_labeled_rate(k, v) for k, v in values.items())
+            vals = (_format_labeled_rate(k, v) for k, v in items)
         else:
-            vals = (_format_rate(v) for v in values.values())
+            vals = (_format_rate(v) for _, v in items)
         parts.append(f"{effec} ({', '.join(vals)})")
 
-    return " ".join(parts)
+    return " ".join(parts) if parts else "()"
 
 
 def generate_iter_score_log(scores: dict) -> str:
@@ -306,8 +315,10 @@ def generate_summary_utility_log(data: dict, item: str, batch: int) -> str:
 
 def generate_summary_effectiveness_label(data: dict, item: str) -> str:
     for values in data[item].values():
-        labels = (EFFECTIVENESS_LABELS.get(k, k) for k in values.keys())
-        return f"({', '.join(labels)})"
+        labels = (EFFECTIVENESS_LABELS.get(k, k) for k, _ in _calculated_items(values))
+        label_text = ", ".join(labels)
+        if label_text:
+            return f"({label_text})"
     return "()"
 
 
@@ -317,13 +328,16 @@ def generate_summary_effectiveness_log(
     parts = []
 
     for effec, values in data[item].items():
+        items = list(_calculated_items(values))
+        if not items:
+            continue
         if include_labels:
-            vals = (_format_labeled_rate(k, v) for k, v in values.items())
+            vals = (_format_labeled_rate(k, v) for k, v in items)
         else:
-            vals = (_format_rate(v) for v in values.values())
+            vals = (_format_rate(v) for _, v in items)
         parts.append(f"{effec} ({', '.join(vals)})")
 
-    return " ".join(parts)
+    return " ".join(parts) if parts else "()"
 
 
 def generate_summary_score_log(scores: dict) -> str:
@@ -332,7 +346,7 @@ def generate_summary_score_log(scores: dict) -> str:
 
 
 def _format_directional_value(values: dict, key: str, label: str) -> str | None:
-    if key not in values:
+    if key not in values or not _is_calculated_rate(values[key]):
         return None
     return f"{label} {_format_rate(values[key])}"
 
@@ -351,19 +365,20 @@ def _format_robustness_pair_log(source: dict, target: dict) -> str:
         if ctx_value is not None:
             values.append(ctx_value)
 
-        for key, value in source_values.items():
+        for key, value in _calculated_items(source_values):
             if key == "pert_swap":
                 continue
             values.append(_format_labeled_rate(key, value))
 
-        for key, value in target_values.items():
+        for key, value in _calculated_items(target_values):
             if key == "pert_swap":
                 continue
             values.append(_format_labeled_rate(key, value))
 
-        parts.append(f"{effec} ({', '.join(values)})")
+        if values:
+            parts.append(f"{effec} ({', '.join(values)})")
 
-    return " ".join(parts)
+    return " ".join(parts) if parts else "()"
 
 
 def generate_iter_robustness_log(source: dict, target: dict) -> str:
@@ -383,5 +398,9 @@ def generate_summary_robustness_log(data: dict) -> str:
     return _format_robustness_pair_log(source, target)
 
 def generate_forensics_robustness_log(data: dict) -> str:
-    vals = (_format_labeled_rate("cloak", v["cloak"]) for v in data.values())
-    return f"({', '.join(vals)})"
+    vals = [
+        _format_labeled_rate("cloak", v["cloak"])
+        for v in data.values()
+        if _is_calculated_rate(v["cloak"])
+    ]
+    return f"({', '.join(vals)})" if vals else "()"

@@ -143,8 +143,6 @@ def _format_effectiveness_with_names(effectiveness: dict | None) -> str:
         return "()"
 
     def format_rate(value: tuple) -> str:
-        if value[1] == 0:
-            return "nan/0"
         return f"{value[0] / value[1] * 100:.3f}/{value[1]:.0f}"
 
     parts = []
@@ -152,9 +150,11 @@ def _format_effectiveness_with_names(effectiveness: dict | None) -> str:
         metrics = ", ".join(
             f"{metric_name}={format_rate(metric_value)}"
             for metric_name, metric_value in values.items()
+            if metric_value[1] != 0
         )
-        parts.append(f"{verifier}({metrics})")
-    return " ".join(parts)
+        if metrics:
+            parts.append(f"{verifier}({metrics})")
+    return " ".join(parts) if parts else "()"
 
 
 def _limit_dataset(dataset: Any, max_images: Any, config_name: str) -> Any:

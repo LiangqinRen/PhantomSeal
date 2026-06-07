@@ -35,7 +35,12 @@ multirun() {
 
 if [[ $function == 'metric' ]]
 then
-    run
+    run \
+    evaluate.effectiveness.perturb=false
+elif [[ $function == 'extend' ]]
+then
+    run \
+    evaluate.effectiveness.perturb=false
 else
     echo "⚠️ Oops! Function '$function' is not supported."
 fi

@@ -17,7 +17,7 @@ def main(config: DictConfig):
     )
 
     defense = Defense(logger, config)
-    defense_function_list = ["metric"]
+    defense_function_list = ["metric", "extend"]
     defense_functions = {name: getattr(defense, name) for name in defense_function_list}
 
     if config.third_party.function in defense_functions:

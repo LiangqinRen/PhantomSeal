@@ -155,6 +155,11 @@ class Base:
 
         return x
 
+    def _model_256_input(self, imgs: Tensor) -> Tensor:
+        if imgs.shape[-2:] == (256, 256):
+            return imgs
+        return F.interpolate(imgs, size=(256, 256), mode="bilinear", align_corners=False)
+
     def get_simswap_identity(self, imgs: Tensor) -> Tensor:
         imgs = self._simswap_normalize(imgs)
         imgs_downsample = F.interpolate(imgs, size=(112, 112))
@@ -164,6 +169,7 @@ class Base:
         return prior.cuda()
 
     def get_faceshifter_identity(self, imgs: Tensor) -> Tensor:
+        imgs = self._model_256_input(imgs)
         return self.arcface(
             F.interpolate(
                 imgs[:, :, 19:237, 19:237],
@@ -174,6 +180,7 @@ class Base:
         )
 
     def get_hififace_identity(self, imgs: Tensor) -> Tensor:
+        imgs = self._model_256_input(imgs)
         return F.normalize(
             self.net.generator.id_extractor.f_id(
                 F.interpolate((imgs - 0.5) / 0.5, size=112, mode="bilinear")

@@ -20,6 +20,7 @@
     - [Table 2](#table-2)
     - [Table 3](#table-3)
     - [Table 4](#table-4)
+    - [Table 5](#table-5)
     - [Table 6](#table-6)
     - [Table 7](#table-7)
     - [Table 8](#table-8)
@@ -98,6 +99,16 @@ Experiments 3 and 8 use the Face++ API to infer gender and cannot be run without
 
 ```shell
 bash reproduce/table4.sh
+```
+
+### Table 5
+
+![Table 5](assets/table5.png)
+
+For experiment 1, the expected runtime is 3 minutes per batch and 450 minutes in total. For experiment 2, the expected runtime is 10 minutes per batch and 1,500 minutes in total.
+
+```shell
+bash reproduce/table5.sh
 ```
 
 ### Table 6

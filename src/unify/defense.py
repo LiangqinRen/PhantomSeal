@@ -1,14 +1,19 @@
 from src import metric
 from src.unify.base import Base
-from src.dataset import MetricDataset
-from src.evaluate import ScoreCalculator
+from src.dataset import FFHQMetric, MetricDataset
+from src.evaluate import DistanceCloakSelector, ScoreCalculator
 from src.common_utils import save_tensor_imgs
+from src.diffface.defense import Defense as DiffFaceDefense
 
 import torch
+import copy
 import textwrap
 from torch import tensor, Tensor
 from torch.utils.data import DataLoader
 from pathlib import Path
+import torch.nn.functional as F
+from omegaconf import OmegaConf, open_dict
+from torchvision import transforms
 
 
 class Defense(Base):
@@ -20,6 +25,137 @@ class Defense(Base):
 
         notes_path = Path(self.config.notes_path)
         notes_path.touch(exist_ok=True)
+
+    def extend(self) -> None:
+        metrics = self._get_extend_metric_template()
+        extend_config = self.config.third_party.extend
+        diffface_config = self._load_diffface_config()
+        diffface_dataset = diffface_config.dataset
+        metric_dir = extend_config.get("metric_dir", diffface_dataset.metric_dir)
+        metric_pairs = extend_config.get("metric_pairs", diffface_dataset.metric_pairs)
+        image_size = extend_config.get("image_size", diffface_dataset.image_size)
+        batch_size = self.config.third_party.defense.batch_size
+
+        transform = transforms.Compose(
+            [
+                transforms.Resize((image_size, image_size)),
+                transforms.ToTensor(),
+            ]
+        )
+        dataset = FFHQMetric(Path(metric_dir), metric_pairs, transform)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+        ffhq_config = copy.deepcopy(self.config)
+        with open_dict(ffhq_config):
+            ffhq_config.third_party.dataset.cloak_dir = extend_config.get(
+                "cloak_dir", diffface_dataset.cloak_dir
+            )
+            ffhq_config.third_party.dataset.cloak_mix = extend_config.get(
+                "cloak_mix", diffface_dataset.cloak_mix
+            )
+            ffhq_config.third_party.dataset.cloak_count = extend_config.get(
+                "cloak_count", diffface_dataset.cloak_count
+            )
+            ffhq_config.third_party.dataset.cloak_min_distance = extend_config.get(
+                "cloak_min_distance", diffface_dataset.cloak_min_distance
+            )
+            ffhq_config.third_party.dataset.cloak_distance = extend_config.get(
+                "cloak_distance", diffface_dataset.cloak_distance
+            )
+            ffhq_config.third_party.dataset.use_224 = False
+        ffhq_cloak = DistanceCloakSelector(self.logger, ffhq_config, self.effectiveness)
+        diffface = self._build_diffface_defense(diffface_config)
+
+        total_count = 0
+        for idx, (imgs_A, imgs_B) in enumerate(dataloader, start=1):
+            torch.set_grad_enabled(True)
+            imgs_A, imgs_B = imgs_A.cuda(), imgs_B.cuda()
+            cloak_imgs = ffhq_cloak.find_best_cloaks(imgs_A)
+            if cloak_imgs.shape[-2:] != imgs_A.shape[-2:]:
+                cloak_imgs = F.interpolate(
+                    cloak_imgs,
+                    size=imgs_A.shape[-2:],
+                    mode="bilinear",
+                    align_corners=False,
+                )
+            pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
+            torch.set_grad_enabled(False)
+
+            diffface_swap = diffface._face_swap_per_image(imgs_A, imgs_B)
+            diffface_pert_swap = diffface._face_swap_per_image(pert_imgs, imgs_B)
+
+            total_count += len(imgs_A)
+            utility = self.utility.calculate_utility(imgs_A, pert_imgs)
+            diffface_effectiveness = self.effectiveness.calculate_effectiveness(
+                imgs_A,
+                None,
+                diffface_swap,
+                diffface_pert_swap,
+                cloak_imgs,
+            )
+            self._merge_extend_metric(metrics, utility, diffface_effectiveness)
+
+            save_tensor_imgs(
+                self.image_dir,
+                idx,
+                [
+                    "imgs_A",
+                    "imgs_B",
+                    "perturb_imgs",
+                    "cloak_imgs",
+                    "diffface_swap",
+                    "diffface_perturb_swap",
+                ],
+                [
+                    imgs_A,
+                    imgs_B,
+                    pert_imgs,
+                    cloak_imgs,
+                    diffface_swap,
+                    diffface_pert_swap,
+                ],
+                image_name="extend_diffface",
+                only_save_summary=self.config.third_party.defense.only_save_summary,
+            )
+
+            del imgs_A, imgs_B, cloak_imgs, pert_imgs, diffface_swap, diffface_pert_swap
+            self._free_gpu()
+
+            diffface_iter_scores = self._calculate_iter_score(diffface_effectiveness)
+            summary_scores = self._calculate_summary_score(metrics, ["diffface"])
+
+            iter_log_str = textwrap.dedent(
+                f"""
+            protection utility: {metric.generate_iter_utility_log(utility)}
+            diffface 𝒯_identity effectiveness {metric.generate_iter_effectiveness_label(diffface_effectiveness)}: {metric.generate_iter_effectiveness_log(diffface_effectiveness, include_labels=False)}
+            scores: {metric.generate_iter_score_log(diffface_iter_scores)}
+            """
+            )
+            summary_log_str = textwrap.dedent(
+                f"""
+            Batch {idx:4}/{len(dataloader):4}, {total_count} pairs of pictures
+            protection utility: {metric.generate_summary_utility_log(metrics, 'pert_utility', idx)}
+            diffface 𝒯_identity effectiveness {metric.generate_summary_effectiveness_label(metrics, 'diffface')}: {metric.generate_summary_effectiveness_log(metrics, 'diffface', include_labels=False)}
+            scores: {self._generate_summary_score_log(summary_scores['diffface'])}
+            """
+            )
+            self.logger.info(textwrap.indent(iter_log_str, "    "))
+            self.logger.info(textwrap.indent(summary_log_str, "    "))
+
+    def _load_diffface_config(self):
+        return OmegaConf.load(
+            Path(self.config.root_dir) / "config/third_party/diffface.yaml"
+        )
+
+    def _build_diffface_defense(self, diffface_third_party_config) -> DiffFaceDefense:
+        diffface_config = copy.deepcopy(self.config)
+        with open_dict(diffface_config):
+            diffface_config.third_party = copy.deepcopy(diffface_third_party_config)
+            diffface_config.third_party.defense = copy.deepcopy(
+                self.config.third_party.defense
+            )
+            diffface_config.third_party.defense.batch_size = 1
+        return DiffFaceDefense(self.logger, diffface_config)
 
     def metric(
         self,
@@ -38,12 +174,18 @@ class Defense(Base):
             pert_imgs = self._perturb_imgs(imgs_A, cloak_imgs)
             torch.set_grad_enabled(False)
 
+            simswap_swap, hififace_swap, faceshifter_swap = self._get_full_swap_results(
+                imgs_A, imgs_B
+            )
             simswap_pert_swap, hififace_pert_swap, faceshifter_pert_swap = (
                 self._get_full_swap_results(pert_imgs, imgs_B)
             )
 
             # filter valid images
             faceshifter_swap_mask = (
+                faceshifter_swap.view(faceshifter_swap.size(0), -1).abs().sum(dim=1)
+                > 0
+            ) & (
                 faceshifter_pert_swap.view(faceshifter_pert_swap.size(0), -1)
                 .abs()
                 .sum(dim=1)
@@ -54,6 +196,9 @@ class Defense(Base):
             imgs_B = imgs_B[faceshifter_swap_mask]
             cloak_imgs = cloak_imgs[faceshifter_swap_mask]
             pert_imgs = pert_imgs[faceshifter_swap_mask]
+            simswap_swap = simswap_swap[faceshifter_swap_mask]
+            hififace_swap = hififace_swap[faceshifter_swap_mask]
+            faceshifter_swap = faceshifter_swap[faceshifter_swap_mask]
             simswap_pert_swap = simswap_pert_swap[faceshifter_swap_mask]
             hififace_pert_swap = hififace_pert_swap[faceshifter_swap_mask]
             faceshifter_pert_swap = faceshifter_pert_swap[faceshifter_swap_mask]
@@ -66,6 +211,9 @@ class Defense(Base):
                     "imgs_B",
                     "perturb_imgs",
                     "cloak_imgs",
+                    "simswap_swap",
+                    "hififace_swap",
+                    "faceshifter_swap",
                     "simswap_perturb_swap",
                     "hififace_perturb_swap",
                     "faceshifter_perturb_swap",
@@ -75,6 +223,9 @@ class Defense(Base):
                     imgs_B,
                     pert_imgs,
                     cloak_imgs,
+                    simswap_swap,
+                    hififace_swap,
+                    faceshifter_swap,
                     simswap_pert_swap,
                     hififace_pert_swap,
                     faceshifter_pert_swap,
@@ -87,14 +238,17 @@ class Defense(Base):
             (
                 utility,
                 simswap_effectiveness,
-                hififace_effectiveness,
                 faceshifter_effectiveness,
+                hififace_effectiveness,
             ) = self._calculate_cross_model_metric(
                 imgs_A,
                 pert_imgs,
                 cloak_imgs,
+                simswap_swap,
                 simswap_pert_swap,
+                hififace_swap,
                 hififace_pert_swap,
+                faceshifter_swap,
                 faceshifter_pert_swap,
             )
 
@@ -107,6 +261,7 @@ class Defense(Base):
             )
 
             del imgs_A, imgs_B, pert_imgs, cloak_imgs
+            del simswap_swap, hififace_swap, faceshifter_swap
             del simswap_pert_swap, hififace_pert_swap, faceshifter_pert_swap
             self._free_gpu()
 
@@ -152,9 +307,13 @@ class Defense(Base):
             faceshifter_self_identity = self.get_faceshifter_identity(imgs)
             faceshifter_cloak_identity = self.get_faceshifter_identity(cloak_imgs)
 
-            hififace_self_3d = self.net.generator.id_extractor.f_3d(imgs)[:, :80]
+            hififace_self_3d = self.net.generator.id_extractor.f_3d(
+                self._model_256_input(imgs)
+            )[:, :80]
             hififace_self_id = self.get_hififace_identity(imgs)
-            hififace_cloak_3d = self.net.generator.id_extractor.f_3d(cloak_imgs)[:, :80]
+            hififace_cloak_3d = self.net.generator.id_extractor.f_3d(
+                self._model_256_input(cloak_imgs)
+            )[:, :80]
             hififace_cloak_id = self.get_hififace_identity(cloak_imgs)
 
         epsilon = (
@@ -205,7 +364,9 @@ class Defense(Base):
             )
 
             # hififace loss
-            x_hififace_3d = self.net.generator.id_extractor.f_3d(x_imgs)[:, :80]
+            x_hififace_3d = self.net.generator.id_extractor.f_3d(
+                self._model_256_input(x_imgs)
+            )[:, :80]
             x_hififace_id = self.get_hififace_identity(x_imgs)
 
             hififace_3d_diff = torch.clamp(
@@ -323,29 +484,32 @@ class Defense(Base):
         imgs_A: Tensor,
         x_imgs: Tensor,
         cloak_imgs: Tensor,
+        simswap_swap: Tensor,
         simswap_pert_swap: Tensor,
-        faceshifter_pert_swap: Tensor,
+        hififace_swap: Tensor,
         hififace_pert_swap: Tensor,
+        faceshifter_swap: Tensor,
+        faceshifter_pert_swap: Tensor,
     ) -> tuple[dict, dict, dict, dict]:
         utility = self.utility.calculate_utility(imgs_A, x_imgs)
         simswap_effectiveness = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
-            None,
+            simswap_swap,
             simswap_pert_swap,
             cloak_imgs,
         )
         faceshifter_effectiveness = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
-            None,
+            faceshifter_swap,
             faceshifter_pert_swap,
             cloak_imgs,
         )
         hififace_effectiveness = self.effectiveness.calculate_effectiveness(
             imgs_A,
             x_imgs,
-            None,
+            hififace_swap,
             hififace_pert_swap,
             cloak_imgs,
         )
@@ -357,6 +521,52 @@ class Defense(Base):
             hififace_effectiveness,
         )
 
+    def _get_extend_metric_template(self) -> dict:
+        data = {
+            "pert_utility": (0, 0, 0, 0),
+            "diffface": {},
+        }
+
+        for effec in self.effectiveness.candi_funcs.keys():
+            data["diffface"][effec] = {}
+            if self.config.evaluate.effectiveness.perturb:
+                data["diffface"][effec]["pert"] = (0, 0)
+            if self.config.evaluate.effectiveness.ASRo:
+                data["diffface"][effec]["swap"] = (0, 0)
+            if self.config.evaluate.effectiveness.ASRp:
+                data["diffface"][effec]["pert_swap"] = (0, 0)
+            if self.config.evaluate.effectiveness.TSR:
+                data["diffface"][effec]["cloak"] = (0, 0)
+
+        return data
+
+    def _merge_extend_metric(
+        self,
+        data: dict,
+        utility: dict,
+        diffface_effectiveness: dict,
+    ) -> None:
+        data["pert_utility"] = tuple(
+            x + y
+            for x, y in zip(
+                data["pert_utility"],
+                (
+                    utility["mse"],
+                    utility["psnr"],
+                    utility["ssim"],
+                    utility["lpips"],
+                ),
+            )
+        )
+
+        for effec, values in diffface_effectiveness.items():
+            for key, value in values.items():
+                prev = data["diffface"][effec][key]
+                data["diffface"][effec][key] = (
+                    prev[0] + value[0],
+                    prev[1] + value[1],
+                )
+
     def _get_unify_metric_template(self) -> dict:
         data = {
             "pert_utility": (0, 0, 0, 0),
@@ -366,24 +576,16 @@ class Defense(Base):
         }
 
         for effec in self.effectiveness.candi_funcs.keys():
-            data["simswap"][effec] = {
-                "pert": (0, 0),
-                "swap": (0, 0),
-                "pert_swap": (0, 0),
-                "cloak": (0, 0),
-            }
-            data["faceshifter"][effec] = {
-                "pert": (0, 0),
-                "swap": (0, 0),
-                "pert_swap": (0, 0),
-                "cloak": (0, 0),
-            }
-            data["hififace"][effec] = {
-                "pert": (0, 0),
-                "swap": (0, 0),
-                "pert_swap": (0, 0),
-                "cloak": (0, 0),
-            }
+            for model in ["simswap", "faceshifter", "hififace"]:
+                data[model][effec] = {}
+                if self.config.evaluate.effectiveness.perturb:
+                    data[model][effec]["pert"] = (0, 0)
+                if self.config.evaluate.effectiveness.ASRo:
+                    data[model][effec]["swap"] = (0, 0)
+                if self.config.evaluate.effectiveness.ASRp:
+                    data[model][effec]["pert_swap"] = (0, 0)
+                if self.config.evaluate.effectiveness.TSR:
+                    data[model][effec]["cloak"] = (0, 0)
         return data
 
     def _merge_unify_metric(
@@ -407,28 +609,18 @@ class Defense(Base):
             )
         )
 
-        for effec in self.effectiveness.candi_funcs.keys():
-            data["simswap"][effec] = {
-                key2: (value1[0] + value2[0], value1[1] + value2[1])
-                for (key1, value1), (key2, value2) in zip(
-                    data["simswap"][effec].items(),
-                    simswap_effectiveness[effec].items(),
-                )
-            }
-            data["faceshifter"][effec] = {
-                key2: (value1[0] + value2[0], value1[1] + value2[1])
-                for (key1, value1), (key2, value2) in zip(
-                    data["faceshifter"][effec].items(),
-                    faceshifter_effectiveness[effec].items(),
-                )
-            }
-            data["hififace"][effec] = {
-                key2: (value1[0] + value2[0], value1[1] + value2[1])
-                for (key1, value1), (key2, value2) in zip(
-                    data["hififace"][effec].items(),
-                    hififace_effectiveness[effec].items(),
-                )
-            }
+        for model, effectiveness in [
+            ("simswap", simswap_effectiveness),
+            ("faceshifter", faceshifter_effectiveness),
+            ("hififace", hififace_effectiveness),
+        ]:
+            for effec, values in effectiveness.items():
+                for key, value in values.items():
+                    prev = data[model][effec][key]
+                    data[model][effec][key] = (
+                        prev[0] + value[0],
+                        prev[1] + value[1],
+                    )
 
     def _free_gpu(self) -> None:
         torch.cuda.synchronize()
