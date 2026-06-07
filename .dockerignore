@@ -1,0 +1,22 @@
+# Git metadata is kept so tools/setup.sh can initialize submodules inside the image.
+.gitignore
+
+# Runtime outputs
+logs
+.cache
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Large artifacts prepared by tools/setup.sh
+data
+checkpoints
+third_party
+
+# Local environment files
+.venv
+.env
+*.tar
+*.tar.gz
+*.zip

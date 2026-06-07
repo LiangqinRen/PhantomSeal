@@ -40,6 +40,13 @@ We implemented PhantomSeal using Python 3.10.19, PyTorch 2.8, and CUDA 12.8. The
 
 ### Environment
 
+Clone the repository first.
+
+```shell
+git clone https://github.com/LiangqinRen/PhantomSeal.git
+cd PhantomSeal
+```
+
 We strongly recommend using Conda to manage the environment. We provide **environment.yml** to create the default *phantomseal* environment. Please use the following commands to create and activate it.
 
 ```shell
@@ -47,7 +54,21 @@ conda env create -f environment.yml
 conda activate phantomseal
 ```
 
-A Docker-based environment is under preparation and will be added in a future update.
+We also provide a Docker image with the PhantomSeal runtime environment and repository code. This mode does not require mounting a host repository. Because datasets, checkpoints, third-party projects, and logs are created inside the container, keep the container instead of using **--rm** if you want to reuse downloaded files after exiting.
+
+```shell
+docker pull liangqinren/phantomseal:ccs2026
+docker run -it --gpus all \
+    --shm-size=32g \
+    --name phantomseal \
+    liangqinren/phantomseal:ccs2026
+```
+
+Inside the container, update the repository before following the dataset preparation and usage instructions below. After exiting, restart the same container with **docker start -ai phantomseal**.
+
+```shell
+git pull
+```
 
 ### Dataset, Pre-Trained Models, and Third-Party Projects
 
