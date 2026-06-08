@@ -94,7 +94,7 @@ We provide scripts in the **reproduce** folder to reproduce all experimental res
 
 ![Table 2](assets/table2.png)
 
-The expected running time is 1 minute.
+Table 2 shows the identity and context protection samples of PhantomSeal. There is one experiment. The expected running time is 1 minute.
 
 ```shell
 bash reproduce/table2.sh
@@ -103,6 +103,8 @@ bash reproduce/table2.sh
 ### Table 3
 
 ![Table 3](assets/table3.png)
+
+Table 3 evaluates the overall utility, identity protection, context protection, and tracing performance of PhantomSeal against SimSwap and DiffFace. There are two experiments.
 
 For experiment 1, the expected runtime is 2.5 minutes per batch and 125 minutes in total. For experiment 2, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. Note that DiffFace runs much slower than the other experiments because it does not support batched face-swapping.
 
@@ -113,6 +115,8 @@ bash reproduce/table3.sh
 ### Table 4
 
 ![Table 4](assets/table4.png)
+
+Table 4 studies how different cloak image selection strategies affect identity protection, context protection, and tracing. There are ten experiments.
 
 For experiments 1-4, the expected runtime is 2.5 minutes per batch and 125 minutes in total. Experiment 5 evaluates five parameter settings, and each setting is expected to take 2.5 minutes per batch and 125 minutes in total.
 For experiments 6-9, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. Experiment 10 evaluates five parameter settings, and each setting is expected to take 12.5 minutes per batch and 1,250 minutes in total.
@@ -126,6 +130,8 @@ bash reproduce/table4.sh
 
 ![Table 5](assets/table5.png)
 
+Table 5 evaluates unified identity protection against SimSwap, FaceShifter, HifiFace, and DiffFace using one protected image. There are two experiments.
+
 For experiment 1, the expected runtime is 3 minutes per batch and 450 minutes in total. For experiment 2, the expected runtime is 10 minutes per batch and 1,500 minutes in total.
 
 ```shell
@@ -135,6 +141,8 @@ bash reproduce/table5.sh
 ### Table 6
 
 ![Table 6](assets/table6.png)
+
+Table 6 evaluates black-box identity protection and compares PhantomSeal with NullSwap across multiple face-swapping models. There are three experiments.
 
 For experiment 1, the expected runtime is 9 minutes per batch and 2,700 minutes in total. For experiment 2, the expected runtime is 8 minutes per batch and 2,400 minutes in total. Experiment 3 cannot be executed automatically because Deep-Live-Cam requires a subscription and runs as Windows GUI software; therefore, the face-swapping step must be performed manually with the protected images.
 
@@ -146,6 +154,8 @@ bash reproduce/table6.sh
 
 ![Table 7](assets/table7.png)
 
+Table 7 compares PhantomSeal with LowKey under the white-box identity protection setting. There are eight experiments.
+
 For experiment 1, the expected runtime is 2.5 minutes per batch and 125 minutes in total. For experiment 2, the expected runtime is 1.5 minutes per batch and 75 minutes in total. For experiment 3, the expected runtime is 3 minutes per batch and 150 minutes in total. For experiment 4, the expected runtime is 12.5 minutes per batch and 1,250 minutes in total. For experiments 5-7, the expected runtime is 5 minutes per batch and 250 minutes in total. For experiment 8, the expected runtime is 15 minutes per batch and 1,500 minutes in total.
 
 ```shell
@@ -155,6 +165,8 @@ bash reproduce/table7.sh
 ### Table 8
 
 ![Table 8](assets/table8.png)
+
+Table 8 evaluates PhantomSeal with additional face recognition models and human perception results. There are three experiments.
 
 For experiments 1 and 2, the expected runtime is 2.5 minutes per batch and 125 minutes in total. Experiment 2 cannot be run without configuring the corresponding AWS API credentials. Experiment 3 reports the user study result and therefore does not have a corresponding program to execute.
 
@@ -166,6 +178,8 @@ bash reproduce/table8.sh
 
 ![Table 9](assets/table9.png)
 
+Table 9 ablates the RGB perturbation bound, identity deviation bound, and context deviation bound to study their effects on utility, protection, and tracing. There are five experiments.
+
 For experiments 1-5, the expected runtime is 2.5 minutes per batch and 125 minutes in total.
 
 ```shell
@@ -175,6 +189,8 @@ bash reproduce/table9.sh
 ### Figure 3
 
 ![Figure 3](assets/figure3.png)
+
+Figure 3 analyzes the sensitivity of PhantomSeal to different loss weights. There are four experiments.
 
 For experiments 1-4, the expected runtime is 2.5 minutes per batch and 125 minutes per parameter setting. Each experiment is a SimSwap multirun over 15 parameter settings and is expected to take 1,875 minutes in total. Each subplot in Figure 3 corresponds to one Y-axis metric, such as MSE or $ASR_{id}$. Therefore, after all parameter settings finish running, the results for the same Y-axis metric are collected across different parameter values and reorganized to produce each subplot.
 
@@ -186,6 +202,8 @@ bash reproduce/figure3.sh
 
 ![Table 10](assets/table10.png)
 
+Table 10 evaluates robustness against AI beautification, image transformations, adaptive attacks, and adaptive denoisers. There are seven experiments.
+
 For experiments 1-3, the expected runtime is 2.5 minutes per batch and 125 minutes in total. Experiments 2 and 3 require paid API credentials for the corresponding AI beauty services and cannot be run without configuring those credentials. For experiment 4, the expected runtime is 6 minutes per batch and 300 minutes in total. For experiments 5 and 6, the expected runtime is 4 minutes per batch and 200 minutes in total. Experiment 7 evaluates four denoiser checkpoints, and each checkpoint is expected to take 1 minute per batch and 60 minutes in total, with 240 minutes expected for the full multirun.
 
 ```shell
@@ -196,6 +214,8 @@ bash reproduce/table10.sh
 
 ![Table 11](assets/table11.png)
 
+Table 11 evaluates robustness when attackers pre-process protected images before face swapping. There are four experiments.
+
 For experiments 1 and 2, the expected runtime is 3.5 minutes per batch and 175 minutes in total. Experiment 3 shows image samples saved in the corresponding log directory under the *images* folder. Experiment 4 reports the user study result and therefore does not have a corresponding program to execute.
 
 ```shell
@@ -205,6 +225,8 @@ bash reproduce/table11.sh
 ### Table 12
 
 ![Table 12](assets/table12.png)
+
+Table 12 evaluates forensic tracing robustness against post-processing operations and compares PhantomSeal with AF and SepMark. There are four experiments.
 
 For experiments 1 and 2, the expected runtime is 3.5 minutes per batch and 175 minutes in total. For experiment 3, the expected runtime is 1 minute per batch and 30 minutes in total. For experiment 4, the expected runtime is 0.5 minutes per batch and 15 minutes in total.
 
