@@ -82,6 +82,15 @@ bash tools/setup.sh
 
 If the automatic download fails, please visit the [Google Drive](https://drive.google.com/drive/folders/1caHioBnA1478FR15W3JzNuHu36zxopJv?usp=sharing), download the required files manually, unzip them, and place them in the repository root folder.
 
+Google Drive may temporarily block repeated `gdown` downloads because of quota or frequency limits. When this happens, `tools/setup.sh` reports the failed download step(s), continues with the remaining setup steps, and prints manual recovery commands at the end. To recover manually, download the missing archive(s) from the Google Drive folder above, place them in the repository root directory, and run the corresponding command.
+
+```shell
+tar -xzf data.tar.gz && rm -f data.tar.gz
+tar -xzf checkpoints.tar.gz && rm -f checkpoints.tar.gz
+```
+
+If only one archive failed, run only the matching command. The `data.tar.gz` archive prepares the datasets, and the `checkpoints.tar.gz` archive prepares the pre-trained model checkpoints.
+
 ## Usage
 
 All projects are controlled by their corresponding configuration files in *config/third_party*. All running results, including logs, metrics, and saved images, are written to the *logs* folder. Single-run experiments are saved under *logs/run*, while multi-run experiments with multiple parameter settings are saved under *logs/multirun*. In both cases, results are first grouped by date and then by run time. Evaluation runs are processed batch by batch. For each batch, PhantomSeal reports both the current batch result and the cumulative summary up to that batch, so users can monitor the running summary and stop early when enough samples have been evaluated to save time.
