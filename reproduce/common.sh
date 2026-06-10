@@ -73,5 +73,8 @@ should_run_experiment() {
 }
 
 announce_experiment() {
+    local script_name
+    script_name=$(basename "$0" .sh)
+    export PHANTOMSEAL_RUN_MARKER="${script_name}_experiment${1}"
     echo "Running experiment $1"
 }

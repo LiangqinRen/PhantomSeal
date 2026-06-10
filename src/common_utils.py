@@ -68,9 +68,31 @@ def get_customized_logger(log_level: str) -> logging.Logger:
     for handler in logger.handlers:
         handler.setFormatter(formatter)
 
+    mark_reproduce_run(logger)
     snapshot_source_tree(logger)
 
     return logger
+
+
+def mark_reproduce_run(logger: logging.Logger) -> None:
+    marker = os.environ.get("PHANTOMSEAL_RUN_MARKER")
+    if not marker:
+        return
+
+    try:
+        from hydra.core.hydra_config import HydraConfig
+
+        log_dir = Path(HydraConfig.get().runtime.output_dir)
+    except Exception as exc:
+        logger.debug("Skip reproduce run marker: Hydra runtime is unavailable: %s", exc)
+        return
+
+    marker_path = log_dir / marker
+    try:
+        marker_path.touch(exist_ok=True)
+        logger.info("Reproduce run marker: %s", marker_path)
+    except Exception as exc:
+        logger.warning("Failed to create reproduce run marker %s: %s", marker_path, exc)
 
 
 def snapshot_source_tree(logger: logging.Logger) -> None:
