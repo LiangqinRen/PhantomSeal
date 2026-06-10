@@ -1,0 +1,25 @@
+diff --git a/config/model.yaml b/config/model.yaml
+index 28bb60c..b1e1ed7 100644
+--- a/config/model.yaml
++++ b/config/model.yaml
+@@ -2,8 +2,8 @@ generator:
+   target: "model.hififace.Generator"
+   params:
+     identity_extractor_config:
+-      f_3d_checkpoint_path: "model/Deep3DFaceRecon_pytorch/checkpoints/epoch_20.pth"
+-      f_id_checkpoint_path: "ms1mv3_arcface_r100_fp16_backbone.pth"
++      f_3d_checkpoint_path: "../../checkpoints/hififace/epoch_20.pth"
++      f_id_checkpoint_path: "../../checkpoints/hififace/ms1mv3_arcface_r100_fp16_backbone.pth"
+ 
+   optimizer:
+     target: "torch.optim.AdamW"
+@@ -29,8 +29,8 @@ discriminator:
+ g_loss:
+   target: "model.loss.GLoss"
+   params:
+-    f_3d_checkpoint_path: "model/Deep3DFaceRecon_pytorch/checkpoints/epoch_20.pth"
+-    f_id_checkpoint_path: "ms1mv3_arcface_r100_fp16_backbone.pth"
++    f_3d_checkpoint_path: "../../checkpoints/hififace/epoch_20.pth"
++    f_id_checkpoint_path: "../../checkpoints/hififace/ms1mv3_arcface_r100_fp16_backbone.pth"
+     sid_config:
+       {}
