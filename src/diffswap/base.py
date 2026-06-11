@@ -149,6 +149,7 @@ class Base:
                     [self.root_dir, self.root_dir / "data_preprocessing/align"],
                     purge_prefixes=purge_prefixes,
                 ), cd(self.root_dir / "data_preprocessing/align"):
+                    self._disable_tensorflow_gpu()
                     import mtcnn
                     from omegaconf import OmegaConf
                     from ldm.models.diffusion.ddim import DDIMSampler
@@ -169,6 +170,16 @@ class Base:
                 if name == "src" or name.startswith("src."):
                     sys.modules.pop(name, None)
             sys.modules.update(original_src_modules)
+
+
+    @staticmethod
+    def _disable_tensorflow_gpu() -> None:
+        try:
+            import tensorflow as tf
+
+            tf.config.set_visible_devices([], "GPU")
+        except Exception:
+            pass
 
     def _build_runtime_helpers(self) -> None:
         self.face_detector = dlib.get_frontal_face_detector()
