@@ -36,6 +36,7 @@ apply_patches() {
 }
 
 apply_patches "third_party/DiffFace" "patches/diffface"
+apply_patches "third_party/DiffSwap" "patches/diffswap"
 apply_patches "third_party/HifiFace" "patches/hififace"
 apply_patches "third_party/SepMark" "patches/sepmark"
 apply_patches "third_party/E4S" "patches/e4s"
