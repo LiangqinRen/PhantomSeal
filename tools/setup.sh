@@ -66,67 +66,6 @@ echo -e "\033[1;34m[2/6] Preparing HifiFace dependencies...\033[0m"
     mv Deep3DFaceRecon_pytorch model/
 )
 
-REQUIRED_BFM_FILES=(
-    "01_MorphableModel.mat"
-    "Exp_Pca.bin"
-    "BFM_front_idx.mat"
-    "BFM_exp_idx.mat"
-    "facemodel_info.mat"
-    "similarity_Lm3D_all.mat"
-    "std_exp.txt"
-)
-OPTIONAL_BFM_FILES=(
-    "BFM_model_front.mat"
-    "select_vertex_id.mat"
-)
-BFM_DIR="$ROOT/third_party/HifiFace/model/Deep3DFaceRecon_pytorch/BFM"
-BFM_SOURCE_DIR="$ROOT/checkpoints/hififace"
-
-bfm_missing_files() {
-    local dir="$1"
-    local missing=()
-    local file
-    for file in "${REQUIRED_BFM_FILES[@]}"; do
-        if [ ! -f "$dir/$file" ]; then
-            missing+=("$file")
-        fi
-    done
-    if [ "${#missing[@]}" -gt 0 ]; then
-        printf "%s\n" "${missing[@]}"
-    fi
-}
-
-restore_bfm_files() {
-    local source_dir="$1"
-    local file
-    if [ ! -d "$source_dir" ]; then
-        return
-    fi
-
-    mkdir -p "$BFM_DIR"
-    for file in "${REQUIRED_BFM_FILES[@]}" "${OPTIONAL_BFM_FILES[@]}"; do
-        if [ -f "$source_dir/$file" ]; then
-            cp "$source_dir/$file" "$BFM_DIR/$file"
-        fi
-    done
-}
-
-mapfile -t MISSING_BFM_FILES < <(bfm_missing_files "$BFM_DIR")
-if [ "${#MISSING_BFM_FILES[@]}" -gt 0 ]; then
-    echo "[INFO] Restoring HifiFace BFM data from $BFM_SOURCE_DIR"
-    restore_bfm_files "$BFM_SOURCE_DIR"
-    mapfile -t MISSING_BFM_FILES < <(bfm_missing_files "$BFM_DIR")
-fi
-
-if [ "${#MISSING_BFM_FILES[@]}" -gt 0 ]; then
-    echo "[ERROR] Missing HifiFace BFM data files in $BFM_DIR:" >&2
-    for file in "${MISSING_BFM_FILES[@]}"; do
-        echo "  - $file" >&2
-    done
-    echo "[ERROR] Put these files in $BFM_SOURCE_DIR, then rerun tools/setup.sh." >&2
-    exit 1
-fi
-
 echo -e "\033[1;34m[3/6] Downloading datasets...\033[0m"
 (
     cd "$ROOT" || exit

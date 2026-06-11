@@ -25,3 +25,16 @@ index c7fd305..8f83875 100644
 -- 
 2.43.0
 
+diff --git a/pretrained_ckpts/facevid2vid/vox-256.yaml b/pretrained_ckpts/facevid2vid/vox-256.yaml
+index 8310049..61de133 100644
+--- a/pretrained_ckpts/facevid2vid/vox-256.yaml
++++ b/pretrained_ckpts/facevid2vid/vox-256.yaml
+@@ -66,7 +66,7 @@ train_params:
+   batch_size: 32
+   scales: [1, 0.5, 0.25, 0.125]
+   checkpoint_freq: 10
+-  hopenet_snapshot: '/zlh/Project/deep-head-pose/checkpoints/hopenet_robust_alpha1.pkl'
++  hopenet_snapshot: '../../checkpoints/e4s/hopenet_robust_alpha1.pkl'
+   transform_params:
+     sigma_affine: 0.05
+     sigma_tps: 0.005

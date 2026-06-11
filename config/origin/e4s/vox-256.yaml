@@ -66,7 +66,7 @@ train_params:
   batch_size: 32
   scales: [1, 0.5, 0.25, 0.125]
   checkpoint_freq: 10
-  hopenet_snapshot: '/zlh/Project/deep-head-pose/checkpoints/hopenet_robust_alpha1.pkl'
+  hopenet_snapshot: '../../checkpoints/e4s/hopenet_robust_alpha1.pkl'
   transform_params:
     sigma_affine: 0.05
     sigma_tps: 0.005

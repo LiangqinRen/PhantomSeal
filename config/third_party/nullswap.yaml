@@ -11,7 +11,7 @@ origin:
     which_epoch: latest
     crop_size: 224
   faceshifter:
-    model_path: face_modules/model_ir_se50.pth
+    model_path: ${root_dir}/checkpoints/faceshifter/model_ir_se50.pth
 
 dataset:
   metric_dir: data/FFHQ

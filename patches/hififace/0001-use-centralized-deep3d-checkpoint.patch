@@ -33,7 +33,7 @@ diff --git a/model/Deep3DFaceRecon_pytorch/models/bfm.py b/model/Deep3DFaceRecon
  from ..util.load_mats import transferBFM09
  import os
 +
-+DEFAULT_BFM_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "BFM"))
++DEFAULT_BFM_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "checkpoints", "hififace"))
  
  def perspective_projection(focal, center):
      # return p.T (N, 3) @ (3, 3) 
@@ -53,7 +53,7 @@ diff --git a/model/Deep3DFaceRecon_pytorch/util/load_mats.py b/model/Deep3DFaceR
  from array import array
  import os.path as osp
 +
-+DEFAULT_BFM_FOLDER = osp.abspath(osp.join(osp.dirname(__file__), "..", "BFM"))
++DEFAULT_BFM_FOLDER = osp.abspath(osp.join(osp.dirname(__file__), "..", "..", "..", "..", "..", "checkpoints", "hififace"))
  
  # load expression basis
 -def LoadExpBasis(bfm_folder='./model/Deep3DFaceRecon_pytorch/BFM'):

@@ -16,8 +16,8 @@ origin:
     config_path: config/model.yaml
     checkpoint_path: ${root_dir}/checkpoints/hififace/hififace_opensource_299999.ckpt
   faceshifter:
-    model_path: face_modules/model_ir_se50.pth
-    G_path: saved_models/G_latest.pth
+    model_path: ${root_dir}/checkpoints/faceshifter/model_ir_se50.pth
+    G_path: ${root_dir}/checkpoints/faceshifter/G_latest.pth
   face_parser_path: ${root_dir}/checkpoints/diffface/FaceParser.pth
   diffface:
     skip_timesteps: 25

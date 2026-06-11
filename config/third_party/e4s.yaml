@@ -6,7 +6,7 @@ origin:
   face_vid2vid_cfg_path: ${root_dir}/config/origin/e4s/vox-256.yaml
   face_vid2vid_ckpt_path: ${root_dir}/checkpoints/e4s/00000189-checkpoint.pth.tar
   face_parser_ckpt_path: ${root_dir}/checkpoints/e4s/79999_iter.pth
-  gpen_base_dir: ${third_party.project_root}/pretrained_ckpts/gpen/
+  gpen_base_dir: ${root_dir}/checkpoints/e4s/gpen/
   checkpoint_path: ${root_dir}/checkpoints/e4s/iteration_300000.pt
 
 dataset:

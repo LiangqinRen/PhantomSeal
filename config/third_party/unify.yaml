@@ -16,8 +16,8 @@ origin:
     crop_size: 224
   config_path: config/model.yaml
   checkpoint_path: ${root_dir}/checkpoints/hififace/hififace_opensource_299999.ckpt
-  model_path: face_modules/model_ir_se50.pth
-  G_path: saved_models/G_latest.pth
+  model_path: ${root_dir}/checkpoints/faceshifter/model_ir_se50.pth
+  G_path: ${root_dir}/checkpoints/faceshifter/G_latest.pth
 
 dataset:
   metric_224_dir: data/vggface2_224_test
