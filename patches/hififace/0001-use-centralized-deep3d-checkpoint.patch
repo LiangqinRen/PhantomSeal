@@ -24,3 +24,55 @@ index 7b40713..518866a 100644
      sid_config:
        {}
      realism_config:
+
+diff --git a/model/Deep3DFaceRecon_pytorch/models/bfm.py b/model/Deep3DFaceRecon_pytorch/models/bfm.py
+--- a/model/Deep3DFaceRecon_pytorch/models/bfm.py
++++ b/model/Deep3DFaceRecon_pytorch/models/bfm.py
+@@ -10,6 +10,8 @@ import sys
+ sys.path.insert(0,'../')
+ from ..util.load_mats import transferBFM09
+ import os
++
++DEFAULT_BFM_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "BFM"))
+ 
+ def perspective_projection(focal, center):
+     # return p.T (N, 3) @ (3, 3) 
+@@ -28,7 +30,7 @@ class SH:
+ 
+ class ParametricFaceModel:
+     def __init__(self, 
+-                bfm_folder='./model/Deep3DFaceRecon_pytorch/BFM',
++                bfm_folder=DEFAULT_BFM_FOLDER,
+                 recenter=True,
+                 camera_distance=10.,
+                 init_lit=np.array([
+diff --git a/model/Deep3DFaceRecon_pytorch/util/load_mats.py b/model/Deep3DFaceRecon_pytorch/util/load_mats.py
+--- a/model/Deep3DFaceRecon_pytorch/util/load_mats.py
++++ b/model/Deep3DFaceRecon_pytorch/util/load_mats.py
+@@ -6,7 +6,9 @@ from scipy.io import loadmat, savemat
+ from array import array
+ import os.path as osp
++
++DEFAULT_BFM_FOLDER = osp.abspath(osp.join(osp.dirname(__file__), "..", "BFM"))
+ 
+ # load expression basis
+-def LoadExpBasis(bfm_folder='./model/Deep3DFaceRecon_pytorch/BFM'):
++def LoadExpBasis(bfm_folder=DEFAULT_BFM_FOLDER):
+     n_vertex = 53215
+     Expbin = open(osp.join(bfm_folder, 'Exp_Pca.bin'), 'rb')
+@@ -29,6 +31,6 @@ def LoadExpBasis(bfm_folder='./model/Deep3DFaceRecon_pytorch/BFM'):
+ 
+ 
+ # transfer original BFM09 to our face model
+-def transferBFM09(bfm_folder='./model/Deep3DFaceRecon_pytorch/BFM'):
++def transferBFM09(bfm_folder=DEFAULT_BFM_FOLDER):
+     print('Transfer BFM09 to BFM_model_front......')
+     original_BFM = loadmat(osp.join(bfm_folder, '01_MorphableModel.mat'))
+@@ -39,6 +41,6 @@ def transferBFM09(bfm_folder='./model/Deep3DFaceRecon_pytorch/BFM'):
+     texEV = original_BFM['texEV']  # eigen value
+     texMU = original_BFM['texMU']  # mean texture
+ 
+-    expPC, expEV = LoadExpBasis()
++    expPC, expEV = LoadExpBasis(bfm_folder)
+ 
+     # transfer BFM09 to our face model
