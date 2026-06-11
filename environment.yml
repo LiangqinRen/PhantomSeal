@@ -16,11 +16,13 @@ dependencies:
       - git+https://github.com/ageitgey/face_recognition_models
       - facenet-pytorch
       - hydra-core==1.3.2
+      - imutils==0.5.4
       - kornia==0.8.2
       - lpips==0.1.4
       - matplotlib==3.10.8
       - mtcnn==0.1.1
       - tensorflow==2.20.0
+      - git+https://github.com/CompVis/taming-transformers.git
       - omegaconf==2.3.0
       - opencv-python==4.12.0.88
       - pytorch-lightning==2.6.0
