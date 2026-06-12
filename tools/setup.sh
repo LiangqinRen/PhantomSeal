@@ -75,7 +75,7 @@ echo -e "\033[1;34m[3/6] Downloading datasets...\033[0m"
 echo -e "\033[1;34m[4/6] Downloading pre-trained models...\033[0m"
 (
     cd "$ROOT" || exit
-    download_and_extract "pre-trained models" "1ykvmB4BIPM0Uix-aI6qxjbL056LKr4_d" "checkpoints.tar.gz"
+    download_and_extract "pre-trained models" "1p-_w1OMEYtph7R3yI188mE-o-xmJ6ya_" "checkpoints.tar.gz"
 ) || record_failure "pre-trained models"
 
 echo -e "\033[1;34m[5/6] Creating local evaluation file...\033[0m"
