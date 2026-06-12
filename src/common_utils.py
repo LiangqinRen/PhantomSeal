@@ -13,11 +13,104 @@ from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 from pathlib import Path
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
-from typing import Iterable, Iterator, TypeAlias
+from typing import Any, Iterable, Iterator, TypeAlias
+
+from omegaconf import OmegaConf
 
 
 FontLike: TypeAlias = ImageFont.ImageFont | ImageFont.FreeTypeFont
 _SOURCE_SNAPSHOT_DONE = False
+
+
+def _config_get(config: Any, path: str, default: Any = None) -> Any:
+    return OmegaConf.select(config, path, default=default)
+
+
+def _is_empty_secret(value: Any) -> bool:
+    return value is None or str(value).strip() == ""
+
+
+def _add_missing_secret(
+    missing: list[str],
+    config: Any,
+    fields: Iterable[str],
+    reason: str,
+) -> None:
+    for field in fields:
+        if _is_empty_secret(_config_get(config, field)) and not any(
+            item.startswith(f"{field} ") for item in missing
+        ):
+            missing.append(f"{field} ({reason})")
+
+
+def check_required_api_keys(config: Any, logger: logging.Logger | None = None) -> None:
+    missing: list[str] = []
+
+    if _config_get(config, "evaluate.facepp.enable", False):
+        _add_missing_secret(
+            missing,
+            config,
+            ["evaluate.facepp.api_key", "evaluate.facepp.api_secret"],
+            "required because evaluate.facepp.enable=true",
+        )
+
+    needs_facepp_gender = (
+        _config_get(config, "third_party.dataset.cloak_mix", True) is False
+        and _config_get(config, "third_party.function") != "swap"
+    )
+    if needs_facepp_gender:
+        _add_missing_secret(
+            missing,
+            config,
+            ["evaluate.facepp.api_key", "evaluate.facepp.api_secret"],
+            "required because third_party.dataset.cloak_mix=false uses Face++ gender detection",
+        )
+
+    if _config_get(config, "evaluate.aws.enable", False):
+        _add_missing_secret(
+            missing,
+            config,
+            ["evaluate.aws.api_key", "evaluate.aws.api_secret"],
+            "required because evaluate.aws.enable=true",
+        )
+
+    if _config_get(config, "third_party.robustness.ai_beauty", False):
+        ai_beauty_tool = _config_get(config, "third_party.robustness.ai_beauty_tool")
+        if ai_beauty_tool == "ai_lab_tools":
+            _add_missing_secret(
+                missing,
+                config,
+                ["evaluate.ai_lab_tools.api_key"],
+                "required because third_party.robustness.ai_beauty_tool=ai_lab_tools",
+            )
+        elif ai_beauty_tool == "tencent_cloud":
+            _add_missing_secret(
+                missing,
+                config,
+                [
+                    "evaluate.tencent_cloud.secret_id",
+                    "evaluate.tencent_cloud.secret_key",
+                ],
+                "required because third_party.robustness.ai_beauty_tool=tencent_cloud",
+            )
+        else:
+            missing.append(
+                "third_party.robustness.ai_beauty_tool "
+                "(set to ai_lab_tools or tencent_cloud when third_party.robustness.ai_beauty=true)"
+            )
+
+    if not missing:
+        return
+
+    message = (
+        "Missing required API credentials for this run:\n"
+        + "\n".join(f"- {item}" for item in missing)
+        + "\nSet them in config/evaluate/evaluate_local.yaml or disable the corresponding feature."
+    )
+    if logger is not None:
+        logger.error(message)
+        raise SystemExit(1)
+    raise SystemExit(message)
 
 
 class Timer:

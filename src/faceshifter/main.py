@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 @hydra.main(config_path="../../config", config_name="config", version_base=None)
 def main(config: DictConfig):
     logger = common_utils.get_customized_logger(config.log.record_level)
+    common_utils.check_required_api_keys(config, logger)
 
     common_utils.check_cuda_availability(logger)
     common_utils.fix_random_seed(logger, config.random_seed)
