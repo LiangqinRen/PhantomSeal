@@ -50,7 +50,7 @@ cd PhantomSeal
 We strongly recommend using Conda to manage the environment. We provide **environment.yml** to create the default *phantomseal* environment. Please use the following commands to create and activate it.
 
 ```shell
-conda env create -f environment.yml
+bash tools/create_env.sh
 conda activate phantomseal
 ```
 

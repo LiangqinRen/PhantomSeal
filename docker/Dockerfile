@@ -31,7 +31,8 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
     && conda clean -afy
 
 COPY environment.yml /tmp/environment.yml
-RUN conda env create -f /tmp/environment.yml \
+RUN PYTHONNOUSERSITE=1 conda env create -f /tmp/environment.yml \
+    && conda run -n phantomseal python -m pip install --no-deps face-recognition==1.3.0 facenet-pytorch==2.6.0 \
     && conda clean -afy \
     && conda init bash \
     && echo "conda activate phantomseal" >> /root/.bashrc
