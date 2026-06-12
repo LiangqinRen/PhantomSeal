@@ -30,17 +30,17 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
     && conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r \
     && conda clean -afy
 
-WORKDIR /workspace/PhantomSeal
-
 COPY environment.yml /tmp/environment.yml
 RUN conda env create -f /tmp/environment.yml \
     && conda clean -afy \
     && conda init bash \
     && echo "conda activate phantomseal" >> /root/.bashrc
 
-COPY . /workspace/PhantomSeal
+WORKDIR /workspace
 
-RUN git remote set-url origin https://github.com/LiangqinRen/PhantomSeal.git || true
+RUN git clone --branch main https://github.com/LiangqinRen/PhantomSeal.git PhantomSeal
+
+WORKDIR /workspace/PhantomSeal
 
 RUN conda run -n phantomseal python -V \
     && conda run -n phantomseal python -c "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda)"
