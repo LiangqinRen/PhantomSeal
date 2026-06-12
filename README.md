@@ -54,7 +54,9 @@ bash tools/create_env.sh
 conda activate phantomseal
 ```
 
-We also provide a Docker image with the PhantomSeal runtime environment and repository code. This mode does not require mounting a host repository. Because datasets, checkpoints, third-party projects, and logs are created inside the container, keep the container instead of using **--rm** if you want to reuse downloaded files after exiting.
+Some reproduce scripts load third-party models that compile CUDA/C++ extensions on first use. For non-Docker installations, make sure a C++ compiler and Ninja are available before running Table 6. On Ubuntu/Debian, install the system compiler with `sudo apt-get install -y build-essential`; Ninja is included in **environment.yml**.
+
+We also provide a Docker image with the PhantomSeal runtime environment and repository code. This mode does not require mounting a host repository. Because datasets, checkpoints, third-party projects, and logs are created inside the container, restart the same container if you want to reuse downloaded files after exiting.
 
 ```shell
 docker pull liangqinren/phantomseal:ccs2026

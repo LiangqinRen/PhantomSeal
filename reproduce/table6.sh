@@ -9,6 +9,24 @@ check_experiment_args "$@"
 EXPERIMENTS=(1 2)
 init_experiments "${1:-}" "${EXPERIMENTS[@]}"
 
+check_table6_build_deps() {
+    if ! command -v ninja >/dev/null 2>&1; then
+        echo "[ERROR] Table 6 requires ninja to build E4S/GPEN CUDA extensions." >&2
+        echo "[INFO] Install it with: conda install -n phantomseal -c conda-forge ninja" >&2
+        exit 1
+    fi
+
+    local cxx="${CXX:-c++}"
+    if ! printf "int main() { return 0; }\n" | "$cxx" -x c++ - -fsyntax-only >/dev/null 2>&1; then
+        echo "[ERROR] Table 6 requires a working C++ compiler for E4S/GPEN CUDA extensions." >&2
+        echo "[INFO] On Ubuntu/Debian, install it with: sudo apt-get install -y build-essential" >&2
+        echo "[INFO] If using Conda without sudo, try: conda install -n phantomseal -c conda-forge gxx_linux-64" >&2
+        exit 1
+    fi
+}
+
+check_table6_build_deps
+
 # Experiment 1
 if should_run_experiment 1; then
     announce_experiment 1
