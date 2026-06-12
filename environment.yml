@@ -7,6 +7,7 @@ dependencies:
   - pip
   - setuptools<81
   - wheel
+  - ninja
   - dlib=20.0.0=cpu_py310hd0aa56f_4
   - pip:
       - absl-py==2.1.0
