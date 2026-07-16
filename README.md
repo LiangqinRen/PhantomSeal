@@ -16,6 +16,7 @@
   - [Getting Started](#getting-started)
     - [Environment](#environment)
     - [Dataset, Pre-Trained Models, and Third-Party Projects](#dataset-pre-trained-models-and-third-party-projects)
+    - [Configuring Random Seeds and Face-Swapping Models](#configuring-random-seeds-and-face-swapping-models)
   - [Usage](#usage)
     - [Table 2](#table-2)
     - [Table 3](#table-3)
@@ -92,6 +93,20 @@ tar -xzf checkpoints.tar.gz && rm -f checkpoints.tar.gz
 ```
 
 If only one archive failed, run only the matching command. The `data.tar.gz` archive prepares the datasets, and the `checkpoints.tar.gz` archive prepares the pre-trained model checkpoints.
+
+### Configuring Random Seeds and Face-Swapping Models
+
+To improve reproducibility, PhantomSeal fixes the Python, NumPy, and PyTorch random seeds to `0` by default. The seed is defined by `random_seed` in **config/config.yaml** and can be changed with a Hydra command-line override, for example:
+
+```shell
+PYTHONPATH="$ROOT" python -m src.simswap.main \
+    third_party=simswap \
+    evaluate=evaluate_local \
+    third_party.function="sample"
+    random_seed=123 # override the random seed
+```
+
+We minimally wrap the third-party projects to provide a unified face-swapping interface. The configured seed controls the random operations used during inference and improves the reproducibility of this process, although minor differences may still occur because of nondeterministic GPU operations. For the pre-trained models, we use the checkpoints publicly released by the corresponding projects; their training procedures and random seeds are determined by the original authors. Users who wish to train a face-swapping model from scratch could refer to and modify the code and configuration files of the corresponding third-party project.
 
 ## Usage
 
